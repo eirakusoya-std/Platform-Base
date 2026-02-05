@@ -19,6 +19,14 @@ export default function RoomPage() {
   const params = useParams<{ roomId: string }>();
   const roomId = typeof params?.roomId === "string" ? params.roomId : "test";
 
+  const roleRef = useRef<"host" | "guest" | "unknown">("unknown");
+  const [role, setRole] = useState<"host" | "guest" | "unknown">("unknown");
+
+  function setRoleBoth(r: "host" | "guest" | "unknown") {
+    roleRef.current = r;
+    setRole(r);
+  }
+
   // hydration対策：peerIdはクライアントで生成
   const [peerId, setPeerId] = useState<string | null>(null);
   useEffect(() => {
@@ -62,7 +70,10 @@ export default function RoomPage() {
   }
 
   function cleanup() {
-    socketRef.current?.disconnect();
+    if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+    }
     socketRef.current = null;
 
     pcRef.current?.close();
@@ -75,6 +86,17 @@ export default function RoomPage() {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
 
     setStatus("idle");
+    setRoleBoth("unknown");
+  }
+
+  // ログ表示用
+  const [logs, setLogs] = useState<string[]>([]);
+
+  function log(message: string) {
+    setLogs((prev) => [
+      ...prev,
+      `${new Date().toLocaleTimeString()}  ${message}`,
+    ].slice(-40)); // 最新40件だけ残す
   }
 
   async function copyRoomLink() {
@@ -114,6 +136,7 @@ export default function RoomPage() {
 
       pc.onicecandidate = (ev) => {
         if (!ev.candidate) return;
+        log("ice candidate sent");
         socketRef.current?.emit(EVENTS.ICE_CANDIDATE, {
           roomId,
           from: peerId,
@@ -122,6 +145,7 @@ export default function RoomPage() {
       };
 
       pc.onconnectionstatechange = () => {
+        log(`pc state: ${pc.connectionState}`);
         if (!mounted) return;
         if (pc.connectionState === "connected") setStatus("connected");
         if (pc.connectionState === "failed") setStatus("failed");
@@ -132,17 +156,39 @@ export default function RoomPage() {
       socketRef.current = socket;
 
       socket.on("connect", () => {
+        log("socket connected");
         socket.emit(EVENTS.JOIN_ROOM, { roomId, peerId });
+        log("join-room sent");
+      });
+
+      socket.on("joined-room", (payload: any) => {
+        setRoleBoth(payload.role);
+        log(`joined-room: role=${payload.role}`);
+      });
+
+      socket.on("room-full", () => {
+        log("room-full: this room already has 2 people");
+        setStatus("failed");
       });
 
       socket.on(EVENTS.PEER_JOINED, async () => {
+        log("peer joined");
+
+        // ✅ hostだけがofferを作る
+        if (roleRef.current !== "host") {
+          log("not host: skip creating offer");
+          return;
+        }
+
         if (pc.signalingState !== "stable") return;
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit(EVENTS.OFFER, { roomId, from: peerId, sdp: offer });
+        log("offer sent");
       });
 
       socket.on(EVENTS.OFFER, async (payload: any) => {
+        log("offer received");
         await pc.setRemoteDescription(payload.sdp);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -150,13 +196,15 @@ export default function RoomPage() {
       });
 
       socket.on(EVENTS.ANSWER, async (payload: any) => {
+        log("answer received");
         await pc.setRemoteDescription(payload.sdp);
       });
 
       socket.on(EVENTS.ICE_CANDIDATE, async (payload: any) => {
+        log("ice candidate received");
         try {
           await pc.addIceCandidate(payload.candidate);
-        } catch {}
+        } catch { }
       });
 
       socket.on(EVENTS.PEER_LEFT, () => {
@@ -167,6 +215,11 @@ export default function RoomPage() {
     }
 
     start().catch((e) => {
+      if (socketRef.current) {
+        socketRef.current.removeAllListeners();
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
       console.error(e);
       setStatus("failed");
     });
@@ -187,10 +240,10 @@ export default function RoomPage() {
     status === "connected"
       ? "🟢 connected"
       : status === "connecting"
-      ? "🟡 connecting"
-      : status === "failed"
-      ? "🔴 failed"
-      : "⚪ idle";
+        ? "🟡 connecting"
+        : status === "failed"
+          ? "🔴 failed"
+          : "⚪ idle";
 
   return (
     <div style={{ padding: 16, fontFamily: "system-ui", color: "#eee", background: "#0b0b0b", minHeight: "100vh" }}>
@@ -241,6 +294,22 @@ export default function RoomPage() {
           peerId: {peerId.slice(0, 8)}…
         </div>
       )}
+      <div
+        style={{
+          marginTop: 16,
+          padding: 10,
+          background: "rgba(0,0,0,0.5)",
+          borderRadius: 8,
+          fontSize: 12,
+          maxHeight: 200,
+          overflowY: "auto",
+          whiteSpace: "pre-wrap",
+          opacity: 0.85,
+        }}
+      >
+        {logs.join("\n")}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>role: {role}</div>
     </div>
   );
 }
