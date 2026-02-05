@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { io, Socket } from "socket.io-client";
+
+function generateId() {
+  return Math.random().toString(36).slice(2, 10);
+}
 
 const EVENTS = {
   JOIN_ROOM: "join-room",
@@ -17,20 +21,25 @@ type Status = "idle" | "connecting" | "connected" | "failed";
 
 export default function RoomPage() {
   const params = useParams<{ roomId: string }>();
-  const roomId = typeof params?.roomId === "string" ? params.roomId : "test";
+  const roomId = params?.roomId;
+
+  const [logs, setLogs] = useState<string[]>([]);
+  const log = useCallback((message: string) => {
+    setLogs((prev) =>
+      [...prev, `${new Date().toLocaleTimeString()}  ${message}`].slice(-40)
+    );
+  }, []);
 
   const roleRef = useRef<"host" | "guest" | "unknown">("unknown");
   const [role, setRole] = useState<"host" | "guest" | "unknown">("unknown");
-
-  function setRoleBoth(r: "host" | "guest" | "unknown") {
+  const setRoleBoth = (r: "host" | "guest" | "unknown") => {
     roleRef.current = r;
     setRole(r);
-  }
+  };
 
-  // hydration対策：peerIdはクライアントで生成
   const [peerId, setPeerId] = useState<string | null>(null);
   useEffect(() => {
-    setPeerId(crypto.randomUUID());
+    setPeerId(generateId());
   }, []);
 
   const [status, setStatus] = useState<Status>("idle");
@@ -50,6 +59,23 @@ export default function RoomPage() {
     () => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }),
     []
   );
+
+  // ✅ ここはレンダーで何もしない。表示だけ。
+  if (!roomId) {
+    return <div style={{ padding: 16, fontFamily: "system-ui" }}>loading...</div>;
+  }
+
+  // ✅ 環境チェックは useEffect で一回だけ
+  useEffect(() => {
+    log(`isSecureContext=${window.isSecureContext}`);
+    log(`hasMediaDevices=${!!navigator.mediaDevices}`);
+    log(`hasGetUserMedia=${!!navigator.mediaDevices?.getUserMedia}`);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      log("❌ getUserMedia unavailable (HTTPS or supported browser required)");
+      setStatus("failed");
+    }
+  }, [log]);
 
   function applyMic(on: boolean) {
     const stream = localStreamRef.current;
@@ -89,16 +115,6 @@ export default function RoomPage() {
     setRoleBoth("unknown");
   }
 
-  // ログ表示用
-  const [logs, setLogs] = useState<string[]>([]);
-
-  function log(message: string) {
-    setLogs((prev) => [
-      ...prev,
-      `${new Date().toLocaleTimeString()}  ${message}`,
-    ].slice(-40)); // 最新40件だけ残す
-  }
-
   async function copyRoomLink() {
     const url = `${location.origin}/room/${encodeURIComponent(roomId)}`;
     await navigator.clipboard.writeText(url);
@@ -106,6 +122,7 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (!peerId) return;
+    if (!navigator.mediaDevices?.getUserMedia) return; // failed に落ちてる想定
 
     let mounted = true;
 
@@ -115,7 +132,6 @@ export default function RoomPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
       localStreamRef.current = stream;
 
-      // 初期状態を反映
       stream.getAudioTracks().forEach((t) => (t.enabled = micOn));
       stream.getVideoTracks().forEach((t) => (t.enabled = camOn));
 
@@ -173,14 +189,12 @@ export default function RoomPage() {
 
       socket.on(EVENTS.PEER_JOINED, async () => {
         log("peer joined");
-
-        // ✅ hostだけがofferを作る
         if (roleRef.current !== "host") {
           log("not host: skip creating offer");
           return;
         }
-
         if (pc.signalingState !== "stable") return;
+
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit(EVENTS.OFFER, { roomId, from: peerId, sdp: offer });
@@ -215,11 +229,6 @@ export default function RoomPage() {
     }
 
     start().catch((e) => {
-      if (socketRef.current) {
-        socketRef.current.removeAllListeners();
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
       console.error(e);
       setStatus("failed");
     });
@@ -255,25 +264,11 @@ export default function RoomPage() {
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => applyMic(!micOn)} style={btnStyle(micOn)} title="マイク送信ON/OFF">
-            🎤 {micOn ? "Mic ON" : "Mic OFF"}
-          </button>
-
-          <button onClick={() => applyCam(!camOn)} style={btnStyle(camOn)} title="カメラ送信ON/OFF">
-            📷 {camOn ? "Cam ON" : "Cam OFF"}
-          </button>
-
-          <button onClick={() => applySpeaker(!speakerOn)} style={btnStyle(speakerOn)} title="相手音声ON/OFF">
-            🔊 {speakerOn ? "Speaker ON" : "Speaker OFF"}
-          </button>
-
-          <button onClick={copyRoomLink} style={{ ...btnStyle(true), opacity: 0.95 }} title="部屋URLをコピー">
-            🔗 Copy link
-          </button>
-
-          <button onClick={cleanup} style={{ ...btnStyle(false), borderColor: "#ff5b5b", color: "#ffbdbd" }} title="切断">
-            ⛔ Leave
-          </button>
+          <button onClick={() => applyMic(!micOn)} style={btnStyle(micOn)}>🎤 {micOn ? "Mic ON" : "Mic OFF"}</button>
+          <button onClick={() => applyCam(!camOn)} style={btnStyle(camOn)}>📷 {camOn ? "Cam ON" : "Cam OFF"}</button>
+          <button onClick={() => applySpeaker(!speakerOn)} style={btnStyle(speakerOn)}>🔊 {speakerOn ? "Speaker ON" : "Speaker OFF"}</button>
+          <button onClick={copyRoomLink} style={{ ...btnStyle(true), opacity: 0.95 }}>🔗 Copy link</button>
+          <button onClick={cleanup} style={{ ...btnStyle(false), borderColor: "#ff5b5b", color: "#ffbdbd" }}>⛔ Leave</button>
         </div>
       </div>
 
@@ -289,26 +284,12 @@ export default function RoomPage() {
         </div>
       </div>
 
-      {peerId && (
-        <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-          peerId: {peerId.slice(0, 8)}…
-        </div>
-      )}
-      <div
-        style={{
-          marginTop: 16,
-          padding: 10,
-          background: "rgba(0,0,0,0.5)",
-          borderRadius: 8,
-          fontSize: 12,
-          maxHeight: 200,
-          overflowY: "auto",
-          whiteSpace: "pre-wrap",
-          opacity: 0.85,
-        }}
-      >
+      {peerId && <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>peerId: {peerId.slice(0, 8)}…</div>}
+
+      <div style={{ marginTop: 16, padding: 10, background: "rgba(0,0,0,0.5)", borderRadius: 8, fontSize: 12, maxHeight: 200, overflowY: "auto", whiteSpace: "pre-wrap", opacity: 0.85 }}>
         {logs.join("\n")}
       </div>
+
       <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>role: {role}</div>
     </div>
   );

@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+function generateRoomId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -12,7 +16,7 @@ export default function HomePage() {
   const [suggestedRoomId, setSuggestedRoomId] = useState<string | null>(null);
 
   useEffect(() => {
-    setSuggestedRoomId(crypto.randomUUID().slice(0, 8));
+    setSuggestedRoomId(generateRoomId());
   }, []);
 
   function createRoom() {
