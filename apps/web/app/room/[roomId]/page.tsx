@@ -168,13 +168,20 @@ export default function RoomPage() {
         if (pc.connectionState === "disconnected") setStatus("idle");
       };
 
-      const socket = io(signalingUrl, { transports: ["websocket"] });
+      // Allow Engine.IO to fallback to polling when direct WebSocket is blocked.
+      const socket = io(signalingUrl, {
+        transports: ["polling", "websocket"],
+      });
       socketRef.current = socket;
 
       socket.on("connect", () => {
         log("socket connected");
         socket.emit(EVENTS.JOIN_ROOM, { roomId, peerId });
         log("join-room sent");
+      });
+
+      socket.on("connect_error", (err) => {
+        log(`socket connect_error: ${err.message}`);
       });
 
       socket.on("joined-room", (payload: any) => {
