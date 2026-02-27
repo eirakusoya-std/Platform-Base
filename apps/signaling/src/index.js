@@ -12,14 +12,34 @@ const EVENTS = {
   PEER_LEFT: "peer-left",
 };
 
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  // Keep current behavior if ALLOWED_ORIGINS is not set yet.
+  if (allowedOrigins.length === 0) return true;
+  if (!origin) return true;
+  return allowedOrigins.includes(origin);
+}
+
+function corsOrigin(origin, callback) {
+  if (isAllowedOrigin(origin)) {
+    callback(null, true);
+    return;
+  }
+  callback(new Error("CORS blocked"));
+}
+
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: { origin: true, credentials: true },
+  cors: { origin: corsOrigin, credentials: true },
 });
 
 io.on("connection", (socket) => {
