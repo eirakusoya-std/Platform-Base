@@ -11,16 +11,19 @@ type NowLiveSectionProps = {
 
 export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNotify }: NowLiveSectionProps) {
   return (
-    <section className="border-t border-gray-100 py-10">
+    <section className="py-10">
       <div className="mb-7 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 rounded-full bg-red-500 px-3 py-1.5 shadow-sm">
             <div className="h-2 w-2 animate-pulse rounded-full bg-white" />
-            <span className="text-xs font-bold tracking-widest text-white">NOW LIVE</span>
+            <span className="text-xs font-bold tracking-widest text-white">LIVE</span>
           </div>
-          <p className="text-sm text-gray-500">配信中 - 参加枠は空き次第のみ</p>
+          <p className="text-sm text-gray-500">現在配信中のセッション</p>
         </div>
-        <span className="text-xs text-gray-400">{sessions.length} 件放送中</span>
+        <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1 border border-red-100">
+          <span className="text-[10px] font-bold text-red-600 uppercase">Total Live</span>
+          <span className="text-xs font-black text-red-600">{sessions.length}</span>
+        </div>
       </div>
 
       {sessions.length === 0 ? (
@@ -100,11 +103,10 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                     </button>
 
                     <button
-                      className={`flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs font-medium transition-all ${
-                        notified
+                      className={`flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs font-medium transition-all ${notified
                           ? "border-[#1e3a5f] bg-[#1e3a5f] text-white"
                           : "border-gray-300 bg-white text-gray-600 hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
-                      }`}
+                        }`}
                       onClick={(event) => onToggleNotify(event, session.id)}
                     >
                       🔔 <span className="whitespace-nowrap">{notified ? "通知ON" : "空きが出たら参加"}</span>

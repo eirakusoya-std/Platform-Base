@@ -6,10 +6,10 @@ import { Footer } from "./components/home/Footer";
 import { SearchFilterBar } from "./components/home/SearchFilterBar";
 import { SessionDetailModal } from "./components/home/SessionDetailModal";
 import { TopNav } from "./components/home/TopNav";
-import { LIVE_NOW_SESSIONS, SCHEDULE_BY_DATE, STARTING_SOON_SESSIONS, TAGS } from "./components/home/data";
+import { LIVE_NOW_SESSIONS, STARTING_SOON_SESSIONS, TAGS } from "./components/home/data";
 import { NowLiveSection } from "./components/home/sections/NowLiveSection";
-import { ScheduleSection } from "./components/home/sections/ScheduleSection";
 import { StartingSoonSection } from "./components/home/sections/StartingSoonSection";
+import { UpcomingTicker } from "./components/home/UpcomingTicker";
 import { ModalSession } from "./components/home/types";
 import { matchesFilter } from "./components/home/utils";
 
@@ -21,7 +21,6 @@ export default function HomePage() {
   const [selectedSession, setSelectedSession] = useState<ModalSession | null>(null);
   const [notifySet, setNotifySet] = useState<Set<number>>(new Set());
   const [reservedSet, setReservedSet] = useState<Set<number>>(new Set());
-  const [activeDate, setActiveDate] = useState("02.27");
 
   const [countdown, setCountdown] = useState<Record<number, number>>(() =>
     Object.fromEntries(STARTING_SOON_SESSIONS.map((session) => [session.id, session.startsInSeconds])),
@@ -92,6 +91,8 @@ export default function HomePage() {
         onClearTags={() => setActiveTags([])}
       />
 
+      <UpcomingTicker sessions={filteredStartingSoon} onParticipate={goPreJoin} />
+
       <div className="mx-auto max-w-[1400px] px-8">
         <StartingSoonSection
           sessions={filteredStartingSoon}
@@ -107,15 +108,6 @@ export default function HomePage() {
           notifySet={notifySet}
           onOpenSession={setSelectedSession}
           onToggleNotify={handleToggleNotify}
-        />
-
-        <ScheduleSection
-          scheduleByDate={SCHEDULE_BY_DATE}
-          activeDate={activeDate}
-          reservedSet={reservedSet}
-          onDateChange={setActiveDate}
-          onToggleReserve={handleToggleReserve}
-          onParticipate={goPreJoin}
         />
       </div>
 
