@@ -35,18 +35,6 @@ export type LiveSession = {
   };
 };
 
-export type ScheduleItem = {
-  id: number;
-  time: string;
-  vtuber: string;
-  title: string;
-  thumbnail: string;
-  isMembersOnly: boolean;
-  isLottery: boolean;
-  hasReserved: boolean;
-  tags: string[];
-};
-
 export type ModalSession = {
   id: number;
   vtuber: string;
