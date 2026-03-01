@@ -61,12 +61,19 @@ export default function StudioLivePage() {
             <h1 className="text-2xl font-bold">Live Studio</h1>
             <p className="text-sm text-[var(--brand-text-muted)]">配信中のモニタリングと参加者コントロール</p>
           </div>
+          <div className="flex items-center gap-2">
+          <a href="/room/studio-main?role=host&mic=1&cam=1&speaker=1" className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-all hover:brightness-110">
+            WebRTCで配信
+          </a>
           <button
             onClick={() => setIsLive((v) => !v)}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold ${isLive ? "bg-[var(--brand-accent)] text-[var(--brand-text)]" : "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"}`}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+              isLive ? "bg-[var(--brand-accent)] text-[var(--brand-text)]" : "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+            }`}
           >
             {isLive ? "配信終了" : "配信再開"}
           </button>
+        </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
