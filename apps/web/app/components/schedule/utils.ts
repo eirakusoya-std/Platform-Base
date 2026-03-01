@@ -32,13 +32,13 @@ export function statusLabel(status: BookingStatus): string {
 }
 
 export function statusStyle(status: BookingStatus): string {
-  if (status === "available") return "bg-[#1e3a5f] text-white";
-  if (status === "booked") return "bg-gray-100 text-gray-500";
-  return "bg-purple-100 text-purple-700";
+  if (status === "available") return "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]";
+  if (status === "booked") return "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]";
+  return "bg-[var(--brand-accent)]/20 text-[var(--brand-accent)]";
 }
 
 export function statusDot(status: BookingStatus): string {
-  if (status === "available") return "bg-[#1e3a5f]";
-  if (status === "booked") return "bg-gray-400";
-  return "bg-purple-500";
+  if (status === "available") return "bg-[var(--brand-primary)]";
+  if (status === "booked") return "bg-[var(--brand-text-muted)]";
+  return "bg-[var(--brand-accent)]";
 }

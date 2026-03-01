@@ -51,13 +51,13 @@ export default function SchedulePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f7f8fb]">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
       <TopNav />
 
       <main className="mx-auto max-w-[1400px] px-8 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">配信スケジュール</h1>
-          <p className="mt-1 text-sm text-gray-600">時間帯とタレントを比較して、予約可能な枠をすばやく選べます。</p>
+          <h1 className="text-2xl font-bold text-[var(--text)]">配信スケジュール</h1>
+          <p className="mt-1 text-sm text-[var(--text-sub)]">時間帯とタレントを比較して、予約可能な枠をすばやく選べます。</p>
         </div>
 
         <div className="space-y-5">

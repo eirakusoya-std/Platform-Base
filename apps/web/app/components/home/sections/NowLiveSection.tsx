@@ -3,10 +3,10 @@ import { LiveSession, ModalSession } from "../types";
 import { getTypeInfo } from "../utils";
 
 type NowLiveSectionProps = {
-  sessions: LiveSession[];
-  notifySet: Set<number>;
-  onOpenSession: (session: ModalSession) => void;
-  onToggleNotify: (event: MouseEvent, sessionId: number) => void;
+ sessions: LiveSession[];
+ notifySet: Set<number>;
+ onOpenSession: (session: ModalSession) => void;
+ onToggleNotify: (event: MouseEvent, sessionId: number) => void;
 };
 
 export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNotify }: NowLiveSectionProps) {
@@ -14,20 +14,20 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
     <section className="py-10">
       <div className="mb-7 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-full bg-red-500 px-3 py-1.5 shadow-sm">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-white" />
-            <span className="text-xs font-bold tracking-widest text-white">LIVE</span>
+          <div className="flex items-center gap-2 rounded-full bg-[var(--brand-accent)] px-3 py-1.5 shadow-sm">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-[var(--brand-bg-900)]" />
+            <span className="text-xs font-bold tracking-widest text-[var(--brand-text)]">LIVE</span>
           </div>
-          <p className="text-sm text-gray-500">現在配信中のセッション</p>
+          <p className="text-sm text-[var(--brand-text-muted)]">現在配信中のセッション</p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1 border border-red-100">
-          <span className="text-[10px] font-bold text-red-600 uppercase">Total Live</span>
-          <span className="text-xs font-black text-red-600">{sessions.length}</span>
+        <div className="flex items-center gap-2 rounded-lg bg-[var(--brand-accent)]/15 px-3 py-1">
+          <span className="text-[10px] font-bold uppercase text-[var(--brand-accent)]">Total Live</span>
+          <span className="text-xs font-black text-[var(--brand-accent)]">{sessions.length}</span>
         </div>
       </div>
 
       {sessions.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">現在ライブ配信はありません</div>
+        <div className="py-12 text-center text-sm text-[var(--brand-text-muted)]">現在ライブ配信はありません</div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sessions.map((session) => {
@@ -38,7 +38,7 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
             return (
               <div
                 key={session.id}
-                className="group cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white transition-all hover:border-gray-300 hover:shadow-md"
+                className="group cursor-pointer overflow-hidden rounded-xl bg-[var(--brand-surface)] shadow-lg shadow-black/25 transition-all hover:-translate-y-0.5 hover:shadow-xl"
                 onClick={() =>
                   onOpenSession({
                     id: session.id,
@@ -55,58 +55,59 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                   })
                 }
               >
-                <div className="relative overflow-hidden" style={{ aspectRatio: "16/9" }}>
-                  <img src={session.thumbnail} alt={session.vtuber} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-
-                  <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-lg bg-red-500 px-2.5 py-1.5 shadow-md">
-                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-                    <span className="text-xs font-bold text-white">LIVE</span>
-                  </div>
-
-                  <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 backdrop-blur-sm">
-                    <span className="text-xs text-white">👥</span>
-                    <span className="text-xs font-bold text-white">{session.viewers.toLocaleString()}</span>
-                  </div>
-
-                  <div className={`absolute bottom-3 left-3 flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold backdrop-blur-sm ${typeInfo.bg}`}>
-                    <span>{typeInfo.icon}</span>
-                    <span>{typeInfo.label}</span>
-                  </div>
+                <div className="overflow-hidden" style={{ aspectRatio: "16/9" }}>
+                  <img
+                    src={session.thumbnail}
+                    alt={session.vtuber}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                  />
                 </div>
 
                 <div className="p-3.5">
-                  <div className="mb-3">
-                    <h3 className="mb-0.5 text-sm font-bold text-gray-900">{session.vtuber}</h3>
-                    <p className="line-clamp-2 text-xs text-gray-600">{session.title}</p>
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                    <div className="flex items-center gap-1 rounded-lg bg-[var(--brand-accent)]/20 px-2 py-1 text-[10px] font-bold text-[var(--brand-accent)]">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand-accent)]" />
+                      <span>LIVE</span>
+                    </div>
+                    <div className="rounded-lg bg-[var(--brand-bg-900)]/70 px-2 py-1 text-[10px] font-bold text-[var(--brand-text)]">
+                      👥 {session.viewers.toLocaleString()}
+                    </div>
+                    <div className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold ${typeInfo.bg}`}>
+                      <span>{typeInfo.icon}</span>
+                      <span>{typeInfo.label}</span>
+                    </div>
                   </div>
 
+                  <p className="mb-0.5 line-clamp-2 text-sm font-bold text-[var(--brand-text)]">{session.title}</p>
+                  <p className="mb-3 text-xs text-[var(--brand-text-muted)]">{session.vtuber}</p>
+
                   {slotsAvailable ? (
-                    <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                      <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
-                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                    <div className="mb-3 rounded-lg bg-[var(--brand-primary)]/15 px-3 py-2">
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--brand-primary)]">
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand-primary)]" />
                         {session.slotsLeft}枠 空きあり - 今すぐ参加可能
                       </p>
                     </div>
                   ) : (
-                    <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                      <p className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-gray-400" />
+                    <div className="mb-3 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
+                      <p className="flex items-center gap-1.5 text-xs text-[var(--brand-text-muted)]">
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--brand-text-muted)]" />
                         参加枠は満員です - 空き待ち通知を設定できます
                       </p>
                     </div>
                   )}
 
                   <div className="flex items-center gap-2">
-                    <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#1e3a5f] py-2.5 text-sm font-medium text-white transition-all hover:bg-[#2d5080]">
+                    <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-bg-900)] transition-all hover:brightness-110">
                       ▶ 視聴する
                     </button>
 
                     <button
-                      className={`flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs font-medium transition-all ${notified
-                          ? "border-[#1e3a5f] bg-[#1e3a5f] text-white"
-                          : "border-gray-300 bg-white text-gray-600 hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
-                        }`}
+                      className={`flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
+                        notified
+                          ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                          : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)] hover:text-[var(--brand-primary)]"
+                      }`}
                       onClick={(event) => onToggleNotify(event, session.id)}
                     >
                       🔔 <span className="whitespace-nowrap">{notified ? "通知ON" : "空きが出たら参加"}</span>
@@ -114,9 +115,9 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                   </div>
 
                   {session.userHistory && (
-                    <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
-                      <span className="text-[11px] text-gray-400">あなたの参加回数</span>
-                      <span className="text-xs font-bold text-[#1e3a5f]">{session.userHistory.totalParticipations}回</span>
+                    <div className="mt-3 flex items-center justify-between pt-3">
+                      <span className="text-[11px] text-[var(--brand-text-muted)]">あなたの参加回数</span>
+                      <span className="text-xs font-bold text-[var(--brand-primary)]">{session.userHistory.totalParticipations}回</span>
                     </div>
                   )}
                 </div>
