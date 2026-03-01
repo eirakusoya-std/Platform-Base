@@ -79,7 +79,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--brand-bg-900)]">
+    <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 md:pb-0">
       <TopNav />
 
       <SearchFilterBar

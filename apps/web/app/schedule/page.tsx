@@ -8,27 +8,34 @@ import { SCHEDULE_DATES, SCHEDULE_EVENTS, TALENTS } from "../components/schedule
 import { ScheduleFilters } from "../components/schedule/ScheduleFilters";
 import { ScheduleGrid } from "../components/schedule/ScheduleGrid";
 import { SessionCategory } from "../components/schedule/types";
-import { buildTimeSlots } from "../components/schedule/utils";
 
 export default function SchedulePage() {
   const router = useRouter();
 
   const [selectedDate, setSelectedDate] = useState(SCHEDULE_DATES[0]);
+  const [talentQuery, setTalentQuery] = useState("");
   const [startHour, setStartHour] = useState(10);
   const [endHour, setEndHour] = useState(16);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<SessionCategory[]>([]);
 
-  const slots = useMemo(() => buildTimeSlots(startHour, endHour), [startHour, endHour]);
-
   const filteredEvents = useMemo(() => {
+    const query = talentQuery.trim().toLowerCase();
+    const matchedTalentIds =
+      query.length === 0
+        ? null
+        : new Set(
+            TALENTS.filter((talent) => talent.name.toLowerCase().includes(query)).map((talent) => talent.id),
+          );
+
     return SCHEDULE_EVENTS.filter((event) => {
       if (event.date !== selectedDate) return false;
+      if (matchedTalentIds && !matchedTalentIds.has(event.talentId)) return false;
       if (selectedCategories.length > 0 && !selectedCategories.includes(event.category)) return false;
       if (onlyAvailable && event.status !== "available") return false;
       return true;
     });
-  }, [selectedDate, selectedCategories, onlyAvailable]);
+  }, [selectedDate, talentQuery, selectedCategories, onlyAvailable]);
 
   const handleToggleCategory = (category: SessionCategory) => {
     setSelectedCategories((prev) =>
@@ -51,7 +58,7 @@ export default function SchedulePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+    <div className="min-h-screen bg-[var(--bg)] pb-20 text-[var(--text)] md:pb-0">
       <TopNav />
 
       <main className="mx-auto max-w-[1400px] px-8 py-8">
@@ -64,18 +71,20 @@ export default function SchedulePage() {
           <ScheduleFilters
             dates={SCHEDULE_DATES}
             selectedDate={selectedDate}
+            talentQuery={talentQuery}
             startHour={startHour}
             endHour={endHour}
             onlyAvailable={onlyAvailable}
             selectedCategories={selectedCategories}
             onDateChange={setSelectedDate}
+            onTalentQueryChange={setTalentQuery}
             onStartHourChange={handleStartHourChange}
             onEndHourChange={handleEndHourChange}
             onOnlyAvailableChange={setOnlyAvailable}
             onToggleCategory={handleToggleCategory}
           />
 
-          <ScheduleGrid talents={TALENTS} slots={slots} events={filteredEvents} onReserve={handleReserve} />
+          <ScheduleGrid talents={TALENTS} selectedDate={selectedDate} startHour={startHour} endHour={endHour} events={filteredEvents} onReserve={handleReserve} />
         </div>
       </main>
 
