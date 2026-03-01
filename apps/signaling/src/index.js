@@ -44,7 +44,7 @@ const io = new Server(server, {
 
 io.on("connection", (socket) => {
   // 参加: 2人制限 + role返す
-  socket.on(EVENTS.JOIN_ROOM, ({ roomId, peerId }) => {
+  socket.on(EVENTS.JOIN_ROOM, ({ roomId, peerId, requestedRole }) => {
     socket.data.roomId = roomId;
     socket.data.peerId = peerId;
 
@@ -59,11 +59,17 @@ io.on("connection", (socket) => {
 
     socket.join(roomId);
 
-    const role = count === 0 ? "host" : "guest";
+    // First peer is always host. Second peer can be listener/speaker.
+    const role =
+      count === 0
+        ? "host"
+        : requestedRole === "speaker"
+          ? "speaker"
+          : "listener";
     socket.emit("joined-room", { roomId, peerId, role });
 
     // 2人目が入ったら、既存側に通知（ホストがoffer作れる）
-    if (role === "guest") {
+    if (role === "listener" || role === "speaker") {
       socket.to(roomId).emit(EVENTS.PEER_JOINED, { peerId });
     }
   });

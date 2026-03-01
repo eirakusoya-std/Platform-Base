@@ -3,7 +3,7 @@ import { ModalSession } from "./types";
 type SessionDetailModalProps = {
  session: ModalSession;
  onClose: () => void;
- onParticipate: (sessionId: number) => void;
+ onParticipate: (sessionId: string) => void;
 };
 
 export function SessionDetailModal({ session, onClose, onParticipate }: SessionDetailModalProps) {

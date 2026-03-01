@@ -4,7 +4,7 @@ export const TAGS = ["雑談", "ゲーム", "歌枠", "英語", "参加型"];
 
 export const STARTING_SOON_SESSIONS: StartingSoonSession[] = [
   {
-    id: 1,
+    id: "1",
     vtuber: "夜城ルミナ",
     title: "【侵食エンド世界】リスナー参加型サバイバル建国計画",
     thumbnail: "/image/thumbnail/thumbnail_1.png",
@@ -19,7 +19,7 @@ export const STARTING_SOON_SESSIONS: StartingSoonSession[] = [
     glowColor: "rgba(236,72,153,0.4)",
   },
   {
-    id: 2,
+    id: "2",
     vtuber: "焔角リゼル",
     title: "【完全初見】DARK SOULS 制覇への血路",
     thumbnail: "/image/thumbnail/thumbnail_2.png",
@@ -34,7 +34,7 @@ export const STARTING_SOON_SESSIONS: StartingSoonSession[] = [
     glowColor: "rgba(245,158,11,0.4)",
   },
   {
-    id: 3,
+    id: "3",
     vtuber: "白雪ノエルナ",
     title: "まったり夜カフェ雑談",
     thumbnail: "/image/thumbnail/thumbnail_3.png",
@@ -52,7 +52,7 @@ export const STARTING_SOON_SESSIONS: StartingSoonSession[] = [
 
 export const LIVE_NOW_SESSIONS: LiveSession[] = [
   {
-    id: 10,
+    id: "10",
     vtuber: "陽葵エルナ",
     title: "【今日から話せる】初心者向け英会話ライブレッスン",
     thumbnail: "/image/thumbnail/thumbnail_5.png",
@@ -67,7 +67,7 @@ export const LIVE_NOW_SESSIONS: LiveSession[] = [
     userHistory: { totalParticipations: 12, lastParticipation: "2026.02.20" },
   },
   {
-    id: 11,
+    id: "11",
     vtuber: "星宮ポラリス ＆ 桜庭メイカ",
     title: "視聴者参加型！ガチレース耐久",
     thumbnail: "/image/thumbnail/thumbnail_4.png",

@@ -4,9 +4,9 @@ import { getTypeInfo } from "../utils";
 
 type NowLiveSectionProps = {
  sessions: LiveSession[];
- notifySet: Set<number>;
+ notifySet: Set<string>;
  onOpenSession: (session: ModalSession) => void;
- onToggleNotify: (event: MouseEvent, sessionId: number) => void;
+ onToggleNotify: (event: MouseEvent, sessionId: string) => void;
 };
 
 export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNotify }: NowLiveSectionProps) {
