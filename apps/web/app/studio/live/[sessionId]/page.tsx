@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import { TopNav } from "../../../components/home/TopNav";
-import { getStreamSession, setStreamSessionStatus, subscribeStreamSessions, type StreamSession } from "../../../lib/streamSessions";
+import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
+import { getStreamSession, setStreamSessionStatus, subscribeStreamSessions, type StreamSession, updateStreamSession } from "../../../lib/streamSessions";
 
 type QueueItem = {
   id: string;
@@ -59,6 +60,8 @@ export default function StudioLiveSessionPage() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [connectedViewers, setConnectedViewers] = useState(0);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
   const [participantLink, setParticipantLink] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -102,7 +105,12 @@ export default function StudioLiveSessionPage() {
 
     const setupPreview = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true,
+          audio: true,
+        });
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
           return;
@@ -114,6 +122,23 @@ export default function StudioLiveSessionPage() {
           previewRef.current.muted = true;
         }
 
+        if (pcRef.current) {
+          const audioTrack = stream.getAudioTracks()[0];
+          const videoTrack = stream.getVideoTracks()[0];
+          for (const sender of pcRef.current.getSenders()) {
+            if (sender.track?.kind === "audio" && audioTrack) {
+              sender.replaceTrack(audioTrack).catch(() => {
+                // no-op
+              });
+            }
+            if (sender.track?.kind === "video" && videoTrack) {
+              sender.replaceTrack(videoTrack).catch(() => {
+                // no-op
+              });
+            }
+          }
+        }
+
         stream.getAudioTracks().forEach((track) => {
           track.enabled = micOn;
         });
@@ -121,9 +146,23 @@ export default function StudioLiveSessionPage() {
           track.enabled = camOn;
         });
 
-        setMediaError(null);
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (!cancelled) {
+          const videos = devices.filter((device) => device.kind === "videoinput");
+          setVideoDevices(videos);
+          if (!selectedVideoDeviceId && videos.length > 0) {
+            const sessionPreferred = session?.preferredVideoDeviceId
+              ? videos.find((device) => device.deviceId === session.preferredVideoDeviceId) ?? null
+              : null;
+            const preferred = sessionPreferred ?? pickPreferredVideoDevice(videos);
+            if (preferred?.deviceId) setSelectedVideoDeviceId(preferred.deviceId);
+          }
+          setMediaError(null);
+        }
       } catch {
-        setMediaError("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。");
+        if (!cancelled) {
+          setMediaError("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。");
+        }
       }
     };
 
@@ -135,12 +174,29 @@ export default function StudioLiveSessionPage() {
       streamRef.current = null;
       if (previewRef.current) previewRef.current.srcObject = null;
     };
-  }, [hydrated, notFound]);
+  }, [hydrated, notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId]);
 
   useEffect(() => {
     if (!hydrated || !session) return;
     setParticipantLink(`${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`);
   }, [hydrated, session]);
+
+  const selectedVideoLabel = useMemo(() => {
+    return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? session?.preferredVideoLabel ?? "デフォルトカメラ";
+  }, [selectedVideoDeviceId, session?.preferredVideoLabel, videoDevices]);
+
+  const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
+
+  useEffect(() => {
+    if (!session) return;
+    if (!selectedVideoDeviceId) return;
+    if (session.preferredVideoDeviceId === selectedVideoDeviceId && session.preferredVideoLabel === selectedVideoLabel) return;
+
+    updateStreamSession(session.sessionId, {
+      preferredVideoDeviceId: selectedVideoDeviceId,
+      preferredVideoLabel: selectedVideoLabel,
+    });
+  }, [selectedVideoDeviceId, selectedVideoLabel, session?.preferredVideoDeviceId, session?.preferredVideoLabel, session?.sessionId]);
 
   useEffect(() => {
     streamRef.current?.getAudioTracks().forEach((track) => {
@@ -391,6 +447,30 @@ export default function StudioLiveSessionPage() {
               {linkCopied ? "コピー済み" : "リンクをコピー"}
             </button>
           </div>
+        </div>
+
+        <div className="mb-4 rounded-xl bg-[var(--brand-surface)] p-3">
+          <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">配信カメラ</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={selectedVideoDeviceId}
+              onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
+              className="w-full rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none sm:max-w-[420px]"
+            >
+              <option value="">デフォルトカメラ</option>
+              {videoDevices.map((device, index) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label || `Camera ${index + 1}`}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-[var(--brand-text-muted)]">仮想カメラをインストール済みならここで選択できます。</span>
+          </div>
+          {!usingVirtualCamera && (
+            <div className="mt-2 rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
+              仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
