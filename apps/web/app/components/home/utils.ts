@@ -20,13 +20,13 @@ export function formatCountdownLabel(seconds: number): string {
 export function getTypeInfo(type: ParticipationType | "First-come" | "Lottery"): TypeInfo {
   switch (type) {
     case "First-come":
-      return { label: "先着順", bg: "bg-blue-50 text-blue-700 border border-blue-200", icon: "🎯" };
+      return { label: "先着順", bg: "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]", icon: "🎯" };
     case "Lottery":
-      return { label: "抽選制", bg: "bg-purple-50 text-purple-700 border border-purple-200", icon: "🎲" };
+      return { label: "抽選制", bg: "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]", icon: "🎲" };
     case "Members-only":
-      return { label: "メンバー限定", bg: "bg-amber-50 text-amber-700 border border-amber-200", icon: "👑" };
+      return { label: "メンバー限定", bg: "bg-[var(--brand-accent)]/20 text-[var(--brand-accent)]", icon: "👑" };
     default:
-      return { label: "配信", bg: "bg-gray-100 text-gray-600", icon: "📺" };
+      return { label: "配信", bg: "bg-[var(--brand-surface)] text-[var(--brand-text-muted)]", icon: "📺" };
   }
 }
 
