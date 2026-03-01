@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
+import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../lib/cameraDevices";
 import { createStreamSession } from "../../lib/streamSessions";
 
 const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
@@ -19,6 +20,92 @@ export default function StudioPreLivePage() {
   const [chatOn, setChatOn] = useState(true);
   const [recordOn, setRecordOn] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
+
+  const previewRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const setupPreview = async () => {
+      try {
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true,
+          audio: true,
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (previewRef.current) {
+          previewRef.current.srcObject = stream;
+          previewRef.current.muted = true;
+        }
+
+        stream.getAudioTracks().forEach((track) => {
+          track.enabled = micOn;
+        });
+        stream.getVideoTracks().forEach((track) => {
+          track.enabled = camOn;
+        });
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) return;
+
+        const videos = devices.filter((device) => device.kind === "videoinput");
+        setVideoDevices(videos);
+
+        if (!selectedVideoDeviceId && videos.length > 0) {
+          const preferred = pickPreferredVideoDevice(videos);
+          if (preferred?.deviceId) {
+            setSelectedVideoDeviceId(preferred.deviceId);
+          }
+        }
+
+        setMediaError(null);
+      } catch {
+        if (!cancelled) {
+          setMediaError("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。");
+        }
+      }
+    };
+
+    setupPreview();
+
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      if (previewRef.current) previewRef.current.srcObject = null;
+    };
+  }, [selectedVideoDeviceId]);
+
+  useEffect(() => {
+    streamRef.current?.getAudioTracks().forEach((track) => {
+      track.enabled = micOn;
+    });
+  }, [micOn]);
+
+  useEffect(() => {
+    streamRef.current?.getVideoTracks().forEach((track) => {
+      track.enabled = camOn;
+    });
+  }, [camOn]);
+
+  const selectedVideoLabel = useMemo(() => {
+    return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? "デフォルトカメラ";
+  }, [selectedVideoDeviceId, videoDevices]);
+
+  const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
 
   const checklist = useMemo(
     () => [
@@ -45,6 +132,8 @@ export default function StudioPreLivePage() {
       thumbnail: "/image/thumbnail/thumbnail_5.png",
       participationType: "First-come",
       slotsTotal: 10,
+      preferredVideoDeviceId: selectedVideoDeviceId || undefined,
+      preferredVideoLabel: selectedVideoLabel || undefined,
     });
 
     router.push(`/studio/live/${encodeURIComponent(created.sessionId)}`);
@@ -82,11 +171,7 @@ export default function StudioPreLivePage() {
               <div className="grid gap-3">
                 <label className="grid gap-1 text-sm">
                   <span className="text-[var(--brand-text-muted)]">タイトル</span>
-                  <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
-                  />
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none" />
                 </label>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -129,9 +214,35 @@ export default function StudioPreLivePage() {
 
             <div className="rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/25">
               <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">プレビュー</h2>
-              <div className="overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
-                <img src="/image/thumbnail/thumbnail_5.png" alt="preview" className="h-full w-full object-cover" />
+              <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
+                <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                {!camOn && <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-[var(--brand-text-muted)]">カメラOFF</div>}
               </div>
+
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-semibold text-[var(--brand-text-muted)]">配信カメラ</label>
+                <select
+                  value={selectedVideoDeviceId}
+                  onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
+                  className="w-full rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none"
+                >
+                  <option value="">デフォルトカメラ</option>
+                  {videoDevices.map((device, index) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Camera ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {!usingVirtualCamera && (
+                <div className="mt-3 rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
+                  仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。
+                </div>
+              )}
+
+              {mediaError && <p className="mt-3 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
+
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <button
                   onClick={() => setMicOn((v) => !v)}

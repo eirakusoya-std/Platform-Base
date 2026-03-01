@@ -16,6 +16,8 @@ export type StreamSession = {
   participationType: "First-come" | "Lottery";
   slotsTotal: number;
   slotsLeft: number;
+  preferredVideoDeviceId?: string;
+  preferredVideoLabel?: string;
 };
 
 type CreateStreamSessionInput = {
@@ -28,6 +30,8 @@ type CreateStreamSessionInput = {
   startsAt?: string;
   participationType?: "First-come" | "Lottery";
   slotsTotal?: number;
+  preferredVideoDeviceId?: string;
+  preferredVideoLabel?: string;
 };
 
 const STORAGE_KEY = "aiment.stream-sessions.v1";
@@ -99,6 +103,8 @@ export function createStreamSession(input: CreateStreamSessionInput): StreamSess
     participationType: input.participationType ?? "First-come",
     slotsTotal: input.slotsTotal ?? 10,
     slotsLeft: input.slotsTotal ?? 10,
+    preferredVideoDeviceId: input.preferredVideoDeviceId,
+    preferredVideoLabel: input.preferredVideoLabel,
   };
 
   writeSessions([created, ...readSessions()]);
