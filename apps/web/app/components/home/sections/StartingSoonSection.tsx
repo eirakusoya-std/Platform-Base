@@ -5,11 +5,11 @@ import { formatCountdown, formatCountdownLabel, getTypeInfo } from "../utils";
 
 type StartingSoonSectionProps = {
  sessions: StartingSoonSession[];
- countdown: Record<number, number>;
- reservedSet: Set<number>;
+ countdown: Record<string, number>;
+ reservedSet: Set<string>;
  onOpenSession: (session: ModalSession) => void;
- onToggleReserve: (event: MouseEvent, sessionId: number) => void;
- onParticipate: (sessionId: number) => void;
+ onToggleReserve: (event: MouseEvent, sessionId: string) => void;
+ onParticipate: (sessionId: string) => void;
 };
 
 export function StartingSoonSection({

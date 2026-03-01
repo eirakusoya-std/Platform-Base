@@ -2,7 +2,7 @@ import { StartingSoonSession } from "./types";
 
 type UpcomingTickerProps = {
  sessions: StartingSoonSession[];
- onParticipate: (sessionId: number) => void;
+ onParticipate: (sessionId: string) => void;
 };
 
 export function UpcomingTicker({ sessions, onParticipate }: UpcomingTickerProps) {

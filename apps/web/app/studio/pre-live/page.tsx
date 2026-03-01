@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
+import { createStreamSession } from "../../lib/streamSessions";
 
 const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
 
@@ -17,6 +18,7 @@ export default function StudioPreLivePage() {
   const [camOn, setCamOn] = useState(true);
   const [chatOn, setChatOn] = useState(true);
   const [recordOn, setRecordOn] = useState(true);
+  const [creating, setCreating] = useState(false);
 
   const checklist = useMemo(
     () => [
@@ -29,6 +31,24 @@ export default function StudioPreLivePage() {
   );
 
   const ready = checklist.every((item) => item.ok);
+
+  const startBroadcastFlow = () => {
+    if (!ready || creating) return;
+    setCreating(true);
+
+    const created = createStreamSession({
+      hostUserId: "vtuber-demo",
+      hostName: "あなたのチャンネル",
+      title: title.trim(),
+      category,
+      description: description.trim(),
+      thumbnail: "/image/thumbnail/thumbnail_5.png",
+      participationType: "First-come",
+      slotsTotal: 10,
+    });
+
+    router.push(`/studio/live/${encodeURIComponent(created.sessionId)}`);
+  };
 
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 text-[var(--brand-text)] md:pb-0">
@@ -46,11 +66,11 @@ export default function StudioPreLivePage() {
               戻る
             </Link>
             <button
-              onClick={() => router.push("/studio/live")}
-              disabled={!ready}
+              onClick={startBroadcastFlow}
+              disabled={!ready || creating}
               className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              配信を開始
+              {creating ? "作成中..." : "枠を作成して進む"}
             </button>
           </div>
         </div>

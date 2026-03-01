@@ -10,21 +10,104 @@ import { LIVE_NOW_SESSIONS, STARTING_SOON_SESSIONS, TAGS } from "./components/ho
 import { NowLiveSection } from "./components/home/sections/NowLiveSection";
 import { StartingSoonSection } from "./components/home/sections/StartingSoonSection";
 import { UpcomingTicker } from "./components/home/UpcomingTicker";
-import { ModalSession } from "./components/home/types";
+import { LiveSession, ModalSession, StartingSoonSession } from "./components/home/types";
 import { matchesFilter } from "./components/home/utils";
+import { listActiveStreamSessions, subscribeStreamSessions } from "./lib/streamSessions";
+
+function toSecondsUntil(startsAt: string) {
+  const diffMs = new Date(startsAt).getTime() - Date.now();
+  return Math.max(0, Math.floor(diffMs / 1000));
+}
 
 export default function HomePage() {
   const router = useRouter();
 
+  const [hydrated, setHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [selectedSession, setSelectedSession] = useState<ModalSession | null>(null);
-  const [notifySet, setNotifySet] = useState<Set<number>>(new Set());
-  const [reservedSet, setReservedSet] = useState<Set<number>>(new Set());
-
-  const [countdown, setCountdown] = useState<Record<number, number>>(() =>
+  const [notifySet, setNotifySet] = useState<Set<string>>(new Set());
+  const [reservedSet, setReservedSet] = useState<Set<string>>(new Set());
+  const [dynamicSessions, setDynamicSessions] = useState<ReturnType<typeof listActiveStreamSessions>>([]);
+  const [countdown, setCountdown] = useState<Record<string, number>>(() =>
     Object.fromEntries(STARTING_SOON_SESSIONS.map((session) => [session.id, session.startsInSeconds])),
   );
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const sync = () => setDynamicSessions(listActiveStreamSessions());
+    sync();
+    return subscribeStreamSessions(sync);
+  }, [hydrated]);
+
+  const dynamicStartingSoon = useMemo<StartingSoonSession[]>(
+    () =>
+      dynamicSessions
+        .filter((session) => session.status === "prelive")
+        .map((session) => ({
+          id: session.sessionId,
+          vtuber: session.hostName,
+          title: session.title,
+          thumbnail: session.thumbnail,
+          startsInSeconds: toSecondsUntil(session.startsAt),
+          slotsTotal: session.slotsTotal,
+          slotsLeft: session.slotsLeft,
+          participationType: session.participationType,
+          isSubscribed: true,
+          tags: [session.category, "参加型"],
+          description: session.description,
+          duration: "約60分",
+          glowColor: "rgba(124,106,230,0.35)",
+        })),
+    [dynamicSessions],
+  );
+
+  const dynamicLive = useMemo<LiveSession[]>(
+    () =>
+      dynamicSessions
+        .filter((session) => session.status === "live")
+        .map((session) => ({
+          id: session.sessionId,
+          vtuber: session.hostName,
+          title: session.title,
+          thumbnail: session.thumbnail,
+          viewers: 0,
+          slotsTotal: session.slotsTotal,
+          slotsLeft: session.slotsLeft,
+          participationType: session.participationType,
+          isSubscribed: true,
+          tags: [session.category, "参加型"],
+          description: session.description,
+          duration: "配信中",
+        })),
+    [dynamicSessions],
+  );
+
+  const allStartingSoon = useMemo(() => [...dynamicStartingSoon, ...STARTING_SOON_SESSIONS], [dynamicStartingSoon]);
+  const allLive = useMemo(() => [...dynamicLive, ...LIVE_NOW_SESSIONS], [dynamicLive]);
+
+  useEffect(() => {
+    setCountdown((prev) => {
+      const next = { ...prev };
+      const validIds = new Set(allStartingSoon.map((session) => session.id));
+
+      for (const session of allStartingSoon) {
+        if (next[session.id] == null) {
+          next[session.id] = session.startsInSeconds;
+        }
+      }
+
+      for (const id of Object.keys(next)) {
+        if (!validIds.has(id)) delete next[id];
+      }
+
+      return next;
+    });
+  }, [allStartingSoon]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -41,20 +124,20 @@ export default function HomePage() {
   }, []);
 
   const filteredStartingSoon = useMemo(
-    () => STARTING_SOON_SESSIONS.filter((session) => matchesFilter(session, searchQuery, activeTags)),
-    [searchQuery, activeTags],
+    () => allStartingSoon.filter((session) => matchesFilter(session, searchQuery, activeTags)),
+    [allStartingSoon, searchQuery, activeTags],
   );
 
   const filteredLive = useMemo(
-    () => LIVE_NOW_SESSIONS.filter((session) => matchesFilter(session, searchQuery, activeTags)),
-    [searchQuery, activeTags],
+    () => allLive.filter((session) => matchesFilter(session, searchQuery, activeTags)),
+    [allLive, searchQuery, activeTags],
   );
 
   const handleToggleTag = (tag: string) => {
     setActiveTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   };
 
-  const handleToggleReserve = (event: MouseEvent, sessionId: number) => {
+  const handleToggleReserve = (event: MouseEvent, sessionId: string) => {
     event.stopPropagation();
     setReservedSet((prev) => {
       const next = new Set(prev);
@@ -64,7 +147,7 @@ export default function HomePage() {
     });
   };
 
-  const handleToggleNotify = (event: MouseEvent, sessionId: number) => {
+  const handleToggleNotify = (event: MouseEvent, sessionId: string) => {
     event.stopPropagation();
     setNotifySet((prev) => {
       const next = new Set(prev);
@@ -74,8 +157,8 @@ export default function HomePage() {
     });
   };
 
-  const goPreJoin = (sessionId: number) => {
-    router.push(`/join/${encodeURIComponent(String(sessionId))}`);
+  const goPreJoin = (sessionId: string) => {
+    router.push(`/join/${encodeURIComponent(sessionId)}`);
   };
 
   return (
@@ -113,13 +196,7 @@ export default function HomePage() {
 
       <Footer />
 
-      {selectedSession && (
-        <SessionDetailModal
-          session={selectedSession}
-          onClose={() => setSelectedSession(null)}
-          onParticipate={goPreJoin}
-        />
-      )}
+      {selectedSession && <SessionDetailModal session={selectedSession} onClose={() => setSelectedSession(null)} onParticipate={goPreJoin} />}
     </div>
   );
 }

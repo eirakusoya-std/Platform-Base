@@ -1,7 +1,8 @@
 export type ParticipationType = "First-come" | "Lottery" | "Members-only";
+export type SessionId = string;
 
 export type StartingSoonSession = {
-  id: number;
+  id: SessionId;
   vtuber: string;
   title: string;
   thumbnail: string;
@@ -17,7 +18,7 @@ export type StartingSoonSession = {
 };
 
 export type LiveSession = {
-  id: number;
+  id: SessionId;
   vtuber: string;
   title: string;
   thumbnail: string;
@@ -36,7 +37,7 @@ export type LiveSession = {
 };
 
 export type ModalSession = {
-  id: number;
+  id: SessionId;
   vtuber: string;
   title: string;
   thumbnail: string;

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { getStreamSession } from "../../lib/streamSessions";
 
 type SessionMeta = {
  id: string;
@@ -67,7 +68,21 @@ export default function PreJoinPage() {
  const sessionId = params?.sessionId ?? "";
 
  const session = useMemo<SessionMeta>(
- () =>
+ () => {
+ const dynamicSession = getStreamSession(sessionId);
+ if (dynamicSession) {
+ return {
+ id: dynamicSession.sessionId,
+ vtuber: dynamicSession.hostName,
+ title: dynamicSession.title,
+ description: dynamicSession.description,
+ duration: dynamicSession.status === "live" ? "配信中" : "約60分",
+ participationType: dynamicSession.participationType === "Lottery" ? "抽選制" : "先着順",
+ thumbnail: dynamicSession.thumbnail,
+ };
+ }
+
+ return (
  SESSION_MAP[sessionId] ?? {
  id: sessionId || "unknown",
  vtuber: "特別セッション",
@@ -76,6 +91,8 @@ export default function PreJoinPage() {
  duration: "約60分",
  participationType: "先着順",
  thumbnail: "/image/thumbnail/thumbnail_4.png",
+ }
+ );
  },
  [sessionId],
  );
@@ -172,7 +189,7 @@ export default function PreJoinPage() {
  };
 
  const joinNow = () => {
- const roomId = `session-${encodeURIComponent(session.id)}`;
+ const roomId = encodeURIComponent(session.id);
  const query = new URLSearchParams({ mic: micOn ? "1" : "0", cam: camOn ? "1" : "0", speaker: speakerOn ? "1" : "0" }).toString();
  router.push(`/room/${roomId}?${query}`);
  };
