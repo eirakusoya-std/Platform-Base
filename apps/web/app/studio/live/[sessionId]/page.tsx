@@ -59,6 +59,8 @@ export default function StudioLiveSessionPage() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [connectedViewers, setConnectedViewers] = useState(0);
+  const [participantLink, setParticipantLink] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -134,6 +136,11 @@ export default function StudioLiveSessionPage() {
       if (previewRef.current) previewRef.current.srcObject = null;
     };
   }, [hydrated, notFound]);
+
+  useEffect(() => {
+    if (!hydrated || !session) return;
+    setParticipantLink(`${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`);
+  }, [hydrated, session]);
 
   useEffect(() => {
     streamRef.current?.getAudioTracks().forEach((track) => {
@@ -281,6 +288,13 @@ export default function StudioLiveSessionPage() {
     setStreamSessionStatus(session.sessionId, "ended");
   };
 
+  const copyParticipantLink = async () => {
+    if (!participantLink) return;
+    await navigator.clipboard.writeText(participantLink);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 1500);
+  };
+
   useEffect(() => {
     return () => {
       cleanupConnection();
@@ -360,6 +374,23 @@ export default function StudioLiveSessionPage() {
             {connectionStatus === "live" ? "配信中" : connectionStatus === "starting" ? "開始中" : connectionStatus === "failed" ? "失敗" : "待機"}
           </span>
           <span>接続視聴者: {connectedViewers}</span>
+        </div>
+
+        <div className="mb-4 rounded-xl bg-[var(--brand-surface)] p-3">
+          <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">参加者用リンク</p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              readOnly
+              value={participantLink}
+              className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs text-[var(--brand-text)] outline-none"
+            />
+            <button
+              onClick={copyParticipantLink}
+              className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
+            >
+              {linkCopied ? "コピー済み" : "リンクをコピー"}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
