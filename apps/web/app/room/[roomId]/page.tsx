@@ -211,6 +211,15 @@ export default function RoomPage() {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
           remoteVideoRef.current.muted = !speakerOn;
+          remoteVideoRef.current.play().catch(() => {
+            if (!remoteVideoRef.current) return;
+            // Fallback for autoplay restrictions on some devices/browsers.
+            remoteVideoRef.current.muted = true;
+            remoteVideoRef.current.play().catch(() => {
+              // no-op
+            });
+            setSpeakerOn(false);
+          });
         }
         setRemoteConnected(true);
       };

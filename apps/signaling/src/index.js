@@ -50,6 +50,8 @@ io.on("connection", (socket) => {
 
     const room = io.sockets.adapter.rooms.get(roomId);
     const count = room ? room.size : 0;
+    const existingSocketIds = room ? [...room] : [];
+    const hostExists = existingSocketIds.some((id) => io.sockets.sockets.get(id)?.data?.role === "host");
 
     if (count >= 2) {
       socket.emit("room-full", { roomId });
@@ -59,18 +61,24 @@ io.on("connection", (socket) => {
 
     socket.join(roomId);
 
-    // First peer is always host. Second peer can be listener/speaker.
+    // Honor requested role. If host is absent, host can join even as second peer.
     const role =
-      count === 0
+      requestedRole === "host" && !hostExists
         ? "host"
         : requestedRole === "speaker"
           ? "speaker"
           : "listener";
+    socket.data.role = role;
     socket.emit("joined-room", { roomId, peerId, role });
 
-    // 2人目が入ったら、既存側に通知（ホストがoffer作れる）
-    if (role === "listener" || role === "speaker") {
+    // Notify host side to create offer.
+    // 1) listener/speaker joins while host exists -> notify existing peers.
+    if ((role === "listener" || role === "speaker") && hostExists) {
       socket.to(roomId).emit(EVENTS.PEER_JOINED, { peerId });
+    }
+    // 2) host joins while listener already waiting -> notify the host itself.
+    if (role === "host" && count > 0) {
+      socket.emit(EVENTS.PEER_JOINED, { peerId: "waiting-peer" });
     }
   });
 
