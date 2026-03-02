@@ -1,20 +1,25 @@
+"use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useI18n } from "../../lib/i18n";
 
 type NavItem = {
-  label: string;
+  labelJp: string;
+  labelEn: string;
   href?: string;
-  shortLabel?: string;
+  shortLabelEn?: string;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "ライブ", href: "/", shortLabel: "Live" },
-  { label: "スケジュール", href: "/schedule", shortLabel: "Schedule" },
-  { label: "タレント", shortLabel: "Talent" },
+  { labelJp: "ライブ", labelEn: "Live", href: "/", shortLabelEn: "Live" },
+  { labelJp: "スケジュール", labelEn: "Schedule", href: "/schedule", shortLabelEn: "Schedule" },
+  { labelJp: "タレント", labelEn: "Talent", shortLabelEn: "Talent" },
 ];
 
 export function TopNav() {
   const pathname = usePathname();
+  const { locale, setLocale, tx } = useI18n();
 
   return (
     <>
@@ -32,8 +37,8 @@ export function TopNav() {
                   const isActive = item.href ? pathname === item.href : false;
                   if (!item.href) {
                     return (
-                      <span key={item.label} className="whitespace-nowrap rounded-lg px-4 py-2 text-sm text-[var(--brand-text-muted)]/80">
-                        {item.label}
+                      <span key={item.labelJp} className="whitespace-nowrap rounded-lg px-4 py-2 text-sm text-[var(--brand-text-muted)]/80">
+                        {tx(item.labelJp, item.labelEn)}
                       </span>
                     );
                   }
@@ -47,7 +52,7 @@ export function TopNav() {
                           : "text-[var(--brand-text-muted)] hover:bg-[var(--brand-surface)] hover:text-[var(--brand-text)]"
                       }`}
                     >
-                      {item.label}
+                      {tx(item.labelJp, item.labelEn)}
                     </Link>
                   );
                 })}
@@ -55,11 +60,18 @@ export function TopNav() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setLocale(locale === "jp" ? "en" : "jp")}
+                className="rounded-lg bg-[var(--brand-bg-900)] px-2.5 py-2 text-xs font-semibold text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
+              >
+                {locale === "jp" ? "EN" : "JP"}
+              </button>
               <Link
                 href="/studio/pre-live"
-                className="hidden rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-all hover:brightness-110 sm:block"
+                className="hidden items-center gap-1 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-all hover:brightness-110 sm:inline-flex"
               >
-                配信を作成
+                <span aria-hidden>+</span>
+                <span>{tx("配信を作成", "Create Stream")}</span>
               </Link>
               <div className="hidden items-center gap-2 rounded-lg bg-[var(--brand-bg-900)] px-2.5 py-1.5 sm:flex">
                 <div className="h-7 w-7 overflow-hidden rounded-full">
@@ -83,10 +95,10 @@ export function TopNav() {
             if (!item.href) {
               return (
                 <span
-                  key={item.label}
+                  key={item.labelJp}
                   className="flex min-w-[72px] flex-1 items-center justify-center rounded-lg px-2 py-2 text-xs text-[var(--brand-text-muted)]/70"
                 >
-                  {item.shortLabel ?? item.label}
+                  {locale === "jp" ? item.labelJp : item.shortLabelEn ?? item.labelEn}
                 </span>
               );
             }
@@ -100,7 +112,7 @@ export function TopNav() {
                     : "text-[var(--brand-text-muted)] hover:bg-[var(--brand-bg-900)] hover:text-[var(--brand-text)]"
                 }`}
               >
-                {item.shortLabel ?? item.label}
+                {locale === "jp" ? item.labelJp : item.shortLabelEn ?? item.labelEn}
               </Link>
             );
           })}

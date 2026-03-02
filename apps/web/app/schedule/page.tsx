@@ -8,9 +8,11 @@ import { SCHEDULE_DATES, SCHEDULE_EVENTS, TALENTS } from "../components/schedule
 import { ScheduleFilters } from "../components/schedule/ScheduleFilters";
 import { ScheduleGrid } from "../components/schedule/ScheduleGrid";
 import { SessionCategory } from "../components/schedule/types";
+import { useI18n } from "../lib/i18n";
 
 export default function SchedulePage() {
   const router = useRouter();
+  const { tx } = useI18n();
 
   const [selectedDate, setSelectedDate] = useState(SCHEDULE_DATES[0]);
   const [talentQuery, setTalentQuery] = useState("");
@@ -63,8 +65,8 @@ export default function SchedulePage() {
 
       <main className="mx-auto max-w-[1400px] px-8 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[var(--text)]">配信スケジュール</h1>
-          <p className="mt-1 text-sm text-[var(--text-sub)]">時間帯とタレントを比較して、予約可能な枠をすばやく選べます。</p>
+          <h1 className="text-2xl font-bold text-[var(--text)]">{tx("配信スケジュール", "Stream Schedule")}</h1>
+          <p className="mt-1 text-sm text-[var(--text-sub)]">{tx("時間帯とタレントを比較して、予約可能な枠をすばやく選べます。", "Compare time slots and talents to quickly find bookable streams.")}</p>
         </div>
 
         <div className="space-y-5">

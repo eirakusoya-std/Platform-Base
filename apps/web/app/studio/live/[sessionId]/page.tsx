@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import { TopNav } from "../../../components/home/TopNav";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
+import { useI18n } from "../../../lib/i18n";
 import { getStreamSession, setStreamSessionStatus, subscribeStreamSessions, type StreamSession, updateStreamSession } from "../../../lib/streamSessions";
 
 type QueueItem = {
@@ -44,6 +45,7 @@ function createPeerId() {
 
 export default function StudioLiveSessionPage() {
   const router = useRouter();
+  const { tx } = useI18n();
   const params = useParams<{ sessionId: string }>();
   const sessionId = params?.sessionId ?? "";
 
@@ -182,7 +184,7 @@ export default function StudioLiveSessionPage() {
   }, [hydrated, session]);
 
   const selectedVideoLabel = useMemo(() => {
-    return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? session?.preferredVideoLabel ?? "デフォルトカメラ";
+    return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? session?.preferredVideoLabel ?? tx("デフォルトカメラ", "Default camera");
   }, [selectedVideoDeviceId, session?.preferredVideoLabel, videoDevices]);
 
   const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
@@ -212,12 +214,12 @@ export default function StudioLiveSessionPage() {
 
   const metrics = useMemo(
     () => [
-      { label: "視聴者", value: `${Math.max(connectedViewers, 0)}` },
-      { label: "同時会話", value: `${queue.length}` },
-      { label: "平均遅延", value: "2.1s" },
-      { label: "接続品質", value: connectionStatus === "live" ? "Good" : "-" },
+      { label: tx("視聴者", "Viewers"), value: `${Math.max(connectedViewers, 0)}` },
+      { label: tx("同時会話", "Active Talks"), value: `${queue.length}` },
+      { label: tx("平均遅延", "Avg Latency"), value: "2.1s" },
+      { label: tx("接続品質", "Connection"), value: connectionStatus === "live" ? "Good" : "-" },
     ],
-    [connectionStatus, connectedViewers, queue.length],
+    [connectionStatus, connectedViewers, queue.length, tx],
   );
 
   const approve = (id: string) => setQueue((prev) => prev.filter((q) => q.id !== id));
@@ -362,7 +364,7 @@ export default function StudioLiveSessionPage() {
       <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 text-[var(--brand-text)] md:pb-0">
         <TopNav />
         <main className="mx-auto flex max-w-[900px] flex-col items-center gap-4 px-4 py-16 text-center">
-          <p className="text-sm text-[var(--brand-text-muted)]">読み込み中...</p>
+          <p className="text-sm text-[var(--brand-text-muted)]">{tx("読み込み中...", "Loading...")}</p>
         </main>
       </div>
     );
@@ -373,10 +375,10 @@ export default function StudioLiveSessionPage() {
       <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 text-[var(--brand-text)] md:pb-0">
         <TopNav />
         <main className="mx-auto flex max-w-[900px] flex-col items-center gap-4 px-4 py-16 text-center">
-          <h1 className="text-2xl font-bold">枠が見つかりません</h1>
-          <p className="text-sm text-[var(--brand-text-muted)]">配信枠を先に作成してください。</p>
+          <h1 className="text-2xl font-bold">{tx("枠が見つかりません", "Session not found")}</h1>
+          <p className="text-sm text-[var(--brand-text-muted)]">{tx("配信枠を先に作成してください。", "Create a stream session first.")}</p>
           <Link href="/studio/pre-live" className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)]">
-            枠作成へ
+            {tx("枠作成へ", "Go to Pre-live")}
           </Link>
         </main>
       </div>
@@ -403,7 +405,7 @@ export default function StudioLiveSessionPage() {
                   : "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
               }`}
             >
-              {connectionStatus === "live" || session.status === "live" ? "配信終了" : "配信開始"}
+              {connectionStatus === "live" || session.status === "live" ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
             </button>
             <button
               onClick={() => {
@@ -412,7 +414,7 @@ export default function StudioLiveSessionPage() {
               }}
               className="rounded-lg bg-[var(--brand-surface)] px-4 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
             >
-              閉じる
+              {tx("閉じる", "Close")}
             </button>
           </div>
         </div>
@@ -427,13 +429,13 @@ export default function StudioLiveSessionPage() {
                   : "bg-[var(--brand-surface)]"
             }`}
           >
-            {connectionStatus === "live" ? "配信中" : connectionStatus === "starting" ? "開始中" : connectionStatus === "failed" ? "失敗" : "待機"}
+            {connectionStatus === "live" ? tx("配信中", "Live") : connectionStatus === "starting" ? tx("開始中", "Starting") : connectionStatus === "failed" ? tx("失敗", "Failed") : tx("待機", "Idle")}
           </span>
-          <span>接続視聴者: {connectedViewers}</span>
+          <span>{tx("接続視聴者", "Connected viewers")}: {connectedViewers}</span>
         </div>
 
         <div className="mb-4 rounded-xl bg-[var(--brand-surface)] p-3">
-          <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">参加者用リンク</p>
+          <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("参加者用リンク", "Participant link")}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               readOnly
@@ -444,31 +446,31 @@ export default function StudioLiveSessionPage() {
               onClick={copyParticipantLink}
               className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
             >
-              {linkCopied ? "コピー済み" : "リンクをコピー"}
+              {linkCopied ? tx("コピー済み", "Copied") : tx("リンクをコピー", "Copy link")}
             </button>
           </div>
         </div>
 
         <div className="mb-4 rounded-xl bg-[var(--brand-surface)] p-3">
-          <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">配信カメラ</p>
+          <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("配信カメラ", "Camera Source")}</p>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <select
               value={selectedVideoDeviceId}
               onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
               className="w-full rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none sm:max-w-[420px]"
             >
-              <option value="">デフォルトカメラ</option>
+              <option value="">{tx("デフォルトカメラ", "Default camera")}</option>
               {videoDevices.map((device, index) => (
                 <option key={device.deviceId} value={device.deviceId}>
                   {device.label || `Camera ${index + 1}`}
                 </option>
               ))}
             </select>
-            <span className="text-xs text-[var(--brand-text-muted)]">仮想カメラをインストール済みならここで選択できます。</span>
+            <span className="text-xs text-[var(--brand-text-muted)]">{tx("仮想カメラをインストール済みならここで選択できます。", "Select virtual camera if installed.")}</span>
           </div>
           {!usingVirtualCamera && (
             <div className="mt-2 rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
-              仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。
+              {tx("仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。", "A non-virtual camera is selected. Virtual camera is recommended for VTuber streaming.")}
             </div>
           )}
         </div>
@@ -478,7 +480,7 @@ export default function StudioLiveSessionPage() {
             <div className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
               <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
                 <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-                {!camOn && <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-[var(--brand-text-muted)]">カメラOFF</div>}
+                {!camOn && <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-[var(--brand-text-muted)]">{tx("カメラOFF", "Camera OFF")}</div>}
               </div>
               {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -486,21 +488,21 @@ export default function StudioLiveSessionPage() {
                   onClick={() => setMicOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm ${micOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  🎤 {micOn ? "ON" : "OFF"}
+                  MIC {micOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setCamOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm ${camOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  📷 {camOn ? "ON" : "OFF"}
+                  CAM {camOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setShareOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm ${shareOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  🖥 {shareOn ? "共有中" : "共有"}
+                  SHARE {shareOn ? "ON" : "OFF"}
                 </button>
-                <button className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text-muted)]">🎬 シーン切替</button>
+                <button className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text-muted)]">SCENE</button>
               </div>
             </div>
 
@@ -514,10 +516,10 @@ export default function StudioLiveSessionPage() {
             </div>
 
             <div className="rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/25">
-              <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">参加キュー（英会話）</h2>
+              <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("参加キュー（英会話）", "Join Queue (English Talk)")}</h2>
               <div className="space-y-2">
                 {queue.length === 0 ? (
-                  <p className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-3 text-sm text-[var(--brand-text-muted)]">待機中の参加者はいません</p>
+                  <p className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-3 text-sm text-[var(--brand-text-muted)]">{tx("待機中の参加者はいません", "No participants waiting")}</p>
                 ) : (
                   queue.map((item) => (
                     <div key={item.id} className="flex items-center justify-between rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
@@ -529,10 +531,10 @@ export default function StudioLiveSessionPage() {
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => approve(item.id)} className="rounded-md bg-[var(--brand-primary)] px-2 py-1 text-xs font-semibold text-[var(--brand-bg-900)]">
-                          承認
+                          {tx("承認", "Approve")}
                         </button>
                         <button onClick={() => reject(item.id)} className="rounded-md bg-[var(--brand-accent)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-accent)]">
-                          却下
+                          {tx("却下", "Reject")}
                         </button>
                       </div>
                     </div>
@@ -544,7 +546,7 @@ export default function StudioLiveSessionPage() {
 
           <aside className="flex min-h-[560px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
             <div className="px-4 py-3">
-              <p className="text-sm font-semibold">配信者チャット</p>
+              <p className="text-sm font-semibold">{tx("配信者チャット", "Host Chat")}</p>
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
               {chat.map((m) => (
@@ -565,11 +567,11 @@ export default function StudioLiveSessionPage() {
                       sendChat();
                     }
                   }}
-                  placeholder="告知・案内を入力"
+                  placeholder={tx("告知・案内を入力", "Type announcement")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
                 />
                 <button onClick={sendChat} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)]">
-                  送信
+                  {tx("送信", "Send")}
                 </button>
               </div>
             </div>

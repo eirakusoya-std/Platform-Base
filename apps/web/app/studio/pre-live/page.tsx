@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../lib/cameraDevices";
+import { useI18n } from "../../lib/i18n";
 import { createStreamSession } from "../../lib/streamSessions";
 
 const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
 
 export default function StudioPreLivePage() {
   const router = useRouter();
+  const { tx } = useI18n();
 
   const [title, setTitle] = useState("【英会話参加型】推しと距離を縮めるリアルトーク");
   const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]>("英語");
@@ -109,12 +111,12 @@ export default function StudioPreLivePage() {
 
   const checklist = useMemo(
     () => [
-      { label: "タイトル設定", ok: title.trim().length >= 8 },
-      { label: "カテゴリ選択", ok: Boolean(category) },
-      { label: "マイク有効", ok: micOn },
-      { label: "カメラ有効", ok: camOn },
+      { label: tx("タイトル設定", "Title set"), ok: title.trim().length >= 8 },
+      { label: tx("カテゴリ選択", "Category selected"), ok: Boolean(category) },
+      { label: tx("マイク有効", "Mic enabled"), ok: micOn },
+      { label: tx("カメラ有効", "Camera enabled"), ok: camOn },
     ],
-    [title, category, micOn, camOn],
+    [title, category, micOn, camOn, tx],
   );
 
   const ready = checklist.every((item) => item.ok);
@@ -148,18 +150,18 @@ export default function StudioPreLivePage() {
           <div>
             <p className="text-xs uppercase tracking-wider text-[var(--brand-text-muted)]">Studio</p>
             <h1 className="mt-1 text-2xl font-bold">Pre-Live Setup</h1>
-            <p className="mt-1 text-sm text-[var(--brand-text-muted)]">配信前の設定と機材チェックを行います。</p>
+            <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{tx("配信前の設定と機材チェックを行います。", "Configure devices and stream settings before going live.")}</p>
           </div>
           <div className="flex items-center gap-2">
             <Link href="/" className="rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]">
-              戻る
+              {tx("戻る", "Back")}
             </Link>
             <button
               onClick={startBroadcastFlow}
               disabled={!ready || creating}
               className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {creating ? "作成中..." : "枠を作成して進む"}
+              {creating ? tx("作成中...", "Creating...") : tx("枠を作成して進む", "Create Stream")}
             </button>
           </div>
         </div>
@@ -167,16 +169,16 @@ export default function StudioPreLivePage() {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
           <section className="space-y-4">
             <div className="rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/25">
-              <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">配信情報</h2>
+              <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("配信情報", "Stream Info")}</h2>
               <div className="grid gap-3">
                 <label className="grid gap-1 text-sm">
-                  <span className="text-[var(--brand-text-muted)]">タイトル</span>
+                  <span className="text-[var(--brand-text-muted)]">{tx("タイトル", "Title")}</span>
                   <input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none" />
                 </label>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="grid gap-1 text-sm">
-                    <span className="text-[var(--brand-text-muted)]">カテゴリ</span>
+                    <span className="text-[var(--brand-text-muted)]">{tx("カテゴリ", "Category")}</span>
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value as (typeof CATEGORY_OPTIONS)[number])}
@@ -191,17 +193,17 @@ export default function StudioPreLivePage() {
                   </label>
 
                   <label className="grid gap-1 text-sm">
-                    <span className="text-[var(--brand-text-muted)]">公開設定</span>
+                    <span className="text-[var(--brand-text-muted)]">{tx("公開設定", "Visibility")}</span>
                     <select className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
-                      <option>公開</option>
-                      <option>メンバー限定</option>
-                      <option>非公開テスト</option>
+                      <option>{tx("公開", "Public")}</option>
+                      <option>{tx("メンバー限定", "Members only")}</option>
+                      <option>{tx("非公開テスト", "Private test")}</option>
                     </select>
                   </label>
                 </div>
 
                 <label className="grid gap-1 text-sm">
-                  <span className="text-[var(--brand-text-muted)]">概要</span>
+                  <span className="text-[var(--brand-text-muted)]">{tx("概要", "Description")}</span>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -213,20 +215,20 @@ export default function StudioPreLivePage() {
             </div>
 
             <div className="rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/25">
-              <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">プレビュー</h2>
+              <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("プレビュー", "Preview")}</h2>
               <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
                 <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-                {!camOn && <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-[var(--brand-text-muted)]">カメラOFF</div>}
+                {!camOn && <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-[var(--brand-text-muted)]">{tx("カメラOFF", "Camera OFF")}</div>}
               </div>
 
               <div className="mt-3">
-                <label className="mb-1 block text-xs font-semibold text-[var(--brand-text-muted)]">配信カメラ</label>
+                <label className="mb-1 block text-xs font-semibold text-[var(--brand-text-muted)]">{tx("配信カメラ", "Camera Source")}</label>
                 <select
                   value={selectedVideoDeviceId}
                   onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
                   className="w-full rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none"
                 >
-                  <option value="">デフォルトカメラ</option>
+                  <option value="">{tx("デフォルトカメラ", "Default camera")}</option>
                   {videoDevices.map((device, index) => (
                     <option key={device.deviceId} value={device.deviceId}>
                       {device.label || `Camera ${index + 1}`}
@@ -237,7 +239,7 @@ export default function StudioPreLivePage() {
 
               {!usingVirtualCamera && (
                 <div className="mt-3 rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
-                  仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。
+                  {tx("仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。", "A non-virtual camera is selected. Virtual camera is recommended for VTuber streaming.")}
                 </div>
               )}
 
@@ -248,43 +250,43 @@ export default function StudioPreLivePage() {
                   onClick={() => setMicOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${micOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  🎤 {micOn ? "ON" : "OFF"}
+                  {tx("マイク", "MIC")} {micOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setCamOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${camOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  📷 {camOn ? "ON" : "OFF"}
+                  {tx("カメラ", "CAM")} {camOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setChatOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${chatOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  💬 {chatOn ? "ON" : "OFF"}
+                  {tx("チャット", "CHAT")} {chatOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setRecordOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${recordOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  ⏺ {recordOn ? "ON" : "OFF"}
+                  {tx("録画", "REC")} {recordOn ? "ON" : "OFF"}
                 </button>
               </div>
             </div>
           </section>
 
           <aside className="rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/25">
-            <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">配信開始チェック</h2>
+            <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("配信開始チェック", "Go-live Checklist")}</h2>
             <div className="space-y-2">
               {checklist.map((item) => (
                 <div key={item.label} className="flex items-center justify-between rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm">
                   <span>{item.label}</span>
-                  <span className={item.ok ? "text-[var(--brand-primary)]" : "text-[var(--brand-accent)]"}>{item.ok ? "OK" : "NG"}</span>
+                  <span className={item.ok ? "text-[var(--brand-primary)]" : "text-[var(--brand-accent)]"}>{item.ok ? "OK" : tx("NG", "NO")}</span>
                 </div>
               ))}
             </div>
 
             <div className="mt-4 rounded-lg bg-[var(--brand-bg-900)] p-3 text-xs text-[var(--brand-text-muted)]">
-              <p>推奨: 配信開始の2分前に「待機画面」へ切り替えて、視聴者の音量確認を行ってください。</p>
+              <p>{tx("推奨: 配信開始の2分前に「待機画面」へ切り替えて、視聴者の音量確認を行ってください。", "Tip: Switch to standby screen 2 minutes before live to verify audience audio levels.")}</p>
             </div>
           </aside>
         </div>

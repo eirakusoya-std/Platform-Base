@@ -1,4 +1,7 @@
+"use client";
+
 import { ModalSession } from "./types";
+import { useI18n } from "../../lib/i18n";
 
 type SessionDetailModalProps = {
  session: ModalSession;
@@ -7,6 +10,7 @@ type SessionDetailModalProps = {
 };
 
 export function SessionDetailModal({ session, onClose, onParticipate }: SessionDetailModalProps) {
+ const { tx } = useI18n();
  return (
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
  <div
@@ -27,7 +31,7 @@ export function SessionDetailModal({ session, onClose, onParticipate }: SessionD
  <p className="text-sm font-bold text-[var(--brand-bg-900)]">{session.startsIn}</p>
  </div>
  <div className="absolute bottom-4 right-4 rounded-lg bg-[var(--brand-accent)] px-4 py-2">
- <p className="text-sm font-bold text-[var(--brand-bg-900)]">{session.slotsLeft} spots left</p>
+ <p className="text-sm font-bold text-[var(--brand-bg-900)]">{session.slotsLeft} {tx("枠残り", "spots left")}</p>
  </div>
  </div>
 
@@ -36,31 +40,31 @@ export function SessionDetailModal({ session, onClose, onParticipate }: SessionD
  <p className="mb-6 text-lg text-[var(--brand-primary)]">{session.vtuber}</p>
 
  <div className="mb-6">
- <h3 className="mb-2 text-sm font-bold text-[var(--brand-text)]">配信内容</h3>
+ <h3 className="mb-2 text-sm font-bold text-[var(--brand-text)]">{tx("配信内容", "About this stream")}</h3>
  <p className="text-sm leading-relaxed text-[var(--brand-text-muted)]">{session.description}</p>
  </div>
 
  <div className="mb-6 grid grid-cols-2 gap-4">
  <div className="rounded-lg bg-[var(--brand-surface)] p-4">
- <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">配信時間</p>
+ <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">{tx("配信時間", "Duration")}</p>
  <p className="text-sm font-bold text-[var(--brand-text)]">{session.duration}</p>
  </div>
  <div className="rounded-lg bg-[var(--brand-surface)] p-4">
- <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">参加方式</p>
- <p className="text-sm font-bold text-[var(--brand-text)]">{session.participationType === "First-come" ? "先着順" : "抽選制"}</p>
+ <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">{tx("参加方式", "Entry Type")}</p>
+ <p className="text-sm font-bold text-[var(--brand-text)]">{session.participationType === "First-come" ? tx("先着順", "First-come") : tx("抽選制", "Lottery")}</p>
  </div>
  </div>
 
  {session.userHistory && (
  <div className="mb-6 rounded-lg bg-[var(--brand-surface)] p-4">
- <h3 className="mb-3 text-sm font-bold text-[var(--brand-text)]">あなたの参加履歴</h3>
+ <h3 className="mb-3 text-sm font-bold text-[var(--brand-text)]">{tx("あなたの参加履歴", "Your history")}</h3>
  <div className="grid grid-cols-2 gap-4">
  <div>
- <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">総参加回数</p>
- <p className="text-lg font-bold text-[var(--brand-primary)]">{session.userHistory.totalParticipations}回</p>
+ <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">{tx("総参加回数", "Total joins")}</p>
+ <p className="text-lg font-bold text-[var(--brand-primary)]">{session.userHistory.totalParticipations}{tx("回", "")}</p>
  </div>
  <div>
- <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">最終参加日</p>
+ <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">{tx("最終参加日", "Last joined")}</p>
  <p className="text-sm font-medium text-[var(--brand-text)]">{session.userHistory.lastParticipation}</p>
  </div>
  </div>
@@ -68,10 +72,10 @@ export function SessionDetailModal({ session, onClose, onParticipate }: SessionD
  )}
 
  <div className="mb-6 flex items-center gap-3 rounded-lg bg-[var(--brand-primary)]/15 p-4">
- <div className="text-[var(--brand-primary)]">✅</div>
+ <div className="text-[var(--brand-primary)]">OK</div>
  <div>
- <p className="text-sm font-bold text-[var(--brand-primary)]">参加可能</p>
- <p className="text-xs text-[var(--brand-primary)]">現在は検証モードのため、サブスクなしで参加できます。</p>
+ <p className="text-sm font-bold text-[var(--brand-primary)]">{tx("参加可能", "Available to Join")}</p>
+ <p className="text-xs text-[var(--brand-primary)]">{tx("現在は検証モードのため、サブスクなしで参加できます。", "Demo mode: join without subscription.")}</p>
  </div>
  </div>
  </div>
@@ -79,13 +83,13 @@ export function SessionDetailModal({ session, onClose, onParticipate }: SessionD
  <div className="sticky bottom-0 z-10 bg-[var(--brand-bg-800)] p-6">
  <div className="flex gap-3">
  <button className="flex-1 rounded-lg px-6 py-4 font-bold text-[var(--brand-text)] transition-colors ">
- 視聴のみ (無料)
+ {tx("視聴のみ (無料)", "Watch only (Free)")}
  </button>
  <button
  className="flex-1 rounded-lg bg-[var(--brand-primary)] px-6 py-4 font-bold text-[var(--brand-bg-900)] transition-colors hover:bg-[var(--brand-primary)]"
  onClick={() => onParticipate(session.id)}
  >
- 参加する
+ {tx("参加する", "Join")}
  </button>
  </div>
  </div>
