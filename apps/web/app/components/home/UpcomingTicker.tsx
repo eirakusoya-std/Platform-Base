@@ -1,4 +1,7 @@
+"use client";
+
 import { StartingSoonSession } from "./types";
+import { useI18n } from "../../lib/i18n";
 
 type UpcomingTickerProps = {
  sessions: StartingSoonSession[];
@@ -6,6 +9,7 @@ type UpcomingTickerProps = {
 };
 
 export function UpcomingTicker({ sessions, onParticipate }: UpcomingTickerProps) {
+ const { tx } = useI18n();
  return (
  <div className=" bg-[var(--brand-bg-800)]">
  <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-8 py-2">
@@ -29,7 +33,7 @@ export function UpcomingTicker({ sessions, onParticipate }: UpcomingTickerProps)
  <span className="max-w-[120px] truncate text-[9px] leading-tight text-[var(--brand-text-muted)]">{s.title}</span>
  </div>
  <div className="rounded bg-[var(--brand-accent)]/20 px-1.5 py-0.5 text-[9px] font-bold text-[var(--brand-accent)]">
- 参加受付中
+ {tx("参加受付中", "Join Open")}
  </div>
  </div>
  ))}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useI18n } from "../../lib/i18n";
 import { getStreamSession } from "../../lib/streamSessions";
 
 type SessionMeta = {
@@ -64,6 +65,7 @@ const SESSION_MAP: Record<string, SessionMeta> = {
 
 export default function PreJoinPage() {
  const router = useRouter();
+ const { tx } = useI18n();
  const params = useParams<{ sessionId: string }>();
  const sessionId = params?.sessionId ?? "";
 
@@ -202,7 +204,7 @@ export default function PreJoinPage() {
  <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-[var(--brand-bg-900)]">A</div>
  <span className="text-lg font-medium tracking-wide text-[var(--brand-text)]">aiment</span>
  </button>
- <p className="text-sm text-[var(--brand-text-muted)]">参加前チェック</p>
+ <p className="text-sm text-[var(--brand-text-muted)]">{tx("参加前チェック", "Pre-join Check")}</p>
  </div>
  </header>
 
@@ -221,15 +223,15 @@ export default function PreJoinPage() {
  </div>
 
  <div className="rounded-2xl bg-[var(--brand-bg-800)] p-5">
- <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">企画の概要</h2>
+ <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("企画の概要", "Overview")}</h2>
  <p className="mb-4 text-sm leading-relaxed text-[var(--brand-text)]">{session.description}</p>
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
- <p className="text-xs text-[var(--brand-text-muted)]">配信時間</p>
+ <p className="text-xs text-[var(--brand-text-muted)]">{tx("配信時間", "Duration")}</p>
  <p className="text-sm font-semibold text-[var(--brand-text)]">{session.duration}</p>
  </div>
  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
- <p className="text-xs text-[var(--brand-text-muted)]">参加方式</p>
+ <p className="text-xs text-[var(--brand-text-muted)]">{tx("参加方式", "Entry Type")}</p>
  <p className="text-sm font-semibold text-[var(--brand-text)]">{session.participationType}</p>
  </div>
  </div>
@@ -238,23 +240,23 @@ export default function PreJoinPage() {
 
  <aside className="rounded-2xl bg-[var(--brand-bg-800)] p-5">
  <div className="mb-4 flex items-center justify-between">
- <h2 className="text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">デバイス確認</h2>
+ <h2 className="text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("デバイス確認", "Device Check")}</h2>
  <span
  className={`rounded-full px-3 py-1 text-xs font-semibold ${ready ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-accent)]/20 text-[var(--brand-accent)]"}`}
  >
- {ready ? "準備OK" : "準備中"}
+ {ready ? tx("準備OK", "Ready") : tx("準備中", "Preparing")}
  </span>
  </div>
 
  <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/10" }}>
  <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
  {!camOn && (
- <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm font-medium text-[var(--brand-text)]">カメラはオフです</div>
+ <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm font-medium text-[var(--brand-text)]">{tx("カメラはオフです", "Camera is off")}</div>
  )}
  </div>
 
  <div className="mt-4 rounded-xl bg-[var(--brand-bg-900)] p-4">
- <p className="mb-2 text-xs font-medium text-[var(--brand-text-muted)]">マイク入力レベル</p>
+ <p className="mb-2 text-xs font-medium text-[var(--brand-text-muted)]">{tx("マイク入力レベル", "Mic input level")}</p>
  <div className="h-2 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
  <div className="h-full rounded-full bg-[var(--brand-primary)] transition-all" style={{ width: `${micOn ? micLevel : 0}%` }} />
  </div>
@@ -269,7 +271,7 @@ export default function PreJoinPage() {
  }`}
  onClick={() => applyMic(!micOn)}
  >
- {micOn ? "MIC ON" : "MIC OFF"}
+ {micOn ? tx("MIC ON", "MIC ON") : tx("MIC OFF", "MIC OFF")}
  </button>
  <button
  className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
@@ -279,7 +281,7 @@ export default function PreJoinPage() {
  }`}
  onClick={() => applyCam(!camOn)}
  >
- {camOn ? "CAM ON" : "CAM OFF"}
+ {camOn ? tx("CAM ON", "CAM ON") : tx("CAM OFF", "CAM OFF")}
  </button>
  <button
  className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
@@ -289,7 +291,7 @@ export default function PreJoinPage() {
  }`}
  onClick={() => setSpeakerOn((prev) => !prev)}
  >
- {speakerOn ? "SPK ON" : "SPK OFF"}
+ {speakerOn ? tx("SPK ON", "SPK ON") : tx("SPK OFF", "SPK OFF")}
  </button>
  </div>
 
@@ -300,14 +302,14 @@ export default function PreJoinPage() {
  onClick={() => router.push("/")}
  className="flex-1 rounded-xl px-4 py-3 text-sm font-medium text-[var(--brand-text-muted)] transition-colors hover:text-[var(--brand-primary)]"
  >
- 戻る
+ {tx("戻る", "Back")}
  </button>
  <button
  onClick={joinNow}
  disabled={!ready || !!errorMessage}
  className="flex-1 rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-[var(--brand-bg-900)] transition-colors hover:bg-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-[var(--brand-text-muted)]"
  >
- この設定で参加
+ {tx("この設定で参加", "Join with this setup")}
  </button>
  </div>
  </aside>

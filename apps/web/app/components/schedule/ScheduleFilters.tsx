@@ -1,4 +1,7 @@
+"use client";
+
 import { SessionCategory } from "./types";
+import { useI18n } from "../../lib/i18n";
 
 type ScheduleFiltersProps = {
   dates: string[];
@@ -38,6 +41,7 @@ export function ScheduleFilters({
   onOnlyAvailableChange,
   onToggleCategory,
 }: ScheduleFiltersProps) {
+  const { tx } = useI18n();
   return (
     <section className="rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/25">
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -62,14 +66,14 @@ export function ScheduleFilters({
           <input
             value={talentQuery}
             onChange={(e) => onTalentQueryChange(e.target.value)}
-            placeholder="名前で検索（例: ルミナ）"
+            placeholder={tx("名前で検索（例: ルミナ）", "Search by name (e.g. Lumina)")}
             className="w-full rounded-md bg-[var(--brand-bg-900)] py-2 pl-9 pr-3 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-[var(--brand-text)]">
-            <span>開始</span>
+            <span>{tx("開始", "Start")}</span>
             <select
               value={startHour}
               onChange={(e) => onStartHourChange(Number(e.target.value))}
@@ -84,7 +88,7 @@ export function ScheduleFilters({
           </label>
 
           <label className="flex items-center gap-2 text-sm text-[var(--brand-text)]">
-            <span>終了</span>
+            <span>{tx("終了", "End")}</span>
             <select
               value={endHour}
               onChange={(e) => onEndHourChange(Number(e.target.value))}
@@ -100,7 +104,7 @@ export function ScheduleFilters({
 
           <label className="flex items-center gap-2 rounded-md bg-[var(--brand-bg-900)] px-2 py-1.5 text-sm text-[var(--brand-text)]">
             <input type="checkbox" checked={onlyAvailable} onChange={(e) => onOnlyAvailableChange(e.target.checked)} />
-            <span>予約可能のみ</span>
+            <span>{tx("予約可能のみ", "Only available")}</span>
           </label>
         </div>
       </div>

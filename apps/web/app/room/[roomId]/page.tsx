@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { io, Socket } from "socket.io-client";
+import { useI18n } from "../../lib/i18n";
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
@@ -69,6 +70,7 @@ function parseRequestedRole(value: string | null): RequestedRole {
 
 export default function RoomPage() {
   const router = useRouter();
+  const { tx } = useI18n();
   const params = useParams<{ roomId: string }>();
   const searchParams = useSearchParams();
   const roomId = params?.roomId ?? "";
@@ -321,15 +323,15 @@ export default function RoomPage() {
 
   const statusLabel =
     status === "connected"
-      ? "接続済み"
+      ? tx("接続済み", "Connected")
       : status === "connecting"
-        ? "接続中"
+        ? tx("接続中", "Connecting")
         : status === "failed"
-          ? "接続失敗"
-          : "待機中";
+          ? tx("接続失敗", "Failed")
+          : tx("待機中", "Idle");
 
   if (!roomId) {
-    return <div className="p-8">Room IDを読み込んでいます...</div>;
+    return <div className="p-8">{tx("Room IDを読み込んでいます...", "Loading room ID...")}</div>;
   }
 
   return (
@@ -365,7 +367,7 @@ export default function RoomPage() {
                 {!remoteConnected && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
                     <p className="text-sm font-semibold text-[var(--brand-text)]">配信者の映像を待機中</p>
-                    <p className="text-xs text-[var(--brand-text-muted)]">接続されると自動でライブ映像に切り替わります</p>
+                    <p className="text-xs text-[var(--brand-text-muted)]">{tx("接続されると自動でライブ映像に切り替わります", "Stream switches automatically when connected")}</p>
                   </div>
                 )}
 
@@ -427,7 +429,7 @@ export default function RoomPage() {
                       : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
                   }`}
                 >
-                  {micOn ? "MIC ON" : "MIC OFF"}
+                  {micOn ? tx("MIC ON", "MIC ON") : tx("MIC OFF", "MIC OFF")}
                 </button>
                 <button
                   onClick={() => applyCam(!camOn)}
@@ -440,7 +442,7 @@ export default function RoomPage() {
                       : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
                   }`}
                 >
-                  {camOn ? "CAM ON" : "CAM OFF"}
+                  {camOn ? tx("CAM ON", "CAM ON") : tx("CAM OFF", "CAM OFF")}
                 </button>
                 <button
                   onClick={() => applySpeaker(!speakerOn)}
@@ -448,10 +450,10 @@ export default function RoomPage() {
                     speakerOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "text-[var(--brand-text-muted)]"
                   }`}
                 >
-                  {speakerOn ? "SPK ON" : "SPK OFF"}
+                  {speakerOn ? tx("SPK ON", "SPK ON") : tx("SPK OFF", "SPK OFF")}
                 </button>
                 <button onClick={copyRoomLink} className="rounded-lg px-3 py-2 text-xs font-medium text-[var(--brand-text)] transition-colors ">
-                  {copied ? "COPY OK" : "LINK COPY"}
+                  {copied ? tx("COPY OK", "COPY OK") : tx("LINK COPY", "LINK COPY")}
                 </button>
                 <button
                   onClick={() => {
@@ -460,7 +462,7 @@ export default function RoomPage() {
                   }}
                   className="ml-auto rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs font-medium text-[var(--brand-accent)] transition-colors hover:bg-[var(--brand-accent)]/25"
                 >
-                  退出
+                  {tx("退出", "Leave")}
                 </button>
               </div>
             </section>
@@ -469,7 +471,7 @@ export default function RoomPage() {
           <aside className="flex min-h-[560px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
             <div className=" px-4 py-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">ライブチャット</p>
+                <p className="text-sm font-semibold">{tx("ライブチャット", "Live Chat")}</p>
                 <span className="rounded-full bg-[var(--brand-surface)] px-2 py-0.5 text-[11px] text-[var(--brand-text-muted)]">{chatMessages.length}件</span>
               </div>
             </div>
@@ -495,14 +497,14 @@ export default function RoomPage() {
                       sendChat();
                     }
                   }}
-                  placeholder="チャットを入力"
+                  placeholder={tx("チャットを入力", "Type a message")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)] "
                 />
                 <button
                   onClick={sendChat}
                   className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-colors hover:bg-[var(--brand-primary)]"
                 >
-                  送信
+                  {tx("送信", "Send")}
                 </button>
               </div>
             </div>

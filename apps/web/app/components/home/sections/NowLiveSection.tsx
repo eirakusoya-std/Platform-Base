@@ -1,6 +1,9 @@
+"use client";
+
 import { MouseEvent } from "react";
 import { LiveSession, ModalSession } from "../types";
 import { getTypeInfo } from "../utils";
+import { useI18n } from "../../../lib/i18n";
 
 type NowLiveSectionProps = {
  sessions: LiveSession[];
@@ -10,6 +13,7 @@ type NowLiveSectionProps = {
 };
 
 export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNotify }: NowLiveSectionProps) {
+  const { tx } = useI18n();
   return (
     <section className="py-10">
       <div className="mb-7 flex items-center justify-between">
@@ -18,7 +22,7 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
             <div className="h-2 w-2 animate-pulse rounded-full bg-[var(--brand-bg-900)]" />
             <span className="text-xs font-bold tracking-widest text-[var(--brand-text)]">LIVE</span>
           </div>
-          <p className="text-sm text-[var(--brand-text-muted)]">現在配信中のセッション</p>
+          <p className="text-sm text-[var(--brand-text-muted)]">{tx("現在配信中のセッション", "Streams live now")}</p>
         </div>
         <div className="flex items-center gap-2 rounded-lg bg-[var(--brand-accent)]/15 px-3 py-1">
           <span className="text-[10px] font-bold uppercase text-[var(--brand-accent)]">Total Live</span>
@@ -27,7 +31,7 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
       </div>
 
       {sessions.length === 0 ? (
-        <div className="py-12 text-center text-sm text-[var(--brand-text-muted)]">現在ライブ配信はありません</div>
+        <div className="py-12 text-center text-sm text-[var(--brand-text-muted)]">{tx("現在ライブ配信はありません", "No live streams right now")}</div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sessions.map((session) => {
@@ -99,7 +103,7 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
 
                   <div className="flex items-center gap-2">
                     <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-bg-900)] transition-all hover:brightness-110">
-                      LIVE 視聴
+                      {tx("LIVE 視聴", "Watch Live")}
                     </button>
 
                     <button
@@ -110,14 +114,14 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                       }`}
                       onClick={(event) => onToggleNotify(event, session.id)}
                     >
-                      <span className="whitespace-nowrap">{notified ? "通知ON" : "空きが出たら参加"}</span>
+                      <span className="whitespace-nowrap">{notified ? tx("通知ON", "Notify ON") : tx("空きが出たら参加", "Notify when open")}</span>
                     </button>
                   </div>
 
                   {session.userHistory && (
                     <div className="mt-3 flex items-center justify-between pt-3">
-                      <span className="text-[11px] text-[var(--brand-text-muted)]">あなたの参加回数</span>
-                      <span className="text-xs font-bold text-[var(--brand-primary)]">{session.userHistory.totalParticipations}回</span>
+                      <span className="text-[11px] text-[var(--brand-text-muted)]">{tx("あなたの参加回数", "Your joins")}</span>
+                      <span className="text-xs font-bold text-[var(--brand-primary)]">{session.userHistory.totalParticipations}{tx("回", "")}</span>
                     </div>
                   )}
                 </div>
