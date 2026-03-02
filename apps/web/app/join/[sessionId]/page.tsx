@@ -269,7 +269,7 @@ export default function PreJoinPage() {
  }`}
  onClick={() => applyMic(!micOn)}
  >
- {micOn ? "🎤 マイク ON" : "🎤 マイク OFF"}
+ {micOn ? "MIC ON" : "MIC OFF"}
  </button>
  <button
  className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
@@ -279,7 +279,7 @@ export default function PreJoinPage() {
  }`}
  onClick={() => applyCam(!camOn)}
  >
- {camOn ? "📷 カメラ ON" : "📷 カメラ OFF"}
+ {camOn ? "CAM ON" : "CAM OFF"}
  </button>
  <button
  className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
@@ -289,7 +289,7 @@ export default function PreJoinPage() {
  }`}
  onClick={() => setSpeakerOn((prev) => !prev)}
  >
- {speakerOn ? "🔊 スピーカー ON" : "🔊 スピーカー OFF"}
+ {speakerOn ? "SPK ON" : "SPK OFF"}
  </button>
  </div>
 

@@ -384,7 +384,7 @@ export default function RoomPage() {
                 <div className="rounded-xl bg-[var(--brand-surface)] p-2">
                   <div className="relative overflow-hidden rounded-lg bg-black" style={{ aspectRatio: "16/9" }}>
                     {assignedRole === "listener" ? (
-                      <div className="absolute inset-0 flex items-center justify-center text-3xl">👤</div>
+                      <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-[var(--brand-text-muted)]">NO CAM</div>
                     ) : (
                       <video ref={localVideoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
                     )}
@@ -395,7 +395,7 @@ export default function RoomPage() {
                   <div className="mt-1 flex items-center justify-between">
                     <p className="truncate text-[11px]">あなた</p>
                     <span className={`text-[10px] ${micOn ? "text-[var(--brand-primary)]" : "text-[var(--brand-accent)]"}`}>
-                      {canSendMic ? (micOn ? "🎤" : "🔇") : "👤"}
+                      {canSendMic ? (micOn ? "MIC" : "MUTE") : "LISTEN"}
                     </span>
                   </div>
                 </div>
@@ -427,7 +427,7 @@ export default function RoomPage() {
                       : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
                   }`}
                 >
-                  {micOn ? "🎤 マイク ON" : "🎤 マイク OFF"}
+                  {micOn ? "MIC ON" : "MIC OFF"}
                 </button>
                 <button
                   onClick={() => applyCam(!camOn)}
@@ -440,7 +440,7 @@ export default function RoomPage() {
                       : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
                   }`}
                 >
-                  {camOn ? "📷 カメラ ON" : "📷 カメラ OFF"}
+                  {camOn ? "CAM ON" : "CAM OFF"}
                 </button>
                 <button
                   onClick={() => applySpeaker(!speakerOn)}
@@ -448,10 +448,10 @@ export default function RoomPage() {
                     speakerOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "text-[var(--brand-text-muted)]"
                   }`}
                 >
-                  {speakerOn ? "🔊 スピーカー ON" : "🔊 スピーカー OFF"}
+                  {speakerOn ? "SPK ON" : "SPK OFF"}
                 </button>
                 <button onClick={copyRoomLink} className="rounded-lg px-3 py-2 text-xs font-medium text-[var(--brand-text)] transition-colors ">
-                  {copied ? "✅ コピー済み" : "🔗 招待リンク"}
+                  {copied ? "COPY OK" : "LINK COPY"}
                 </button>
                 <button
                   onClick={() => {
@@ -460,7 +460,7 @@ export default function RoomPage() {
                   }}
                   className="ml-auto rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs font-medium text-[var(--brand-accent)] transition-colors hover:bg-[var(--brand-accent)]/25"
                 >
-                  ⛔ 退出
+                  退出
                 </button>
               </div>
             </section>

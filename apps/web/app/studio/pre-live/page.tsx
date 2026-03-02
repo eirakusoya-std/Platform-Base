@@ -248,25 +248,25 @@ export default function StudioPreLivePage() {
                   onClick={() => setMicOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${micOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  🎤 {micOn ? "ON" : "OFF"}
+                  MIC {micOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setCamOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${camOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  📷 {camOn ? "ON" : "OFF"}
+                  CAM {camOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setChatOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${chatOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  💬 {chatOn ? "ON" : "OFF"}
+                  CHAT {chatOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setRecordOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${recordOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  ⏺ {recordOn ? "ON" : "OFF"}
+                  REC {recordOn ? "ON" : "OFF"}
                 </button>
               </div>
             </div>

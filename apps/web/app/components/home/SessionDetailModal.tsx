@@ -68,7 +68,7 @@ export function SessionDetailModal({ session, onClose, onParticipate }: SessionD
  )}
 
  <div className="mb-6 flex items-center gap-3 rounded-lg bg-[var(--brand-primary)]/15 p-4">
- <div className="text-[var(--brand-primary)]">✅</div>
+ <div className="text-[var(--brand-primary)]">OK</div>
  <div>
  <p className="text-sm font-bold text-[var(--brand-primary)]">参加可能</p>
  <p className="text-xs text-[var(--brand-primary)]">現在は検証モードのため、サブスクなしで参加できます。</p>

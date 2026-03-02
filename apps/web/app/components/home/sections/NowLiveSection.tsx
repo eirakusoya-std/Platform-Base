@@ -70,7 +70,7 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                       <span>LIVE</span>
                     </div>
                     <div className="rounded-lg bg-[var(--brand-bg-900)]/70 px-2 py-1 text-[10px] font-bold text-[var(--brand-text)]">
-                      👥 {session.viewers.toLocaleString()}
+                      VIEW {session.viewers.toLocaleString()}
                     </div>
                     <div className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold ${typeInfo.bg}`}>
                       <span>{typeInfo.icon}</span>
@@ -99,7 +99,7 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
 
                   <div className="flex items-center gap-2">
                     <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-bg-900)] transition-all hover:brightness-110">
-                      ▶ 視聴する
+                      LIVE 視聴
                     </button>
 
                     <button
@@ -110,7 +110,7 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                       }`}
                       onClick={(event) => onToggleNotify(event, session.id)}
                     >
-                      🔔 <span className="whitespace-nowrap">{notified ? "通知ON" : "空きが出たら参加"}</span>
+                      <span className="whitespace-nowrap">{notified ? "通知ON" : "空きが出たら参加"}</span>
                     </button>
                   </div>
 

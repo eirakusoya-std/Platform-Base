@@ -486,21 +486,21 @@ export default function StudioLiveSessionPage() {
                   onClick={() => setMicOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm ${micOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  🎤 {micOn ? "ON" : "OFF"}
+                  MIC {micOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setCamOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm ${camOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  📷 {camOn ? "ON" : "OFF"}
+                  CAM {camOn ? "ON" : "OFF"}
                 </button>
                 <button
                   onClick={() => setShareOn((v) => !v)}
                   className={`rounded-lg px-3 py-2 text-sm ${shareOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
                 >
-                  🖥 {shareOn ? "共有中" : "共有"}
+                  SHARE {shareOn ? "ON" : "OFF"}
                 </button>
-                <button className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text-muted)]">🎬 シーン切替</button>
+                <button className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text-muted)]">SCENE</button>
               </div>
             </div>
 

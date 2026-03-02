@@ -57,9 +57,10 @@ export function TopNav() {
             <div className="flex items-center gap-2">
               <Link
                 href="/studio/pre-live"
-                className="hidden rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-all hover:brightness-110 sm:block"
+                className="hidden items-center gap-1 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-all hover:brightness-110 sm:inline-flex"
               >
-                配信を作成
+                <span aria-hidden>+</span>
+                <span>配信を作成</span>
               </Link>
               <div className="hidden items-center gap-2 rounded-lg bg-[var(--brand-bg-900)] px-2.5 py-1.5 sm:flex">
                 <div className="h-7 w-7 overflow-hidden rounded-full">
