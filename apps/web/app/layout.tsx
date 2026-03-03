@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { I18nProvider } from "./lib/i18n";
+import { UserSessionProvider } from "./lib/userSession";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className="antialiased">
-        <I18nProvider>{children}</I18nProvider>
+        <UserSessionProvider>
+          <I18nProvider>{children}</I18nProvider>
+        </UserSessionProvider>
       </body>
     </html>
   );

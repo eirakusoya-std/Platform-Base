@@ -2,18 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import { TopNav } from "../../../components/home/TopNav";
+import { StudioProgress } from "../../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
 import { useI18n } from "../../../lib/i18n";
 import { getStreamSession, setStreamSessionStatus, subscribeStreamSessions, type StreamSession, updateStreamSession } from "../../../lib/streamSessions";
+import { useUserSession } from "../../../lib/userSession";
 
-type QueueItem = {
+type ParticipantItem = {
   id: string;
   name: string;
-  level: "beginner" | "intermediate";
-  topic: string;
+  status: "watching" | "speaking" | "requested";
+  muted: boolean;
 };
 
 type ConnectionStatus = "idle" | "starting" | "live" | "failed";
@@ -27,10 +29,10 @@ const EVENTS = {
   PEER_LEFT: "peer-left",
 } as const;
 
-const INITIAL_QUEUE: QueueItem[] = [
-  { id: "q1", name: "Kaito", level: "beginner", topic: "自己紹介" },
-  { id: "q2", name: "Ren", level: "intermediate", topic: "推しトーク" },
-  { id: "q3", name: "Yuma", level: "beginner", topic: "ゲーム感想" },
+const INITIAL_PARTICIPANTS: ParticipantItem[] = [
+  { id: "p1", name: "Kaito", status: "watching", muted: false },
+  { id: "p2", name: "Ren", status: "requested", muted: false },
+  { id: "p3", name: "Yuma", status: "speaking", muted: false },
 ];
 
 const INITIAL_CHAT = [
@@ -43,9 +45,34 @@ function createPeerId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+type CircleControlProps = {
+  label: string;
+  on: boolean;
+  onToggle: () => void;
+};
+
+function CircleControl({ label, on, onToggle }: CircleControlProps) {
+  return (
+    <button onClick={onToggle} className="group flex w-[84px] flex-col items-center gap-1">
+      <span
+        className={`flex h-14 w-14 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
+          on
+            ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+            : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
+        }`}
+      >
+        {label}
+      </span>
+      <span className={`text-[11px] font-semibold ${on ? "text-[var(--brand-primary)]" : "text-[var(--brand-text-muted)]"}`}>{on ? "ON" : "OFF"}</span>
+    </button>
+  );
+}
+
 export default function StudioLiveSessionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { tx } = useI18n();
+  const { isVtuber } = useUserSession();
   const params = useParams<{ sessionId: string }>();
   const sessionId = params?.sessionId ?? "";
 
@@ -55,11 +82,11 @@ export default function StudioLiveSessionPage() {
 
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
-  const [shareOn, setShareOn] = useState(false);
-  const [queue, setQueue] = useState<QueueItem[]>(INITIAL_QUEUE);
+  const [participants, setParticipants] = useState<ParticipantItem[]>(INITIAL_PARTICIPANTS);
   const [chatInput, setChatInput] = useState("");
   const [chat, setChat] = useState(INITIAL_CHAT);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [startWarnings, setStartWarnings] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [connectedViewers, setConnectedViewers] = useState(0);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
@@ -72,9 +99,14 @@ export default function StudioLiveSessionPage() {
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const peerIdRef = useRef<string>("");
+  const autoStartDoneRef = useRef(false);
 
   const signalingUrl = process.env.NEXT_PUBLIC_SIGNALING_URL;
   const iceServers = useMemo(() => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), []);
+
+  useEffect(() => {
+    if (!isVtuber) router.replace("/");
+  }, [isVtuber, router]);
 
   useEffect(() => {
     setHydrated(true);
@@ -128,16 +160,8 @@ export default function StudioLiveSessionPage() {
           const audioTrack = stream.getAudioTracks()[0];
           const videoTrack = stream.getVideoTracks()[0];
           for (const sender of pcRef.current.getSenders()) {
-            if (sender.track?.kind === "audio" && audioTrack) {
-              sender.replaceTrack(audioTrack).catch(() => {
-                // no-op
-              });
-            }
-            if (sender.track?.kind === "video" && videoTrack) {
-              sender.replaceTrack(videoTrack).catch(() => {
-                // no-op
-              });
-            }
+            if (sender.track?.kind === "audio" && audioTrack) sender.replaceTrack(audioTrack).catch(() => undefined);
+            if (sender.track?.kind === "video" && videoTrack) sender.replaceTrack(videoTrack).catch(() => undefined);
           }
         }
 
@@ -163,7 +187,7 @@ export default function StudioLiveSessionPage() {
         }
       } catch {
         if (!cancelled) {
-          setMediaError("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。");
+          setMediaError(tx("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。", "Camera/mic access denied. Check browser permissions."));
         }
       }
     };
@@ -176,7 +200,7 @@ export default function StudioLiveSessionPage() {
       streamRef.current = null;
       if (previewRef.current) previewRef.current.srcObject = null;
     };
-  }, [hydrated, notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId]);
+  }, [hydrated, notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId, micOn, camOn, tx]);
 
   useEffect(() => {
     if (!hydrated || !session) return;
@@ -185,13 +209,12 @@ export default function StudioLiveSessionPage() {
 
   const selectedVideoLabel = useMemo(() => {
     return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? session?.preferredVideoLabel ?? tx("デフォルトカメラ", "Default camera");
-  }, [selectedVideoDeviceId, session?.preferredVideoLabel, videoDevices]);
+  }, [selectedVideoDeviceId, session?.preferredVideoLabel, tx, videoDevices]);
 
   const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
 
   useEffect(() => {
-    if (!session) return;
-    if (!selectedVideoDeviceId) return;
+    if (!session || !selectedVideoDeviceId) return;
     if (session.preferredVideoDeviceId === selectedVideoDeviceId && session.preferredVideoLabel === selectedVideoLabel) return;
 
     updateStreamSession(session.sessionId, {
@@ -200,36 +223,29 @@ export default function StudioLiveSessionPage() {
     });
   }, [selectedVideoDeviceId, selectedVideoLabel, session?.preferredVideoDeviceId, session?.preferredVideoLabel, session?.sessionId]);
 
-  useEffect(() => {
-    streamRef.current?.getAudioTracks().forEach((track) => {
-      track.enabled = micOn;
-    });
-  }, [micOn]);
-
-  useEffect(() => {
-    streamRef.current?.getVideoTracks().forEach((track) => {
-      track.enabled = camOn;
-    });
-  }, [camOn]);
-
   const metrics = useMemo(
     () => [
       { label: tx("視聴者", "Viewers"), value: `${Math.max(connectedViewers, 0)}` },
-      { label: tx("同時会話", "Active Talks"), value: `${queue.length}` },
+      { label: tx("同時会話", "Active Talks"), value: `${participants.filter((p) => p.status === "speaking").length}` },
       { label: tx("平均遅延", "Avg Latency"), value: "2.1s" },
       { label: tx("接続品質", "Connection"), value: connectionStatus === "live" ? "Good" : "-" },
     ],
-    [connectionStatus, connectedViewers, queue.length, tx],
+    [connectionStatus, connectedViewers, participants, tx],
   );
-
-  const approve = (id: string) => setQueue((prev) => prev.filter((q) => q.id !== id));
-  const reject = (id: string) => setQueue((prev) => prev.filter((q) => q.id !== id));
 
   const sendChat = () => {
     const text = chatInput.trim();
     if (!text) return;
     setChat((prev) => [...prev, { id: `${Date.now()}`, user: "host", text }]);
     setChatInput("");
+  };
+
+  const toggleParticipantMute = (id: string) => {
+    setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, muted: !p.muted } : p)));
+  };
+
+  const kickParticipant = (id: string) => {
+    setParticipants((prev) => prev.filter((p) => p.id !== id));
   };
 
   const cleanupConnection = () => {
@@ -246,26 +262,33 @@ export default function StudioLiveSessionPage() {
 
   const startBroadcast = async () => {
     if (!session) return;
+
+    const warnings: string[] = [];
+    if (!micOn) warnings.push(tx("マイクをONにしてください。", "Turn MIC ON before starting."));
+    if (!camOn) warnings.push(tx("カメラをONにしてください。", "Turn CAM ON before starting."));
+    if (!selectedVideoDeviceId) warnings.push(tx("カメラソースを選択してください。", "Choose a camera source."));
+    if (!streamRef.current) warnings.push(tx("カメラ/マイクの準備ができていません。", "Camera/mic is not ready."));
+    setStartWarnings(warnings);
+    if (warnings.length > 0) return;
+
     if (!signalingUrl) {
       setConnectionStatus("failed");
-      setMediaError("NEXT_PUBLIC_SIGNALING_URL が未設定です。");
+      setMediaError("NEXT_PUBLIC_SIGNALING_URL is not set.");
       return;
     }
 
-    if (!streamRef.current) {
-      setConnectionStatus("failed");
-      setMediaError("カメラ/マイクの準備ができていません。");
-      return;
-    }
+    const localStream = streamRef.current;
+    if (!localStream) return;
 
+    setStartWarnings([]);
     cleanupConnection();
     setConnectionStatus("starting");
 
     const pc = new RTCPeerConnection(iceServers);
     pcRef.current = pc;
 
-    streamRef.current.getTracks().forEach((track) => {
-      pc.addTrack(track, streamRef.current as MediaStream);
+    localStream.getTracks().forEach((track) => {
+      pc.addTrack(track, localStream);
     });
 
     pc.onicecandidate = (event) => {
@@ -298,7 +321,7 @@ export default function StudioLiveSessionPage() {
 
     socket.on("room-full", () => {
       setConnectionStatus("failed");
-      setMediaError("現在の構成では同時接続は1名までです。複数視聴者にはSFU対応が必要です。");
+      setMediaError(tx("現在の構成では同時接続は1名までです。", "Current signaling supports one viewer at a time."));
     });
 
     socket.on(EVENTS.PEER_JOINED, async () => {
@@ -359,10 +382,24 @@ export default function StudioLiveSessionPage() {
     };
   }, []);
 
+  const shouldAutoStart = searchParams.get("autostart") === "1";
+
+  useEffect(() => {
+    if (!shouldAutoStart || autoStartDoneRef.current) return;
+    if (!hydrated || notFound || !session) return;
+    if (connectionStatus !== "idle") return;
+    if (!streamRef.current || !selectedVideoDeviceId || !micOn || !camOn) return;
+
+    autoStartDoneRef.current = true;
+    void startBroadcast();
+  }, [shouldAutoStart, hydrated, notFound, session, connectionStatus, selectedVideoDeviceId, micOn, camOn]);
+
+  if (!isVtuber) return null;
+
   if (!hydrated) {
     return (
       <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 text-[var(--brand-text)] md:pb-0">
-        <TopNav />
+        <TopNav mode="studio" />
         <main className="mx-auto flex max-w-[900px] flex-col items-center gap-4 px-4 py-16 text-center">
           <p className="text-sm text-[var(--brand-text-muted)]">{tx("読み込み中...", "Loading...")}</p>
         </main>
@@ -373,7 +410,7 @@ export default function StudioLiveSessionPage() {
   if (notFound || !session) {
     return (
       <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 text-[var(--brand-text)] md:pb-0">
-        <TopNav />
+        <TopNav mode="studio" />
         <main className="mx-auto flex max-w-[900px] flex-col items-center gap-4 px-4 py-16 text-center">
           <h1 className="text-2xl font-bold">{tx("枠が見つかりません", "Session not found")}</h1>
           <p className="text-sm text-[var(--brand-text-muted)]">{tx("配信枠を先に作成してください。", "Create a stream session first.")}</p>
@@ -385,167 +422,131 @@ export default function StudioLiveSessionPage() {
     );
   }
 
+  const isLive = connectionStatus === "live" || session.status === "live";
+
   return (
-    <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 text-[var(--brand-text)] md:pb-0">
-      <TopNav />
+    <div className="h-screen overflow-hidden bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
+      <TopNav mode="studio" />
 
-      <main className="mx-auto max-w-[1500px] px-4 py-4 lg:px-8">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">Live Studio</h1>
-            <p className="text-sm text-[var(--brand-text-muted)]">{session.title}</p>
-            <p className="mt-1 text-xs text-[var(--brand-text-muted)]">Session ID: {session.sessionId}</p>
+      <main className="mx-auto grid h-[calc(100vh-72px)] max-w-[1440px] grid-cols-[1fr_320px] gap-4 overflow-hidden px-4 py-3 lg:grid-cols-[58px_1fr_360px] lg:px-6">
+        <aside className="hidden lg:block">
+          <StudioProgress current="live" orientation="vertical" />
+        </aside>
+
+        <section className="flex min-h-0 flex-col overflow-hidden">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-bold">Live Studio</h1>
+              <p className="line-clamp-1 text-xs text-[var(--brand-text-muted)]">{session.title}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={isLive ? stopBroadcast : startBroadcast}
+                className={`rounded-xl px-4 py-2.5 text-sm font-extrabold ${
+                  isLive
+                    ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
+                    : "bg-[var(--brand-primary)] text-[var(--brand-bg-900)] shadow-[0_10px_24px_rgba(124,106,230,0.4)]"
+                }`}
+              >
+                {isLive ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
+              </button>
+              <button onClick={() => { stopBroadcast(); router.push("/"); }} className="rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]">
+                {tx("閉じる", "Close")}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={connectionStatus === "live" || session.status === "live" ? stopBroadcast : startBroadcast}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-                connectionStatus === "live" || session.status === "live"
-                  ? "bg-[var(--brand-accent)] text-[var(--brand-text)]"
-                  : "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
-              }`}
-            >
-              {connectionStatus === "live" || session.status === "live" ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
-            </button>
-            <button
-              onClick={() => {
-                stopBroadcast();
-                router.push("/");
-              }}
-              className="rounded-lg bg-[var(--brand-surface)] px-4 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
-            >
-              {tx("閉じる", "Close")}
-            </button>
-          </div>
-        </div>
 
-        <div className="mb-2 flex items-center gap-2 text-xs text-[var(--brand-text-muted)]">
-          <span
-            className={`rounded-full px-2 py-1 ${
-              connectionStatus === "live"
-                ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
-                : connectionStatus === "failed"
-                  ? "bg-[var(--brand-accent)]/20 text-[var(--brand-accent)]"
-                  : "bg-[var(--brand-surface)]"
-            }`}
-          >
-            {connectionStatus === "live" ? tx("配信中", "Live") : connectionStatus === "starting" ? tx("開始中", "Starting") : connectionStatus === "failed" ? tx("失敗", "Failed") : tx("待機", "Idle")}
-          </span>
-          <span>{tx("接続視聴者", "Connected viewers")}: {connectedViewers}</span>
-        </div>
-
-        <div className="mb-4 rounded-xl bg-[var(--brand-surface)] p-3">
-          <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("参加者用リンク", "Participant link")}</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              readOnly
-              value={participantLink}
-              className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs text-[var(--brand-text)] outline-none"
-            />
-            <button
-              onClick={copyParticipantLink}
-              className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
-            >
-              {linkCopied ? tx("コピー済み", "Copied") : tx("リンクをコピー", "Copy link")}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-4 rounded-xl bg-[var(--brand-surface)] p-3">
-          <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("配信カメラ", "Camera Source")}</p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              value={selectedVideoDeviceId}
-              onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
-              className="w-full rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none sm:max-w-[420px]"
-            >
-              <option value="">{tx("デフォルトカメラ", "Default camera")}</option>
-              {videoDevices.map((device, index) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || `Camera ${index + 1}`}
-                </option>
+          {startWarnings.length > 0 && (
+            <div className="mb-2 rounded-xl bg-[var(--brand-accent)]/15 p-2.5 text-xs text-[var(--brand-accent)]">
+              {startWarnings.map((w) => (
+                <p key={w}>{w}</p>
               ))}
-            </select>
-            <span className="text-xs text-[var(--brand-text-muted)]">{tx("仮想カメラをインストール済みならここで選択できます。", "Select virtual camera if installed.")}</span>
-          </div>
-          {!usingVirtualCamera && (
-            <div className="mt-2 rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
-              {tx("仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。", "A non-virtual camera is selected. Virtual camera is recommended for VTuber streaming.")}
             </div>
           )}
-        </div>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
-          <section className="space-y-4">
-            <div className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
-              <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
-                <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-                {!camOn && <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-[var(--brand-text-muted)]">{tx("カメラOFF", "Camera OFF")}</div>}
-              </div>
-              {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <button
-                  onClick={() => setMicOn((v) => !v)}
-                  className={`rounded-lg px-3 py-2 text-sm ${micOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
-                >
-                  MIC {micOn ? "ON" : "OFF"}
-                </button>
-                <button
-                  onClick={() => setCamOn((v) => !v)}
-                  className={`rounded-lg px-3 py-2 text-sm ${camOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
-                >
-                  CAM {camOn ? "ON" : "OFF"}
-                </button>
-                <button
-                  onClick={() => setShareOn((v) => !v)}
-                  className={`rounded-lg px-3 py-2 text-sm ${shareOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"}`}
-                >
-                  SHARE {shareOn ? "ON" : "OFF"}
-                </button>
-                <button className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text-muted)]">SCENE</button>
-              </div>
+          <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
+            <div className="mx-auto max-w-[640px] overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
+              <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
             </div>
+            {!camOn && <p className="mt-2 text-xs text-[var(--brand-text-muted)]">{tx("カメラOFF", "Camera OFF")}</p>}
+            {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {metrics.map((item) => (
-                <div key={item.label} className="rounded-xl bg-[var(--brand-surface)] px-3 py-2 shadow-lg shadow-black/25">
-                  <p className="text-[11px] text-[var(--brand-text-muted)]">{item.label}</p>
-                  <p className="text-lg font-bold text-[var(--brand-text)]">{item.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/25">
-              <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("参加キュー（英会話）", "Join Queue (English Talk)")}</h2>
-              <div className="space-y-2">
-                {queue.length === 0 ? (
-                  <p className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-3 text-sm text-[var(--brand-text-muted)]">{tx("待機中の参加者はいません", "No participants waiting")}</p>
-                ) : (
-                  queue.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
-                      <div>
-                        <p className="text-sm font-semibold">{item.name}</p>
-                        <p className="text-xs text-[var(--brand-text-muted)]">
-                          {item.topic} / {item.level === "beginner" ? "初級" : "中級"}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => approve(item.id)} className="rounded-md bg-[var(--brand-primary)] px-2 py-1 text-xs font-semibold text-[var(--brand-bg-900)]">
-                          {tx("承認", "Approve")}
-                        </button>
-                        <button onClick={() => reject(item.id)} className="rounded-md bg-[var(--brand-accent)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-accent)]">
-                          {tx("却下", "Reject")}
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <CircleControl label="MIC" on={micOn} onToggle={() => setMicOn((v) => !v)} />
+              <CircleControl label="CAM" on={camOn} onToggle={() => setCamOn((v) => !v)} />
             </div>
           </section>
 
-          <aside className="flex min-h-[560px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
-            <div className="px-4 py-3">
+          <section className="mt-3 min-h-0 flex-1 overflow-hidden rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
+            <h2 className="mb-2 text-xs font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("配信設定", "Stream Settings")}</h2>
+            <div className="h-full space-y-3 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2">
+                {metrics.map((item) => (
+                  <div key={item.label} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
+                    <p className="text-[10px] text-[var(--brand-text-muted)]">{item.label}</p>
+                    <p className="text-sm font-bold text-[var(--brand-text)]">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <label className="grid gap-1 text-sm">
+                <span className="text-[var(--brand-text-muted)]">{tx("配信カメラ", "Camera Source")}</span>
+                <select value={selectedVideoDeviceId} onChange={(event) => setSelectedVideoDeviceId(event.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
+                  <option value="">{tx("デフォルトカメラ", "Default camera")}</option>
+                  {videoDevices.map((device, index) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Camera ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {!usingVirtualCamera && (
+                <div className="rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
+                  {tx("仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。", "A non-virtual camera is selected. Virtual camera is recommended.")}
+                </div>
+              )}
+
+              <div>
+                <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("参加者一覧", "Participants")}</p>
+                <div className="space-y-2">
+                  {participants.length === 0 ? (
+                    <p className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-3 text-sm text-[var(--brand-text-muted)]">{tx("参加者はいません", "No participants")}</p>
+                  ) : (
+                    participants.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
+                        <div>
+                          <p className="text-sm font-semibold">{p.name}</p>
+                          <p className="text-xs text-[var(--brand-text-muted)]">
+                            {p.status === "speaking" ? tx("会話中", "Speaking") : p.status === "requested" ? tx("申請中", "Requested") : tx("視聴中", "Watching")}
+                            {" / "}
+                            {p.muted ? tx("ミュート", "Muted") : tx("有効", "Unmuted")}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => toggleParticipantMute(p.id)} className="rounded-md bg-[var(--brand-primary)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-primary)]">
+                            {p.muted ? tx("解除", "Unmute") : tx("ミュート", "Mute")}
+                          </button>
+                          <button onClick={() => kickParticipant(p.id)} className="rounded-md bg-[var(--brand-accent)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-accent)]">
+                            {tx("キック", "Kick")}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <button onClick={copyParticipantLink} className="w-full rounded-md bg-[var(--brand-primary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]">
+                {linkCopied ? tx("コピー済み", "Copied") : tx("参加リンクをコピー", "Copy Invite Link")}
+              </button>
+            </div>
+          </section>
+        </section>
+
+        <aside className="flex min-h-0 flex-col overflow-hidden">
+          <section className="flex h-full min-h-[220px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
+            <div className="border-b border-black/20 px-3 py-2">
               <p className="text-sm font-semibold">{tx("配信者チャット", "Host Chat")}</p>
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
@@ -556,7 +557,7 @@ export default function StudioLiveSessionPage() {
                 </div>
               ))}
             </div>
-            <div className="p-3">
+            <div className="border-t border-black/20 p-3">
               <div className="flex gap-2">
                 <input
                   value={chatInput}
@@ -575,8 +576,8 @@ export default function StudioLiveSessionPage() {
                 </button>
               </div>
             </div>
-          </aside>
-        </div>
+          </section>
+        </aside>
       </main>
     </div>
   );
