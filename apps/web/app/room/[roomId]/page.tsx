@@ -339,7 +339,7 @@ export default function RoomPage() {
       <header className=" bg-[var(--brand-bg-900)]">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-5 lg:px-12">
           <button onClick={() => router.push("/")} className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-[var(--brand-bg-900)]">A</div>
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-white">A</div>
             <span className="text-lg font-medium tracking-wide text-[var(--brand-text)]">aiment</span>
           </button>
           <div className="flex items-center gap-2">
@@ -361,7 +361,7 @@ export default function RoomPage() {
       <main className="mx-auto w-full max-w-[1600px] px-4 py-4 lg:px-8">
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
           <section className="min-w-0 space-y-4">
-            <div className="overflow-hidden rounded-2xl bg-black shadow-xl">
+            <div className="overflow-hidden rounded-2xl bg-[var(--brand-bg-900)] shadow-xl">
               <div className="relative" style={{ aspectRatio: "16/9" }}>
                 <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
                 {!remoteConnected && (
@@ -384,7 +384,7 @@ export default function RoomPage() {
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 <div className="rounded-xl bg-[var(--brand-surface)] p-2">
-                  <div className="relative overflow-hidden rounded-lg bg-black" style={{ aspectRatio: "16/9" }}>
+                  <div className="relative overflow-hidden rounded-lg bg-[var(--brand-bg-900)]" style={{ aspectRatio: "16/9" }}>
                     {assignedRole === "listener" ? (
                       <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-[var(--brand-text-muted)]">NO CAM</div>
                     ) : (
@@ -502,7 +502,7 @@ export default function RoomPage() {
                 />
                 <button
                   onClick={sendChat}
-                  className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)] transition-colors hover:bg-[var(--brand-primary)]"
+                  className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-primary)]"
                 >
                   {tx("送信", "Send")}
                 </button>

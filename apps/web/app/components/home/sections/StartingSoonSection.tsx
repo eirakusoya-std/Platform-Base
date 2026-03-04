@@ -97,7 +97,7 @@ export function StartingSoonSection({
                   </div>
                   <div className="flex gap-2">
                     <button
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-bold text-[var(--brand-bg-900)] transition-all hover:brightness-110"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-bold text-white transition-all hover:brightness-110"
                       onClick={(event) => {
                         event.stopPropagation();
                         onToggleReserve(event, session.id);

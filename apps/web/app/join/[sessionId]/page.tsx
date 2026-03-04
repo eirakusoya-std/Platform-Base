@@ -201,7 +201,7 @@ export default function PreJoinPage() {
  <header className=" bg-[var(--brand-bg-900)]">
  <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-5 lg:px-12">
  <button onClick={() => router.push("/")} className="flex items-center gap-2">
- <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-[var(--brand-bg-900)]">A</div>
+ <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-white">A</div>
  <span className="text-lg font-medium tracking-wide text-[var(--brand-text)]">aiment</span>
  </button>
  <p className="text-sm text-[var(--brand-text-muted)]">{tx("参加前チェック", "Pre-join Check")}</p>
@@ -210,10 +210,10 @@ export default function PreJoinPage() {
 
  <main className="mx-auto grid w-full max-w-[1600px] grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-[1fr_420px] lg:px-8">
  <section className="min-w-0 space-y-4">
- <div className="overflow-hidden rounded-2xl bg-black shadow-xl">
+ <div className="overflow-hidden rounded-2xl bg-[var(--brand-bg-900)] shadow-xl">
  <div className="relative" style={{ aspectRatio: "16/9" }}>
  <img src={session.thumbnail} alt={session.vtuber} className="h-full w-full object-cover" />
- <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+ <div className="absolute inset-0 bg-gradient-to-t from-[var(--brand-bg-900)]/75 via-[var(--brand-bg-900)]/20 to-transparent" />
  <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">配信企画</div>
  <div className="absolute bottom-4 left-4 right-4">
  <h1 className="line-clamp-2 text-2xl font-bold leading-tight text-[var(--brand-text)] lg:text-3xl">{session.title}</h1>
@@ -248,10 +248,10 @@ export default function PreJoinPage() {
  </span>
  </div>
 
- <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/10" }}>
+ <div className="relative overflow-hidden rounded-xl bg-[var(--brand-bg-900)]" style={{ aspectRatio: "16/10" }}>
  <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
  {!camOn && (
- <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm font-medium text-[var(--brand-text)]">{tx("カメラはオフです", "Camera is off")}</div>
+ <div className="absolute inset-0 flex items-center justify-center bg-[var(--brand-bg-900)]/70 text-sm font-medium text-[var(--brand-text)]">{tx("カメラはオフです", "Camera is off")}</div>
  )}
  </div>
 
@@ -307,7 +307,7 @@ export default function PreJoinPage() {
  <button
  onClick={joinNow}
  disabled={!ready || !!errorMessage}
- className="flex-1 rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-[var(--brand-bg-900)] transition-colors hover:bg-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-[var(--brand-text-muted)]"
+ className="flex-1 rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-[var(--brand-text-muted)]"
  >
  {tx("この設定で参加", "Join with this setup")}
  </button>

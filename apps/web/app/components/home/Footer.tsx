@@ -10,7 +10,7 @@ export function Footer() {
  <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4 md:gap-12">
  <div>
  <div className="mb-4 flex items-center gap-2">
- <div className="flex h-6 w-6 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-[var(--brand-bg-900)]">A</div>
+ <div className="flex h-6 w-6 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-white">A</div>
  <span className="font-medium text-[var(--brand-text)]">aiment</span>
  </div>
  <p className="text-sm leading-relaxed text-[var(--brand-text-muted)]">Beyond Chat. Unlock Distance.</p>

@@ -34,7 +34,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
         <div className="mx-auto max-w-[1400px] px-4 py-3 lg:px-8">
           <div className="flex items-center justify-between gap-3">
             <Link href="/" className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-[var(--brand-primary)] text-sm font-bold text-[var(--brand-bg-900)]">A</div>
+              <div className="flex h-8 w-8 items-center justify-center rounded bg-[var(--brand-primary)] text-sm font-bold text-white">A</div>
               <span className="text-lg font-semibold tracking-wide text-[var(--brand-text)]">aiment</span>
             </Link>
 
@@ -56,7 +56,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                       href={item.href}
                       className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                         isActive
-                          ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                          ? "bg-[var(--brand-primary)] text-white"
                           : "text-[var(--brand-text-muted)] hover:bg-[var(--brand-surface)] hover:text-[var(--brand-text)]"
                       }`}
                     >
@@ -74,7 +74,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                   onClick={() => setLocale("jp")}
                   className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
                     locale === "jp"
-                      ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                      ? "bg-[var(--brand-primary)] text-white"
                       : "text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
                   }`}
                 >
@@ -84,7 +84,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                   onClick={() => setLocale("en")}
                   className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
                     locale === "en"
-                      ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                      ? "bg-[var(--brand-primary)] text-white"
                       : "text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
                   }`}
                 >
@@ -94,7 +94,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
               {!isStudioMode && isVtuber && (
                 <Link
                   href="/studio/pre-live"
-                  className="hidden items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-extrabold text-[var(--brand-bg-900)] shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_8px_24px_rgba(124,106,230,0.45)] transition-all hover:brightness-110 sm:inline-flex"
+                  className="hidden items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_8px_24px_rgba(124,106,230,0.45)] transition-all hover:brightness-110 sm:inline-flex"
                 >
                   <span aria-hidden className="text-base leading-none">+</span>
                   <span>{tx("配信を作成", "Create Stream")}</span>
@@ -136,7 +136,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                 href={item.href}
                 className={`flex min-w-[72px] flex-1 items-center justify-center rounded-lg px-2 py-2 text-xs font-semibold transition-colors ${
                   isActive
-                    ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                    ? "bg-[var(--brand-primary)] text-white"
                     : "text-[var(--brand-text-muted)] hover:bg-[var(--brand-bg-900)] hover:text-[var(--brand-text)]"
                 }`}
               >

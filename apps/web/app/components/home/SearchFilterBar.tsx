@@ -50,7 +50,7 @@ export function SearchFilterBar({
               onClick={() => onToggleTag(tag)}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                 activeTags.includes(tag)
-                  ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)] shadow-sm"
+                  ? "bg-[var(--brand-primary)] text-white shadow-sm"
                   : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
               }`}
             >

@@ -57,7 +57,7 @@ function CircleControl({ label, on, onToggle }: CircleControlProps) {
       <span
         className={`flex h-14 w-14 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
           on
-            ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+            ? "bg-[var(--brand-primary)] text-white"
             : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
         }`}
       >
@@ -414,7 +414,7 @@ export default function StudioLiveSessionPage() {
         <main className="mx-auto flex max-w-[900px] flex-col items-center gap-4 px-4 py-16 text-center">
           <h1 className="text-2xl font-bold">{tx("枠が見つかりません", "Session not found")}</h1>
           <p className="text-sm text-[var(--brand-text-muted)]">{tx("配信枠を先に作成してください。", "Create a stream session first.")}</p>
-          <Link href="/studio/pre-live" className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)]">
+          <Link href="/studio/pre-live" className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white">
             {tx("枠作成へ", "Go to Pre-live")}
           </Link>
         </main>
@@ -445,7 +445,7 @@ export default function StudioLiveSessionPage() {
                 className={`rounded-xl px-4 py-2.5 text-sm font-extrabold ${
                   isLive
                     ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
-                    : "bg-[var(--brand-primary)] text-[var(--brand-bg-900)] shadow-[0_10px_24px_rgba(124,106,230,0.4)]"
+                    : "bg-[var(--brand-primary)] text-white shadow-[0_10px_24px_rgba(124,106,230,0.4)]"
                 }`}
               >
                 {isLive ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
@@ -465,7 +465,7 @@ export default function StudioLiveSessionPage() {
           )}
 
           <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
-            <div className="mx-auto max-w-[640px] overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
+            <div className="mx-auto max-w-[640px] overflow-hidden rounded-xl bg-[var(--brand-bg-900)]" style={{ aspectRatio: "16/9" }}>
               <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
             </div>
             {!camOn && <p className="mt-2 text-xs text-[var(--brand-text-muted)]">{tx("カメラOFF", "Camera OFF")}</p>}
@@ -537,7 +537,7 @@ export default function StudioLiveSessionPage() {
                 </div>
               </div>
 
-              <button onClick={copyParticipantLink} className="w-full rounded-md bg-[var(--brand-primary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]">
+              <button onClick={copyParticipantLink} className="w-full rounded-md bg-[var(--brand-primary)] px-3 py-2 text-xs font-semibold text-white">
                 {linkCopied ? tx("コピー済み", "Copied") : tx("参加リンクをコピー", "Copy Invite Link")}
               </button>
             </div>
@@ -571,7 +571,7 @@ export default function StudioLiveSessionPage() {
                   placeholder={tx("告知・案内を入力", "Type announcement")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
                 />
-                <button onClick={sendChat} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)]">
+                <button onClick={sendChat} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white">
                   {tx("送信", "Send")}
                 </button>
               </div>

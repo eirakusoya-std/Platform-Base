@@ -51,7 +51,7 @@ export function ScheduleFilters({
             onClick={() => onDateChange(date)}
             className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
               selectedDate === date
-                ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                ? "bg-[var(--brand-primary)] text-white"
                 : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
             }`}
           >
@@ -118,7 +118,7 @@ export function ScheduleFilters({
               onClick={() => onToggleCategory(category)}
               className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
                 selected
-                  ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                  ? "bg-[var(--brand-primary)] text-white"
                   : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
               }`}
             >

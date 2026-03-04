@@ -23,7 +23,7 @@ function CircleControl({ label, on, onToggle }: CircleControlProps) {
       <span
         className={`flex h-14 w-14 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
           on
-            ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+            ? "bg-[var(--brand-primary)] text-white"
             : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
         }`}
       >
@@ -216,7 +216,7 @@ export default function StudioPreLivePage() {
               <button
                 onClick={startBroadcastFlow}
                 disabled={creating}
-                className="rounded-l-xl bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-extrabold text-[var(--brand-bg-900)] shadow-[0_10px_26px_rgba(124,106,230,0.45)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-l-xl bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_26px_rgba(124,106,230,0.45)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {creating
                   ? tx("作成中...", "Creating...")
@@ -229,7 +229,7 @@ export default function StudioPreLivePage() {
               <button
                 type="button"
                 onClick={() => setShowPublishMenu((v) => !v)}
-                className="rounded-r-xl border-l border-black/20 bg-[var(--brand-primary)] px-3 py-2.5 text-sm font-black text-[var(--brand-bg-900)] shadow-[0_10px_26px_rgba(124,106,230,0.45)]"
+                className="rounded-r-xl border-l border-black/20 bg-[var(--brand-primary)] px-3 py-2.5 text-sm font-black text-white shadow-[0_10px_26px_rgba(124,106,230,0.45)]"
                 aria-label={tx("配信モードを選択", "Select publish mode")}
               >
                 ▾
@@ -242,7 +242,7 @@ export default function StudioPreLivePage() {
                       setPublishMode("go_live_now");
                       setShowPublishMenu(false);
                     }}
-                    className={`w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "go_live_now" ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "go_live_now" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
                   >
                     {tx("今すぐ開始", "Start now")}
                   </button>
@@ -252,7 +252,7 @@ export default function StudioPreLivePage() {
                       setPublishMode("create_only");
                       setShowPublishMenu(false);
                     }}
-                    className={`mt-1 w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "create_only" ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "create_only" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
                   >
                     {tx("枠だけ作成", "Create room only")}
                   </button>
@@ -262,7 +262,7 @@ export default function StudioPreLivePage() {
                       setPublishMode("scheduled");
                       setShowPublishMenu(false);
                     }}
-                    className={`mt-1 w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "scheduled" ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "scheduled" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
                   >
                     {tx("予約配信", "Schedule stream")}
                   </button>
@@ -280,10 +280,17 @@ export default function StudioPreLivePage() {
           )}
 
           <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
-            <div className="mx-auto max-w-[640px] overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
+            <div
+              className="relative mx-auto max-w-[640px] overflow-hidden rounded-xl bg-[var(--brand-bg-900)]"
+              style={{ aspectRatio: "16/9" }}
+            >
               <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+              {!camOn && (
+                <div className="absolute inset-0 flex items-center justify-center bg-[var(--brand-bg-900)]/70 text-sm font-semibold text-[var(--brand-text-muted)]">
+                  {tx("カメラOFF", "Camera OFF")}
+                </div>
+              )}
             </div>
-            {!camOn && <p className="mt-2 text-xs text-[var(--brand-text-muted)]">{tx("カメラOFF", "Camera OFF")}</p>}
             {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
 
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -389,7 +396,7 @@ export default function StudioPreLivePage() {
                   placeholder={tx("告知・案内を入力", "Type announcement")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
                 />
-                <button onClick={sendChat} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-bg-900)]">
+                <button onClick={sendChat} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white">
                   {tx("送信", "Send")}
                 </button>
               </div>
