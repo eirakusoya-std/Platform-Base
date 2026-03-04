@@ -1,8 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ComponentType, SVGProps, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import {
+  ChatBubbleLeftRightIcon,
+  LinkIcon,
+  MicrophoneIcon,
+  PaperAirplaneIcon,
+  PlayIcon,
+  StopIcon,
+  VideoCameraIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/solid";
 import { io, type Socket } from "socket.io-client";
 import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
@@ -47,11 +57,12 @@ function createPeerId() {
 
 type CircleControlProps = {
   label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   on: boolean;
   onToggle: () => void;
 };
 
-function CircleControl({ label, on, onToggle }: CircleControlProps) {
+function CircleControl({ label, icon: Icon, on, onToggle }: CircleControlProps) {
   return (
     <button onClick={onToggle} className="group flex w-[84px] flex-col items-center gap-1">
       <span
@@ -61,8 +72,9 @@ function CircleControl({ label, on, onToggle }: CircleControlProps) {
             : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
         }`}
       >
-        {label}
+        <Icon className="h-6 w-6" aria-hidden />
       </span>
+      <span className="text-[10px] font-semibold text-[var(--brand-text-muted)]">{label}</span>
       <span className={`text-[11px] font-semibold ${on ? "text-[var(--brand-primary)]" : "text-[var(--brand-text-muted)]"}`}>{on ? "ON" : "OFF"}</span>
     </button>
   );
@@ -442,15 +454,20 @@ export default function StudioLiveSessionPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={isLive ? stopBroadcast : startBroadcast}
-                className={`rounded-xl px-4 py-2.5 text-sm font-extrabold ${
+                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-extrabold ${
                   isLive
                     ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
                     : "bg-[var(--brand-primary)] text-white shadow-[0_10px_24px_rgba(124,106,230,0.4)]"
                 }`}
               >
+                {isLive ? <StopIcon className="h-4 w-4" aria-hidden /> : <PlayIcon className="h-4 w-4" aria-hidden />}
                 {isLive ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
               </button>
-              <button onClick={() => { stopBroadcast(); router.push("/"); }} className="rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]">
+              <button
+                onClick={() => { stopBroadcast(); router.push("/"); }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
+              >
+                <XMarkIcon className="h-4 w-4" aria-hidden />
                 {tx("閉じる", "Close")}
               </button>
             </div>
@@ -472,8 +489,8 @@ export default function StudioLiveSessionPage() {
             {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
 
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <CircleControl label="MIC" on={micOn} onToggle={() => setMicOn((v) => !v)} />
-              <CircleControl label="CAM" on={camOn} onToggle={() => setCamOn((v) => !v)} />
+              <CircleControl label="MIC" icon={MicrophoneIcon} on={micOn} onToggle={() => setMicOn((v) => !v)} />
+              <CircleControl label="CAM" icon={VideoCameraIcon} on={camOn} onToggle={() => setCamOn((v) => !v)} />
             </div>
           </section>
 
@@ -537,7 +554,8 @@ export default function StudioLiveSessionPage() {
                 </div>
               </div>
 
-              <button onClick={copyParticipantLink} className="w-full rounded-md bg-[var(--brand-primary)] px-3 py-2 text-xs font-semibold text-white">
+              <button onClick={copyParticipantLink} className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--brand-primary)] px-3 py-2 text-xs font-semibold text-white">
+                <LinkIcon className="h-4 w-4" aria-hidden />
                 {linkCopied ? tx("コピー済み", "Copied") : tx("参加リンクをコピー", "Copy Invite Link")}
               </button>
             </div>
@@ -547,7 +565,10 @@ export default function StudioLiveSessionPage() {
         <aside className="flex min-h-0 flex-col overflow-hidden">
           <section className="flex h-full min-h-[220px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
             <div className="border-b border-black/20 px-3 py-2">
-              <p className="text-sm font-semibold">{tx("配信者チャット", "Host Chat")}</p>
+              <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                <ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden />
+                {tx("配信者チャット", "Host Chat")}
+              </p>
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
               {chat.map((m) => (
@@ -571,7 +592,8 @@ export default function StudioLiveSessionPage() {
                   placeholder={tx("告知・案内を入力", "Type announcement")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
                 />
-                <button onClick={sendChat} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white">
+                <button onClick={sendChat} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white">
+                  <PaperAirplaneIcon className="h-4 w-4" aria-hidden />
                   {tx("送信", "Send")}
                 </button>
               </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ComponentType, SVGProps, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ChatBubbleLeftRightIcon, MicrophoneIcon, RadioIcon, VideoCameraIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../components/home/TopNav";
 import { StudioProgress } from "../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../lib/cameraDevices";
@@ -13,11 +14,12 @@ const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
 
 type CircleControlProps = {
   label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   on: boolean;
   onToggle: () => void;
 };
 
-function CircleControl({ label, on, onToggle }: CircleControlProps) {
+function CircleControl({ label, icon: Icon, on, onToggle }: CircleControlProps) {
   return (
     <button onClick={onToggle} className="group flex w-[84px] flex-col items-center gap-1">
       <span
@@ -27,8 +29,9 @@ function CircleControl({ label, on, onToggle }: CircleControlProps) {
             : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
         }`}
       >
-        {label}
+        <Icon className="h-6 w-6" aria-hidden />
       </span>
+      <span className="text-[10px] font-semibold text-[var(--brand-text-muted)]">{label}</span>
       <span className={`text-[11px] font-semibold ${on ? "text-[var(--brand-primary)]" : "text-[var(--brand-text-muted)]"}`}>{on ? "ON" : "OFF"}</span>
     </button>
   );
@@ -294,10 +297,10 @@ export default function StudioPreLivePage() {
             {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
 
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <CircleControl label="MIC" on={micOn} onToggle={() => setMicOn((v) => !v)} />
-              <CircleControl label="CAM" on={camOn} onToggle={() => setCamOn((v) => !v)} />
-              <CircleControl label="CHAT" on={chatOn} onToggle={() => setChatOn((v) => !v)} />
-              <CircleControl label="REC" on={recordOn} onToggle={() => setRecordOn((v) => !v)} />
+              <CircleControl label="MIC" icon={MicrophoneIcon} on={micOn} onToggle={() => setMicOn((v) => !v)} />
+              <CircleControl label="CAM" icon={VideoCameraIcon} on={camOn} onToggle={() => setCamOn((v) => !v)} />
+              <CircleControl label="CHAT" icon={ChatBubbleLeftRightIcon} on={chatOn} onToggle={() => setChatOn((v) => !v)} />
+              <CircleControl label="REC" icon={RadioIcon} on={recordOn} onToggle={() => setRecordOn((v) => !v)} />
             </div>
           </section>
 
