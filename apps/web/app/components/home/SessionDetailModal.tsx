@@ -28,10 +28,10 @@ export function SessionDetailModal({ session, onClose, onParticipate }: SessionD
  ✕
  </button>
  <div className="absolute bottom-4 left-4 rounded-lg bg-[var(--brand-primary)] px-4 py-2">
- <p className="text-sm font-bold text-[var(--brand-bg-900)]">{session.startsIn}</p>
+ <p className="text-sm font-bold text-white">{session.startsIn}</p>
  </div>
  <div className="absolute bottom-4 right-4 rounded-lg bg-[var(--brand-accent)] px-4 py-2">
- <p className="text-sm font-bold text-[var(--brand-bg-900)]">{session.slotsLeft} {tx("枠残り", "spots left")}</p>
+ <p className="text-sm font-bold text-white">{session.slotsLeft} {tx("枠残り", "spots left")}</p>
  </div>
  </div>
 
@@ -86,7 +86,7 @@ export function SessionDetailModal({ session, onClose, onParticipate }: SessionD
  {tx("視聴のみ (無料)", "Watch only (Free)")}
  </button>
  <button
- className="flex-1 rounded-lg bg-[var(--brand-primary)] px-6 py-4 font-bold text-[var(--brand-bg-900)] transition-colors hover:bg-[var(--brand-primary)]"
+ className="flex-1 rounded-lg bg-[var(--brand-primary)] px-6 py-4 font-bold text-white transition-colors hover:bg-[var(--brand-primary)]"
  onClick={() => onParticipate(session.id)}
  >
  {tx("参加する", "Join")}

@@ -30,7 +30,7 @@ export function StudioProgress({ current, orientation = "horizontal" }: StudioPr
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold ${
                   active
-                    ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                    ? "bg-[var(--brand-primary)] text-white"
                     : done
                       ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
                       : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)]"
@@ -57,7 +57,7 @@ export function StudioProgress({ current, orientation = "horizontal" }: StudioPr
             key={stage.key}
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold ${
               active
-                ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                ? "bg-[var(--brand-primary)] text-white"
                 : done
                   ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
                   : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)]"

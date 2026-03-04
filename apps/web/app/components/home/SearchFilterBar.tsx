@@ -1,5 +1,6 @@
 "use client";
 
+import { FunnelIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useI18n } from "../../lib/i18n";
 
 type SearchFilterBarProps = {
@@ -25,7 +26,7 @@ export function SearchFilterBar({
     <div className="sticky top-[72px] z-30 bg-[var(--brand-bg-900)]/95 shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-8 py-3">
         <div className="relative max-w-sm flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--brand-text-muted)]">🔍</span>
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--brand-text-muted)]" aria-hidden />
           <input
             type="text"
             placeholder={tx("VTuber名・配信タイトルで検索", "Search VTuber or stream title")}
@@ -37,20 +38,25 @@ export function SearchFilterBar({
             <button
               onClick={() => onSearchChange("")}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
+              aria-label={tx("検索をクリア", "Clear search")}
             >
-              ✕
+              <XMarkIcon className="h-4 w-4" aria-hidden />
             </button>
           )}
         </div>
         <div className="h-6 w-px bg-[var(--brand-surface)]" />
         <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-surface)] px-2.5 py-1 text-xs text-[var(--brand-text-muted)]">
+            <FunnelIcon className="h-3.5 w-3.5" aria-hidden />
+            {tx("フィルタ", "Filters")}
+          </span>
           {tags.map((tag) => (
             <button
               key={tag}
               onClick={() => onToggleTag(tag)}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                 activeTags.includes(tag)
-                  ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)] shadow-sm"
+                  ? "bg-[var(--brand-primary)] text-white shadow-sm"
                   : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
               }`}
             >
@@ -63,6 +69,7 @@ export function SearchFilterBar({
             onClick={onClearTags}
             className="flex items-center gap-1 text-xs text-[var(--brand-text-muted)] transition-colors hover:text-[var(--brand-text)]"
           >
+            <XMarkIcon className="h-3.5 w-3.5" aria-hidden />
             {tx("クリア", "Clear")}
           </button>
         )}

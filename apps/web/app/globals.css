@@ -2,19 +2,19 @@
 
 :root {
   --bg: #1a1d25;
-  --surface: #1f2130;
+  --surface: color-mix(in srgb, var(--bg) 88%, #ffffff 12%);
   --primary: #7c6ae6;
   --secondary: #00e5ff;
   --accent: #ff3b5c;
   --text: #ededed;
-  --text-sub: #a0a0b0;
+  --text-sub: color-mix(in srgb, var(--text) 62%, var(--bg) 38%);
 
   --background: var(--bg);
   --foreground: var(--text);
   --brand-bg-900: var(--bg);
-  --brand-bg-800: var(--bg);
+  --brand-bg-800: color-mix(in srgb, var(--bg) 92%, #ffffff 8%);
   --brand-surface: var(--surface);
-  --brand-surface-soft: var(--surface);
+  --brand-surface-soft: color-mix(in srgb, var(--bg) 84%, #ffffff 16%);
   --brand-primary: var(--primary);
   --brand-secondary: var(--secondary);
   --brand-accent: var(--accent);

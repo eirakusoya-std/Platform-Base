@@ -102,14 +102,14 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                   )}
 
                   <div className="flex items-center gap-2">
-                    <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-bg-900)] transition-all hover:brightness-110">
+                    <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-white transition-all hover:brightness-110">
                       {tx("LIVE 視聴", "Watch Live")}
                     </button>
 
                     <button
                       className={`flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
                         notified
-                          ? "bg-[var(--brand-primary)] text-[var(--brand-bg-900)]"
+                          ? "bg-[var(--brand-primary)] text-white"
                           : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)] hover:text-[var(--brand-primary)]"
                       }`}
                       onClick={(event) => onToggleNotify(event, session.id)}
