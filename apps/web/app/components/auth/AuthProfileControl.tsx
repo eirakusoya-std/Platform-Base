@@ -84,6 +84,7 @@ function MiniHudAccountCard({ user }: { user: SessionUser | null }) {
 
 function AuthDropdown({ onClose }: { onClose: () => void }) {
   const { user, isAuthenticated, login, logout } = useUserSession();
+  const [selectedRole, setSelectedRole] = useState<SessionUser["role"]>("listener");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,7 +139,7 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
                 name: profile.name || profile.email || "Google User",
                 email: profile.email,
                 avatarUrl: profile.picture,
-                role: "listener",
+                role: selectedRole,
               };
 
               login(sessionUser);
@@ -163,7 +164,7 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
       id: `mock-${Date.now().toString(36)}`,
       name: "田中太郎",
       email: "tanaka@example.com",
-      role: "listener",
+      role: selectedRole,
     });
   };
 
@@ -172,6 +173,33 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
       {!isAuthenticated ? (
         <div className="space-y-3">
           <p className="text-sm text-[var(--brand-text-muted)]">ログイン方法を選択してください。</p>
+          <div className="rounded-lg bg-[var(--brand-surface)] p-2">
+            <p className="mb-2 text-xs text-[var(--brand-text-muted)]">ログインロール（仮）</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedRole("listener")}
+                className={`h-9 rounded-md text-xs font-semibold transition ${
+                  selectedRole === "listener"
+                    ? "bg-[var(--brand-secondary)]/20 text-[var(--brand-secondary)]"
+                    : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
+                }`}
+              >
+                リスナー
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedRole("vtuber")}
+                className={`h-9 rounded-md text-xs font-semibold transition ${
+                  selectedRole === "vtuber"
+                    ? "bg-[var(--brand-secondary)]/20 text-[var(--brand-secondary)]"
+                    : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
+                }`}
+              >
+                VTuber
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             onClick={handleGoogleLogin}

@@ -118,7 +118,10 @@ export default function LoginPage() {
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    setAuthState(raw === "1" ? "logged_in" : "logged_out");
+    const timer = window.setTimeout(() => {
+      setAuthState(raw === "1" ? "logged_in" : "logged_out");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleTrigger = () => {

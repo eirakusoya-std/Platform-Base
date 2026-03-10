@@ -13,6 +13,7 @@ import {
   VideoCameraIcon,
   XMarkIcon,
 } from "@heroicons/react/24/solid";
+import { EVENTS } from "@repo/shared";
 import { io, type Socket } from "socket.io-client";
 import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
@@ -29,15 +30,6 @@ type ParticipantItem = {
 };
 
 type ConnectionStatus = "idle" | "starting" | "live" | "failed";
-
-const EVENTS = {
-  JOIN_ROOM: "join-room",
-  PEER_JOINED: "peer-joined",
-  OFFER: "offer",
-  ANSWER: "answer",
-  ICE_CANDIDATE: "ice-candidate",
-  PEER_LEFT: "peer-left",
-} as const;
 
 const INITIAL_PARTICIPANTS: ParticipantItem[] = [
   { id: "p1", name: "Kaito", status: "watching", muted: false },
@@ -88,7 +80,6 @@ export default function StudioLiveSessionPage() {
   const params = useParams<{ sessionId: string }>();
   const sessionId = params?.sessionId ?? "";
 
-  const [hydrated, setHydrated] = useState(false);
   const [session, setSession] = useState<StreamSession | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -103,14 +94,13 @@ export default function StudioLiveSessionPage() {
   const [connectedViewers, setConnectedViewers] = useState(0);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
-  const [participantLink, setParticipantLink] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const peerIdRef = useRef<string>("");
+  const peerIdRef = useRef<string>(createPeerId());
   const autoStartDoneRef = useRef(false);
 
   const signalingUrl = process.env.NEXT_PUBLIC_SIGNALING_URL;
@@ -122,31 +112,33 @@ export default function StudioLiveSessionPage() {
   }, [sessionHydrated, isVtuber, router]);
 
   useEffect(() => {
-    setHydrated(true);
-    peerIdRef.current = createPeerId();
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (!hydrated) return;
-
-    const sync = () => {
+    const sync = async () => {
       if (!sessionId) {
-        setSession(null);
-        setNotFound(true);
+        if (!cancelled) {
+          setSession(null);
+          setNotFound(true);
+        }
         return;
       }
 
-      const found = getStreamSession(sessionId);
+      const found = await getStreamSession(sessionId);
+      if (cancelled) return;
       setSession(found);
       setNotFound(!found);
     };
 
-    sync();
-    return subscribeStreamSessions(sync);
-  }, [hydrated, sessionId]);
+    void sync();
+    const unsubscribe = subscribeStreamSessions(sync);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [sessionId]);
 
   useEffect(() => {
-    if (!hydrated || notFound) return;
+    if (notFound) return;
 
     let cancelled = false;
 
@@ -213,24 +205,23 @@ export default function StudioLiveSessionPage() {
       streamRef.current = null;
       if (previewRef.current) previewRef.current.srcObject = null;
     };
-  }, [hydrated, notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId, micOn, camOn, tx]);
-
-  useEffect(() => {
-    if (!hydrated || !session) return;
-    setParticipantLink(`${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`);
-  }, [hydrated, session]);
+  }, [notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId, micOn, camOn, tx]);
 
   const selectedVideoLabel = useMemo(() => {
     return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? session?.preferredVideoLabel ?? tx("デフォルトカメラ", "Default camera");
   }, [selectedVideoDeviceId, session?.preferredVideoLabel, tx, videoDevices]);
 
   const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
+  const participantLink = useMemo(() => {
+    if (!session || typeof window === "undefined") return "";
+    return `${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`;
+  }, [session]);
 
   useEffect(() => {
     if (!session || !selectedVideoDeviceId) return;
     if (session.preferredVideoDeviceId === selectedVideoDeviceId && session.preferredVideoLabel === selectedVideoLabel) return;
 
-    updateStreamSession(session.sessionId, {
+    void updateStreamSession(session.sessionId, {
       preferredVideoDeviceId: selectedVideoDeviceId,
       preferredVideoLabel: selectedVideoLabel,
     });
@@ -373,13 +364,13 @@ export default function StudioLiveSessionPage() {
       setConnectedViewers(0);
     });
 
-    setStreamSessionStatus(session.sessionId, "live");
+    void setStreamSessionStatus(session.sessionId, "live");
   };
 
   const stopBroadcast = () => {
     if (!session) return;
     cleanupConnection();
-    setStreamSessionStatus(session.sessionId, "ended");
+    void setStreamSessionStatus(session.sessionId, "ended");
   };
 
   const copyParticipantLink = async () => {
@@ -399,26 +390,18 @@ export default function StudioLiveSessionPage() {
 
   useEffect(() => {
     if (!shouldAutoStart || autoStartDoneRef.current) return;
-    if (!hydrated || notFound || !session) return;
+    if (notFound || !session) return;
     if (connectionStatus !== "idle") return;
     if (!streamRef.current || !selectedVideoDeviceId || !micOn || !camOn) return;
 
     autoStartDoneRef.current = true;
-    void startBroadcast();
-  }, [shouldAutoStart, hydrated, notFound, session, connectionStatus, selectedVideoDeviceId, micOn, camOn]);
+    const timer = window.setTimeout(() => {
+      void startBroadcast();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [shouldAutoStart, notFound, session, connectionStatus, selectedVideoDeviceId, micOn, camOn]);
 
   if (!sessionHydrated || !isVtuber) return null;
-
-  if (!hydrated) {
-    return (
-      <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 text-[var(--brand-text)] md:pb-0">
-        <TopNav mode="studio" />
-        <main className="mx-auto flex max-w-[900px] flex-col items-center gap-4 px-4 py-16 text-center">
-          <p className="text-sm text-[var(--brand-text-muted)]">{tx("読み込み中...", "Loading...")}</p>
-        </main>
-      </div>
-    );
-  }
 
   if (notFound || !session) {
     return (

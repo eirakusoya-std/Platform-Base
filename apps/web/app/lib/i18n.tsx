@@ -20,12 +20,16 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved === "jp" || saved === "en") {
-      setLocaleState(saved);
-      document.documentElement.lang = saved === "jp" ? "ja" : "en";
-      return;
+      const timer = window.setTimeout(() => {
+        setLocaleState(saved);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
-    document.documentElement.lang = "ja";
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = locale === "jp" ? "ja" : "en";
+  }, [locale]);
 
   const setLocale = (next: Locale) => {
     setLocaleState(next);

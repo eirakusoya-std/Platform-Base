@@ -4,19 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import { useI18n } from "../../lib/i18n";
+import { EVENTS } from "@repo/shared";
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
 }
-
-const EVENTS = {
-  JOIN_ROOM: "join-room",
-  PEER_JOINED: "peer-joined",
-  OFFER: "offer",
-  ANSWER: "answer",
-  ICE_CANDIDATE: "ice-candidate",
-  PEER_LEFT: "peer-left",
-} as const;
 
 type Role = "host" | "listener" | "speaker" | "unknown";
 type RequestedRole = "host" | "listener" | "speaker";

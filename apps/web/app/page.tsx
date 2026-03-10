@@ -12,7 +12,7 @@ import { StartingSoonSection } from "./components/home/sections/StartingSoonSect
 import { UpcomingTicker } from "./components/home/UpcomingTicker";
 import { LiveSession, ModalSession, StartingSoonSession } from "./components/home/types";
 import { matchesFilter } from "./components/home/utils";
-import { listActiveStreamSessions, subscribeStreamSessions } from "./lib/streamSessions";
+import { listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "./lib/streamSessions";
 
 function toSecondsUntil(startsAt: string) {
   const diffMs = new Date(startsAt).getTime() - Date.now();
@@ -22,27 +22,33 @@ function toSecondsUntil(startsAt: string) {
 export default function HomePage() {
   const router = useRouter();
 
-  const [hydrated, setHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [selectedSession, setSelectedSession] = useState<ModalSession | null>(null);
   const [notifySet, setNotifySet] = useState<Set<string>>(new Set());
   const [reservedSet, setReservedSet] = useState<Set<string>>(new Set());
-  const [dynamicSessions, setDynamicSessions] = useState<ReturnType<typeof listActiveStreamSessions>>([]);
+  const [dynamicSessions, setDynamicSessions] = useState<StreamSession[]>([]);
   const [countdown, setCountdown] = useState<Record<string, number>>(() =>
     Object.fromEntries(STARTING_SOON_SESSIONS.map((session) => [session.id, session.startsInSeconds])),
   );
 
   useEffect(() => {
-    setHydrated(true);
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const sessions = await listActiveStreamSessions();
+        if (!cancelled) setDynamicSessions(sessions);
+      } catch {
+        if (!cancelled) setDynamicSessions([]);
+      }
+    };
+    void sync();
+    const unsubscribe = subscribeStreamSessions(sync);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    const sync = () => setDynamicSessions(listActiveStreamSessions());
-    sync();
-    return subscribeStreamSessions(sync);
-  }, [hydrated]);
 
   const dynamicStartingSoon = useMemo<StartingSoonSession[]>(
     () =>
@@ -91,25 +97,6 @@ export default function HomePage() {
   const allLive = useMemo(() => [...dynamicLive, ...LIVE_NOW_SESSIONS], [dynamicLive]);
 
   useEffect(() => {
-    setCountdown((prev) => {
-      const next = { ...prev };
-      const validIds = new Set(allStartingSoon.map((session) => session.id));
-
-      for (const session of allStartingSoon) {
-        if (next[session.id] == null) {
-          next[session.id] = session.startsInSeconds;
-        }
-      }
-
-      for (const id of Object.keys(next)) {
-        if (!validIds.has(id)) delete next[id];
-      }
-
-      return next;
-    });
-  }, [allStartingSoon]);
-
-  useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => {
         const next = { ...prev };
@@ -122,6 +109,14 @@ export default function HomePage() {
 
     return () => clearInterval(timer);
   }, []);
+
+  const mergedCountdown = useMemo(() => {
+    const next: Record<string, number> = {};
+    for (const session of allStartingSoon) {
+      next[session.id] = countdown[session.id] ?? session.startsInSeconds;
+    }
+    return next;
+  }, [allStartingSoon, countdown]);
 
   const filteredStartingSoon = useMemo(
     () => allStartingSoon.filter((session) => matchesFilter(session, searchQuery, activeTags)),
@@ -179,7 +174,7 @@ export default function HomePage() {
       <div className="mx-auto max-w-[1400px] px-8">
         <StartingSoonSection
           sessions={filteredStartingSoon}
-          countdown={countdown}
+          countdown={mergedCountdown}
           reservedSet={reservedSet}
           onOpenSession={setSelectedSession}
           onToggleReserve={handleToggleReserve}

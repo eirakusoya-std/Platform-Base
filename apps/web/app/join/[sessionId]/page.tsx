@@ -68,10 +68,22 @@ export default function PreJoinPage() {
  const { tx } = useI18n();
  const params = useParams<{ sessionId: string }>();
  const sessionId = params?.sessionId ?? "";
+ const [dynamicSession, setDynamicSession] = useState<Awaited<ReturnType<typeof getStreamSession>>>(null);
+
+ useEffect(() => {
+ let cancelled = false;
+ const load = async () => {
+ const found = await getStreamSession(sessionId);
+ if (!cancelled) setDynamicSession(found);
+ };
+ void load();
+ return () => {
+ cancelled = true;
+ };
+ }, [sessionId]);
 
  const session = useMemo<SessionMeta>(
  () => {
- const dynamicSession = getStreamSession(sessionId);
  if (dynamicSession) {
  return {
  id: dynamicSession.sessionId,
@@ -96,7 +108,7 @@ export default function PreJoinPage() {
  }
  );
  },
- [sessionId],
+ [dynamicSession, sessionId],
  );
 
  const previewRef = useRef<HTMLVideoElement | null>(null);
