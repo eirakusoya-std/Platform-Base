@@ -91,14 +91,14 @@ function FrameNoise() {
   );
 }
 
-function VerticalCipher({ className, palette }: { className: string; palette: HudPalette }) {
+function VerticalCipher({ className, palette, text = "BOOT.SEQUENCE.INITIALIZED / REMAP.PING.SENSOR.FEEDBACK" }: { className: string; palette: HudPalette; text?: string }) {
   return (
     <p
       className={`absolute text-[10px] uppercase tracking-[0.16em] ${className}`}
       style={{ writingMode: "vertical-rl", textOrientation: "mixed", color: palette.lineSoft }}
       aria-hidden
     >
-      BOOT.SEQUENCE.INITIALIZED / REMAP.PING.SENSOR.FEEDBACK
+      {text}
     </p>
   );
 }
@@ -224,21 +224,45 @@ function TopGraphicBand({ palette }: { palette: HudPalette }) {
   );
 }
 
-function BottomGraphicBand({ palette }: { palette: HudPalette }) {
+function TopGraphicBandSimple({ palette }: { palette: HudPalette }) {
   return (
-    <div className="relative mt-10 h-24" aria-hidden>
+    <div className="relative mb-6 h-24" aria-hidden>
+      <NestedSquares className="left-2 top-0" palette={palette} />
+      <ThickGhostCircle className="left-28 top-8" palette={palette} />
+      <div className="absolute right-12 top-2 grid grid-cols-2 gap-1.5">
+        <div className="h-2.5 w-2.5 border" style={{ borderColor: palette.line }} />
+        <div className="h-2.5 w-2.5 border" style={{ borderColor: palette.line }} />
+        <div className="h-2.5 w-2.5 border" style={{ borderColor: palette.line }} />
+        <div className="h-2.5 w-2.5 border" style={{ borderColor: palette.line }} />
+      </div>
+      <div className="absolute right-6 top-6 h-10 w-px" style={{ backgroundColor: palette.line }} />
+    </div>
+  );
+}
+
+function RightClusterVertical({ palette, className = "" }: { palette: HudPalette; className?: string }) {
+  return (
+    <div className={`h-32 w-24 ${className}`} aria-hidden>
+      <div className="absolute left-0 top-0 h-14 w-14 rounded-full border-2" style={{ borderColor: palette.accent }} />
+      <div className="absolute left-0 top-0 h-14 w-14 rounded-full" style={{ boxShadow: `inset 0 0 0 7px color-mix(in srgb, ${palette.accent} 24%, transparent)` }} />
+      <div className="absolute left-10 top-7 h-11 w-11 border" style={{ borderColor: palette.line }} />
+      <div className="absolute left-2 top-[82px] h-8 w-8 border" style={{ borderColor: palette.accent }}>
+        <div className="absolute inset-2 border" style={{ borderColor: palette.accent }} />
+      </div>
+    </div>
+  );
+}
+
+function BottomGraphicBand({ palette, showRightCluster = true, topMarginClass = "mt-10" }: { palette: HudPalette; showRightCluster?: boolean; topMarginClass?: string }) {
+  return (
+    <div className={`relative ${topMarginClass} h-24`} aria-hidden>
       <div className="absolute left-0 top-5 h-px w-32" style={{ backgroundColor: palette.line }} />
       <div className="absolute left-36 top-[13px] flex items-center gap-2">
         <span className="block h-6 w-px" style={{ backgroundColor: palette.line }} />
         <span className="block h-6 w-px" style={{ backgroundColor: palette.line }} />
         <span className="block h-6 w-px" style={{ backgroundColor: palette.accent }} />
       </div>
-      <div className="absolute right-16 top-0 h-14 w-14 rounded-full border-2" style={{ borderColor: palette.accent }} />
-      <div className="absolute right-16 top-0 h-14 w-14 rounded-full" style={{ boxShadow: `inset 0 0 0 7px color-mix(in srgb, ${palette.accent} 24%, transparent)` }} />
-      <div className="absolute right-0 top-3 h-11 w-11 border" style={{ borderColor: palette.line }} />
-      <div className="absolute right-8 top-10 h-8 w-8 border" style={{ borderColor: palette.accent }}>
-        <div className="absolute inset-2 border" style={{ borderColor: palette.accent }} />
-      </div>
+      {showRightCluster && <RightClusterVertical palette={palette} className="absolute right-0 top-0 h-24" />}
     </div>
   );
 }
@@ -316,10 +340,54 @@ function LoginWireCard({ palette }: { palette: HudPalette }) {
   );
 }
 
-function AccountWireCard({ palette }: { palette: HudPalette }) {
+function AccountWireCard({
+  palette,
+  headerLabel = "Account Protocol",
+  headerTitle = "STATUS",
+  headerSubtitle = "MOTION.CU.R3 / DE.FAULT",
+  rows = [
+    ["User Name", "XXXX XXXXX"],
+    ["Plan", "PROTOCOL 02"],
+    ["Last Login", "2026-03-07 20:41"],
+    ["Security", "MFA ENABLED"],
+  ],
+  showActionButtons = true,
+  topGraphicVariant = "full",
+  showCodeStacks = true,
+  emphasizeUserName = false,
+  showFooterTelemetry = true,
+  coinInfo,
+  coinDecorationVariant = "none",
+  verticalText = "BOOT.SEQUENCE.INITIALIZED / REMAP.PING.SENSOR.FEEDBACK",
+  minHeightClass = "min-h-[680px]",
+  bottomBandTopMarginClass = "mt-10",
+  showBottomBand = true,
+  showInlineBottomGlyph = false,
+}: {
+  palette: HudPalette;
+  headerLabel?: string;
+  headerTitle?: string;
+  headerSubtitle?: string;
+  rows?: Array<[string, string]>;
+  showActionButtons?: boolean;
+  topGraphicVariant?: "full" | "simple";
+  showCodeStacks?: boolean;
+  emphasizeUserName?: boolean;
+  showFooterTelemetry?: boolean;
+  coinInfo?: {
+    coins: string;
+    streak: string;
+  };
+  coinDecorationVariant?: "none" | "verticalRight";
+  verticalText?: string;
+  minHeightClass?: string;
+  bottomBandTopMarginClass?: string;
+  showBottomBand?: boolean;
+  showInlineBottomGlyph?: boolean;
+}) {
   return (
     <section
-      className="relative min-h-[680px] overflow-hidden rounded-xl border p-7 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+      className={`relative ${minHeightClass} overflow-hidden rounded-xl border p-7 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]`}
       style={{ borderColor: palette.lineSoft, backgroundColor: palette.surface, color: palette.text }}
     >
       <FrameNoise />
@@ -327,67 +395,99 @@ function AccountWireCard({ palette }: { palette: HudPalette }) {
       <HudCorner className="right-3 top-3 border-r-2 border-t-2" palette={palette} />
       <HudCorner className="bottom-3 left-3 border-b-2 border-l-2" palette={palette} />
       <HudCorner className="bottom-3 right-3 border-b-2 border-r-2" palette={palette} />
-      <VerticalCipher className="left-5 top-64 hidden md:block" palette={palette} />
+      <VerticalCipher className="left-5 top-64 hidden md:block" palette={palette} text={verticalText} />
 
       <div className="relative z-10 px-2 md:px-6">
         <header className="mb-8 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-[0.38em]" style={{ color: palette.textMuted }}>
-              Account Protocol
+              {headerLabel}
             </p>
             <h2 className="text-4xl font-semibold tracking-[0.05em]" style={{ color: palette.accent }}>
-              STATUS
+              {headerTitle}
             </h2>
             <p className="mt-2 text-[10px] uppercase tracking-[0.2em]" style={{ color: palette.textMuted }}>
-              MOTION.CU.R3 / DE.FAULT
+              {headerSubtitle}
             </p>
           </div>
           <div className="mt-1 h-11 w-11 rounded-full border-2" style={{ borderColor: palette.accent }} />
         </header>
 
-        <TopGraphicBand palette={palette} />
-        <CodeStack className="left-44 top-[176px] whitespace-pre" palette={palette} lines={["MAP.ONLINE", "DE.", "FAULT"]} />
-        <CodeStack className="right-10 top-[208px] whitespace-pre text-right" palette={palette} lines={["S.0X", "P", "004"]} />
+        {topGraphicVariant === "full" ? <TopGraphicBand palette={palette} /> : <TopGraphicBandSimple palette={palette} />}
+        {showCodeStacks && <CodeStack className="left-44 top-[176px] whitespace-pre" palette={palette} lines={["MAP.ONLINE", "DE.", "FAULT"]} />}
+        {showCodeStacks && <CodeStack className="right-10 top-[208px] whitespace-pre text-right" palette={palette} lines={["S.0X", "P", "004"]} />}
 
         <div className="space-y-4">
-          {[
-            ["User Name", "XXXX XXXXX"],
-            ["Plan", "PROTOCOL 02"],
-            ["Last Login", "2026-03-07 20:41"],
-            ["Security", "MFA ENABLED"],
-          ].map(([key, value]) => (
+          {rows.map(([key, value]) => (
             <div key={key} className="grid grid-cols-[120px_1fr] gap-3 border-b pb-3" style={{ borderColor: palette.lineSoft }}>
               <span className="text-[10px] uppercase tracking-[0.2em]" style={{ color: palette.textMuted }}>
                 {key}
               </span>
-              <span className="text-sm tracking-[0.08em]" style={{ color: key === "Security" ? palette.accent : palette.text }}>
+              <span
+                className={`${emphasizeUserName && key === "User Name" ? "text-[1.35rem]" : "text-sm"} tracking-[0.08em]`}
+                style={{ color: key === "Security" ? palette.accent : palette.text }}
+              >
                 {value}
               </span>
             </div>
           ))}
         </div>
 
-        <div className="mt-8 flex flex-wrap gap-3">
-          <button className="h-10 border px-4 text-xs tracking-[0.2em]" style={{ borderColor: palette.accent, color: palette.accent }}>
-            EDIT PROFILE
-          </button>
-          <button className="h-10 border px-4 text-xs tracking-[0.2em]" style={{ borderColor: palette.lineSoft, color: palette.text }}>
-            SETTINGS
-          </button>
-          <button className="h-10 border px-4 text-xs tracking-[0.2em]" style={{ borderColor: palette.lineSoft, color: palette.text }}>
-            LOGOUT
-          </button>
-        </div>
-
-        <div className="mt-8 space-y-4">
-          <TinyReadout palette={palette} />
-          <DividerGlyph palette={palette} />
-          <div className="text-[10px] uppercase tracking-[0.22em]" style={{ color: palette.textMuted }}>
-            Restore / ZXTX / Static
+        {showActionButtons && (
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button className="h-10 border px-4 text-xs tracking-[0.2em]" style={{ borderColor: palette.accent, color: palette.accent }}>
+              EDIT PROFILE
+            </button>
+            <button className="h-10 border px-4 text-xs tracking-[0.2em]" style={{ borderColor: palette.lineSoft, color: palette.text }}>
+              SETTINGS
+            </button>
+            <button className="h-10 border px-4 text-xs tracking-[0.2em]" style={{ borderColor: palette.lineSoft, color: palette.text }}>
+              LOGOUT
+            </button>
           </div>
-        </div>
+        )}
 
-        <BottomGraphicBand palette={palette} />
+        {showFooterTelemetry && (
+          <div className="mt-8 space-y-4">
+            <TinyReadout palette={palette} />
+            <DividerGlyph palette={palette} />
+            <div className="text-[10px] uppercase tracking-[0.22em]" style={{ color: palette.textMuted }}>
+              Restore / ZXTX / Static
+            </div>
+          </div>
+        )}
+
+        {coinInfo && (
+          <div className="relative mt-8 min-h-[148px] w-full space-y-2 pr-32">
+            <p className="text-[10px] uppercase tracking-[0.22em]" style={{ color: palette.textMuted }}>
+              Coin Balance
+            </p>
+            <p className="text-4xl font-semibold leading-none tracking-[0.04em]" style={{ color: palette.accent }}>
+              {coinInfo.coins}
+            </p>
+            <p className="mt-3 text-[10px] uppercase tracking-[0.22em]" style={{ color: palette.textMuted }}>
+              Daily Streak
+            </p>
+            <p className="text-2xl font-semibold leading-none tracking-[0.05em]" style={{ color: "var(--brand-secondary)" }}>
+              {coinInfo.streak}
+            </p>
+            {coinDecorationVariant === "verticalRight" && <RightClusterVertical palette={palette} className="absolute right-[10px] top-[12px]" />}
+            {showInlineBottomGlyph && (
+              <div className="mt-4 flex items-center gap-4" aria-hidden>
+                <div className="h-px w-44" style={{ backgroundColor: palette.line }} />
+                <div className="flex items-center gap-2">
+                  <span className="block h-8 w-px" style={{ backgroundColor: palette.line }} />
+                  <span className="block h-8 w-px" style={{ backgroundColor: palette.line }} />
+                  <span className="block h-8 w-px" style={{ backgroundColor: palette.accent }} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {showBottomBand && (
+          <BottomGraphicBand palette={palette} showRightCluster={coinDecorationVariant !== "verticalRight"} topMarginClass={bottomBandTopMarginClass} />
+        )}
       </div>
     </section>
   );
@@ -414,6 +514,67 @@ function CardPair({ palette }: { palette: HudPalette }) {
         </div>
       </div>
     </section>
+  );
+}
+
+export function WireframeAccountCardAiment({
+  headerLabel,
+  headerTitle,
+  headerSubtitle,
+  rows,
+  showActionButtons,
+  topGraphicVariant,
+  showCodeStacks,
+  emphasizeUserName,
+  showFooterTelemetry,
+  coinInfo,
+  coinDecorationVariant,
+  verticalText,
+  minHeightClass,
+  bottomBandTopMarginClass,
+  showBottomBand,
+  showInlineBottomGlyph,
+}: {
+  headerLabel?: string;
+  headerTitle?: string;
+  headerSubtitle?: string;
+  rows?: Array<[string, string]>;
+  showActionButtons?: boolean;
+  topGraphicVariant?: "full" | "simple";
+  showCodeStacks?: boolean;
+  emphasizeUserName?: boolean;
+  showFooterTelemetry?: boolean;
+  coinInfo?: {
+    coins: string;
+    streak: string;
+  };
+  coinDecorationVariant?: "none" | "verticalRight";
+  verticalText?: string;
+  minHeightClass?: string;
+  bottomBandTopMarginClass?: string;
+  showBottomBand?: boolean;
+  showInlineBottomGlyph?: boolean;
+}) {
+  return (
+    <AccountWireCard
+      palette={brandPalette}
+      headerLabel={headerLabel}
+      headerTitle={headerTitle}
+      headerSubtitle={headerSubtitle}
+      rows={rows}
+      showActionButtons={showActionButtons}
+      topGraphicVariant={topGraphicVariant}
+      showCodeStacks={showCodeStacks}
+      emphasizeUserName={emphasizeUserName}
+      showFooterTelemetry={showFooterTelemetry}
+      coinInfo={coinInfo}
+      coinDecorationVariant={coinDecorationVariant}
+      verticalText={verticalText}
+      minHeightClass={minHeightClass}
+      bottomBandTopMarginClass={bottomBandTopMarginClass}
+      showBottomBand={showBottomBand}
+      showInlineBottomGlyph={showInlineBottomGlyph}
+    />
   );
 }
 
