@@ -143,7 +143,7 @@ export default function StudioPreLivePage() {
 
   const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
 
-  const startBroadcastFlow = () => {
+  const startBroadcastFlow = async () => {
     setShowPublishMenu(false);
     const warnings: string[] = [];
     if (title.trim().length < 8) warnings.push(tx("タイトルは8文字以上で入力してください。", "Title must be at least 8 characters."));
@@ -170,26 +170,31 @@ export default function StudioPreLivePage() {
         ? new Date(scheduledAt).toISOString()
         : new Date().toISOString();
 
-    const created = createStreamSession({
-      hostUserId: "vtuber-demo",
-      hostName: "あなたのチャンネル",
-      title: title.trim(),
-      category,
-      description: description.trim(),
-      thumbnail: "/image/thumbnail/thumbnail_5.png",
-      startsAt,
-      participationType: "First-come",
-      slotsTotal: 10,
-      preferredVideoDeviceId: selectedVideoDeviceId || undefined,
-      preferredVideoLabel: selectedVideoLabel || undefined,
-    });
+    try {
+      const created = await createStreamSession({
+        hostUserId: "vtuber-demo",
+        hostName: "あなたのチャンネル",
+        title: title.trim(),
+        category,
+        description: description.trim(),
+        thumbnail: "/image/thumbnail/thumbnail_5.png",
+        startsAt,
+        participationType: "First-come",
+        slotsTotal: 10,
+        preferredVideoDeviceId: selectedVideoDeviceId || undefined,
+        preferredVideoLabel: selectedVideoLabel || undefined,
+      });
 
-    if (publishMode === "go_live_now") {
-      router.push(`/studio/live/${encodeURIComponent(created.sessionId)}?autostart=1`);
-      return;
+      if (publishMode === "go_live_now") {
+        router.push(`/studio/live/${encodeURIComponent(created.sessionId)}?autostart=1`);
+        return;
+      }
+
+      router.push(`/studio/live/${encodeURIComponent(created.sessionId)}`);
+    } catch {
+      setStartWarnings([tx("配信枠の作成に失敗しました。時間をおいて再試行してください。", "Failed to create stream session. Please retry.")]);
+      setCreating(false);
     }
-
-    router.push(`/studio/live/${encodeURIComponent(created.sessionId)}`);
   };
 
   const sendChat = () => {

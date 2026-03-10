@@ -1,24 +1,6 @@
 "use client";
 
-export type StreamSessionStatus = "prelive" | "live" | "ended";
-
-export type StreamSession = {
-  sessionId: string;
-  hostUserId: string;
-  title: string;
-  status: StreamSessionStatus;
-  createdAt: string;
-  startsAt: string;
-  description: string;
-  category: string;
-  thumbnail: string;
-  hostName: string;
-  participationType: "First-come" | "Lottery";
-  slotsTotal: number;
-  slotsLeft: number;
-  preferredVideoDeviceId?: string;
-  preferredVideoLabel?: string;
-};
+import { API_ROUTES, type StreamSession, type StreamSessionStatus } from "@repo/shared";
 
 type CreateStreamSessionInput = {
   hostUserId: string;
@@ -34,111 +16,128 @@ type CreateStreamSessionInput = {
   preferredVideoLabel?: string;
 };
 
-const STORAGE_KEY = "aiment.stream-sessions.v1";
 const UPDATE_EVENT = "aiment-stream-sessions-updated";
+const DEFAULT_API_BASE = "http://localhost:3002";
 
-let memorySessions: StreamSession[] = [];
+function getApiBase() {
+  const base = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_BASE;
+  return base.endsWith("/") ? base.slice(0, -1) : base;
+}
+
+function url(path: string) {
+  return `${getApiBase()}${path}`;
+}
 
 function isBrowser() {
   return typeof window !== "undefined";
 }
 
-function parseSessions(raw: string | null): StreamSession[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item) => typeof item?.sessionId === "string");
-  } catch {
-    return [];
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url(path), {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const body = await response.json();
+      if (typeof body?.message === "string") message = body.message;
+    } catch {
+      // no-op
+    }
+    throw new Error(message);
   }
+
+  if (response.status === 204) return {} as T;
+  return (await response.json()) as T;
 }
 
-function readSessions(): StreamSession[] {
-  if (!isBrowser()) return memorySessions;
-  const parsed = parseSessions(window.localStorage.getItem(STORAGE_KEY));
-  memorySessions = parsed;
-  return parsed;
-}
-
-function writeSessions(next: StreamSession[]) {
-  memorySessions = next;
+function notifyUpdated() {
   if (!isBrowser()) return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 }
 
-function makeSessionId() {
-  const seed = Math.random().toString(36).slice(2, 7);
-  return `session-${Date.now().toString(36)}-${seed}`;
+export type { StreamSession, StreamSessionStatus };
+
+export async function listAllStreamSessions(): Promise<StreamSession[]> {
+  const { sessions } = await requestJson<{ sessions: StreamSession[] }>(API_ROUTES.SESSIONS);
+  return sessions.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-export function listAllStreamSessions(): StreamSession[] {
-  return readSessions().slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+export async function listActiveStreamSessions(): Promise<StreamSession[]> {
+  const { sessions } = await requestJson<{ sessions: StreamSession[] }>(`${API_ROUTES.SESSIONS}?status=active`);
+  return sessions.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-export function listActiveStreamSessions(): StreamSession[] {
-  return listAllStreamSessions().filter((session) => session.status === "prelive" || session.status === "live");
+export async function getStreamSession(sessionId: string): Promise<StreamSession | null> {
+  try {
+    const { session } = await requestJson<{ session: StreamSession }>(API_ROUTES.SESSION_BY_ID(sessionId));
+    return session;
+  } catch {
+    return null;
+  }
 }
 
-export function getStreamSession(sessionId: string): StreamSession | null {
-  return readSessions().find((session) => session.sessionId === sessionId) ?? null;
-}
-
-export function createStreamSession(input: CreateStreamSessionInput): StreamSession {
-  const now = new Date();
-  const startsAt = input.startsAt ?? new Date(now.getTime() + 5 * 60 * 1000).toISOString();
-
-  const created: StreamSession = {
-    sessionId: makeSessionId(),
-    hostUserId: input.hostUserId,
-    title: input.title,
-    status: "prelive",
-    createdAt: now.toISOString(),
-    startsAt,
-    description: input.description,
-    category: input.category,
-    thumbnail: input.thumbnail ?? "/image/thumbnail/thumbnail_5.png",
-    hostName: input.hostName ?? "あなたのチャンネル",
-    participationType: input.participationType ?? "First-come",
-    slotsTotal: input.slotsTotal ?? 10,
-    slotsLeft: input.slotsTotal ?? 10,
-    preferredVideoDeviceId: input.preferredVideoDeviceId,
-    preferredVideoLabel: input.preferredVideoLabel,
-  };
-
-  writeSessions([created, ...readSessions()]);
-  return created;
-}
-
-export function updateStreamSession(sessionId: string, patch: Partial<StreamSession>): StreamSession | null {
-  const current = readSessions();
-  let updated: StreamSession | null = null;
-
-  const next = current.map((session) => {
-    if (session.sessionId !== sessionId) return session;
-    updated = { ...session, ...patch, sessionId: session.sessionId };
-    return updated;
+export async function createStreamSession(input: CreateStreamSessionInput): Promise<StreamSession> {
+  const { session } = await requestJson<{ session: StreamSession }>(API_ROUTES.SESSIONS, {
+    method: "POST",
+    body: JSON.stringify(input),
   });
-
-  if (!updated) return null;
-  writeSessions(next);
-  return updated;
+  notifyUpdated();
+  return session;
 }
 
-export function setStreamSessionStatus(sessionId: string, status: StreamSessionStatus) {
-  return updateStreamSession(sessionId, { status });
+export async function updateStreamSession(sessionId: string, patch: Partial<StreamSession>): Promise<StreamSession | null> {
+  try {
+    const { session } = await requestJson<{ session: StreamSession }>(API_ROUTES.SESSION_BY_ID(sessionId), {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    notifyUpdated();
+    return session;
+  } catch {
+    return null;
+  }
 }
 
-export function subscribeStreamSessions(onUpdate: () => void): () => void {
+export async function setStreamSessionStatus(sessionId: string, status: StreamSessionStatus): Promise<StreamSession | null> {
+  try {
+    const path =
+      status === "live"
+        ? API_ROUTES.SESSION_START(sessionId)
+        : status === "ended"
+          ? API_ROUTES.SESSION_END(sessionId)
+          : API_ROUTES.SESSION_BY_ID(sessionId);
+    const body = status === "prelive" ? JSON.stringify({ status }) : undefined;
+    const { session } = await requestJson<{ session: StreamSession }>(path, {
+      method: "PATCH",
+      body,
+    });
+    notifyUpdated();
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeStreamSessions(onUpdate: () => void, intervalMs = 6000): () => void {
   if (!isBrowser()) return () => undefined;
 
-  const handler = () => onUpdate();
-  window.addEventListener(UPDATE_EVENT, handler);
-  window.addEventListener("storage", handler);
+  const tick = () => onUpdate();
+  const timer = window.setInterval(tick, intervalMs);
+  window.addEventListener(UPDATE_EVENT, tick);
+  window.addEventListener("focus", tick);
+  document.addEventListener("visibilitychange", tick);
 
   return () => {
-    window.removeEventListener(UPDATE_EVENT, handler);
-    window.removeEventListener("storage", handler);
+    window.clearInterval(timer);
+    window.removeEventListener(UPDATE_EVENT, tick);
+    window.removeEventListener("focus", tick);
+    document.removeEventListener("visibilitychange", tick);
   };
 }

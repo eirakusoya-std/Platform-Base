@@ -8,6 +8,7 @@
     "dev": "pnpm --filter ./apps/... -r --parallel dev",
     "dev:web": "pnpm --filter ./apps/web dev",
     "dev:signaling": "pnpm --filter ./apps/signaling dev",
+    "dev:api": "pnpm --filter ./apps/api dev",
     "lint": "pnpm -r --filter \"./apps/*\" lint"
   },
   "keywords": [],
