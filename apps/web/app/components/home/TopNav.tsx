@@ -4,6 +4,7 @@ import { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarDaysIcon, HomeIcon, SparklesIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import { AuthProfileControl } from "../auth/AuthProfileControl";
 import { useI18n } from "../../lib/i18n";
 import { useUserSession } from "../../lib/userSession";
 
@@ -28,7 +29,7 @@ type TopNavProps = {
 export function TopNav({ mode = "default" }: TopNavProps) {
   const pathname = usePathname();
   const { locale, setLocale, tx } = useI18n();
-  const { user, isVtuber } = useUserSession();
+  const { isVtuber } = useUserSession();
   const isStudioMode = mode === "studio";
 
   return (
@@ -106,15 +107,8 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                   <span>{tx("配信を作成", "Create Stream")}</span>
                 </Link>
               )}
-              <div className="hidden items-center gap-2 rounded-lg bg-[var(--brand-bg-900)] px-2.5 py-1.5 sm:flex">
-                <div className="h-7 w-7 overflow-hidden rounded-full">
-                  <img
-                    src="https://api.dicebear.com/7.x/adventurer/svg?seed=TaroTanaka&backgroundColor=e6f0ff&hair=short02"
-                    alt={user.name}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <span className="text-sm text-[var(--brand-text)]">{user.name}</span>
+              <div>
+                <AuthProfileControl />
               </div>
             </div>
           </div>

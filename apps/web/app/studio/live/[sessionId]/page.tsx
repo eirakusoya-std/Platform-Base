@@ -84,7 +84,7 @@ export default function StudioLiveSessionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tx } = useI18n();
-  const { isVtuber } = useUserSession();
+  const { isVtuber, hydrated: sessionHydrated } = useUserSession();
   const params = useParams<{ sessionId: string }>();
   const sessionId = params?.sessionId ?? "";
 
@@ -117,8 +117,9 @@ export default function StudioLiveSessionPage() {
   const iceServers = useMemo(() => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), []);
 
   useEffect(() => {
+    if (!sessionHydrated) return;
     if (!isVtuber) router.replace("/");
-  }, [isVtuber, router]);
+  }, [sessionHydrated, isVtuber, router]);
 
   useEffect(() => {
     setHydrated(true);
@@ -406,7 +407,7 @@ export default function StudioLiveSessionPage() {
     void startBroadcast();
   }, [shouldAutoStart, hydrated, notFound, session, connectionStatus, selectedVideoDeviceId, micOn, camOn]);
 
-  if (!isVtuber) return null;
+  if (!sessionHydrated || !isVtuber) return null;
 
   if (!hydrated) {
     return (

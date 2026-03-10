@@ -40,7 +40,7 @@ function CircleControl({ label, icon: Icon, on, onToggle }: CircleControlProps) 
 export default function StudioPreLivePage() {
   const router = useRouter();
   const { tx } = useI18n();
-  const { isVtuber } = useUserSession();
+  const { isVtuber, hydrated } = useUserSession();
 
   const [title, setTitle] = useState("【英会話参加型】推しと距離を縮めるリアルトーク");
   const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]>("英語");
@@ -73,8 +73,9 @@ export default function StudioPreLivePage() {
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!isVtuber) router.replace("/");
-  }, [isVtuber, router]);
+  }, [hydrated, isVtuber, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,7 +199,7 @@ export default function StudioPreLivePage() {
     setChatInput("");
   };
 
-  if (!isVtuber) return null;
+  if (!hydrated || !isVtuber) return null;
 
   return (
     <div className="h-screen overflow-hidden bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
