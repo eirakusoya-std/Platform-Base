@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useI18n } from "../../lib/i18n";
-import { getStreamSession } from "../../lib/streamSessions";
+import { listMyReservations } from "../../lib/reservations";
+import { getStreamSession, type StreamSession } from "../../lib/streamSessions";
+import { useUserSession } from "../../lib/userSession";
 
 type SessionMeta = {
  id: string;
@@ -66,12 +68,60 @@ const SESSION_MAP: Record<string, SessionMeta> = {
 export default function PreJoinPage() {
  const router = useRouter();
  const { tx } = useI18n();
+ const { isAuthenticated } = useUserSession();
  const params = useParams<{ sessionId: string }>();
  const sessionId = params?.sessionId ?? "";
+ const [dynamicSession, setDynamicSession] = useState<StreamSession | null>(null);
+ const [hasReservation, setHasReservation] = useState(false);
+ const [checkingReservation, setCheckingReservation] = useState(false);
+
+ useEffect(() => {
+ let cancelled = false;
+
+ const sync = async () => {
+ const found = await getStreamSession(sessionId);
+ if (!cancelled) setDynamicSession(found);
+ };
+
+ if (sessionId) {
+ void sync();
+ }
+
+ return () => {
+ cancelled = true;
+ };
+ }, [sessionId]);
+
+ useEffect(() => {
+ let cancelled = false;
+
+ const syncReservation = async () => {
+ if (!dynamicSession || !isAuthenticated) {
+ if (!cancelled) {
+ setHasReservation(false);
+ setCheckingReservation(false);
+ }
+ return;
+ }
+
+ setCheckingReservation(true);
+ const reservations = await listMyReservations().catch(() => []);
+ const active = reservations.some((reservation) => reservation.sessionId === dynamicSession.sessionId && reservation.status === "reserved");
+ if (!cancelled) {
+ setHasReservation(active);
+ setCheckingReservation(false);
+ }
+ };
+
+ void syncReservation();
+
+ return () => {
+ cancelled = true;
+ };
+ }, [dynamicSession, isAuthenticated]);
 
  const session = useMemo<SessionMeta>(
  () => {
- const dynamicSession = getStreamSession(sessionId);
  if (dynamicSession) {
  return {
  id: dynamicSession.sessionId,
@@ -96,7 +146,7 @@ export default function PreJoinPage() {
  }
  );
  },
- [sessionId],
+ [dynamicSession, sessionId],
  );
 
  const previewRef = useRef<HTMLVideoElement | null>(null);
@@ -195,6 +245,18 @@ export default function PreJoinPage() {
  const query = new URLSearchParams({ mic: micOn ? "1" : "0", cam: camOn ? "1" : "0", speaker: speakerOn ? "1" : "0" }).toString();
  router.push(`/room/${roomId}?${query}`);
  };
+
+ const joinBlockedReason = dynamicSession
+ ? dynamicSession.status !== "live"
+ ? tx("配信開始前なのでまだ参加できません。開始まで予約でお待ちください。", "This stream is not live yet. Reserve first and wait for the start.")
+ : dynamicSession.reservationRequired && !isAuthenticated
+ ? tx("この配信は予約必須です。ログインして予約状態を確認してください。", "This stream requires a reservation. Log in to verify your reservation.")
+ : dynamicSession.reservationRequired && checkingReservation
+ ? tx("予約状態を確認しています。少し待ってください。", "Checking your reservation. Please wait.")
+ : dynamicSession.reservationRequired && !hasReservation
+ ? tx("この配信は予約必須です。先に予約したアカウントで参加してください。", "This stream requires a reservation. Join with an account that reserved first.")
+ : null
+ : null;
 
  return (
  <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
@@ -296,6 +358,7 @@ export default function PreJoinPage() {
  </div>
 
  {errorMessage && <p className="mt-4 rounded-xl bg-[var(--brand-accent)]/15 px-4 py-3 text-sm text-[var(--brand-accent)]">{errorMessage}</p>}
+ {joinBlockedReason && <p className="mt-4 rounded-xl bg-[var(--brand-accent)]/15 px-4 py-3 text-sm text-[var(--brand-accent)]">{joinBlockedReason}</p>}
 
  <div className="mt-6 flex gap-2">
  <button
@@ -306,10 +369,10 @@ export default function PreJoinPage() {
  </button>
  <button
  onClick={joinNow}
- disabled={!ready || !!errorMessage}
+ disabled={!ready || !!errorMessage || !!joinBlockedReason}
  className="flex-1 rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-[var(--brand-text-muted)]"
  >
- {tx("この設定で参加", "Join with this setup")}
+ {joinBlockedReason ? tx("まだ参加できません", "Join unavailable") : tx("この設定で参加", "Join with this setup")}
  </button>
  </div>
  </aside>

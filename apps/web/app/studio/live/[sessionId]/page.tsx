@@ -18,7 +18,14 @@ import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
 import { useI18n } from "../../../lib/i18n";
-import { getStreamSession, setStreamSessionStatus, subscribeStreamSessions, type StreamSession, updateStreamSession } from "../../../lib/streamSessions";
+import {
+  getStreamSession,
+  notifyStreamEndedOnUnload,
+  setStreamSessionStatus,
+  subscribeStreamSessions,
+  type StreamSession,
+  updateStreamSession,
+} from "../../../lib/streamSessions";
 import { useUserSession } from "../../../lib/userSession";
 
 type ParticipantItem = {
@@ -84,7 +91,7 @@ export default function StudioLiveSessionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tx } = useI18n();
-  const { isVtuber } = useUserSession();
+  const { isVtuber, loading } = useUserSession();
   const params = useParams<{ sessionId: string }>();
   const sessionId = params?.sessionId ?? "";
 
@@ -105,6 +112,8 @@ export default function StudioLiveSessionPage() {
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
   const [participantLink, setParticipantLink] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [closeCountdown, setCloseCountdown] = useState<number | null>(null);
+  const [closeFallbackVisible, setCloseFallbackVisible] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -112,13 +121,18 @@ export default function StudioLiveSessionPage() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const peerIdRef = useRef<string>("");
   const autoStartDoneRef = useRef(false);
+  const liveSessionRef = useRef<StreamSession | null>(null);
+  const isLiveRef = useRef(false);
+  const sessionEndedRef = useRef(false);
+  const stoppingRef = useRef(false);
 
   const signalingUrl = process.env.NEXT_PUBLIC_SIGNALING_URL;
   const iceServers = useMemo(() => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), []);
+  const isDedicatedLiveTab = searchParams.get("liveTab") === "1";
 
   useEffect(() => {
-    if (!isVtuber) router.replace("/");
-  }, [isVtuber, router]);
+    if (!loading && !isVtuber) router.replace("/");
+  }, [isVtuber, loading, router]);
 
   useEffect(() => {
     setHydrated(true);
@@ -128,20 +142,22 @@ export default function StudioLiveSessionPage() {
   useEffect(() => {
     if (!hydrated) return;
 
-    const sync = () => {
+    const sync = async () => {
       if (!sessionId) {
         setSession(null);
         setNotFound(true);
         return;
       }
 
-      const found = getStreamSession(sessionId);
+      const found = await getStreamSession(sessionId);
       setSession(found);
       setNotFound(!found);
     };
 
-    sync();
-    return subscribeStreamSessions(sync);
+    void sync();
+    return subscribeStreamSessions(() => {
+      void sync();
+    });
   }, [hydrated, sessionId]);
 
   useEffect(() => {
@@ -226,13 +242,20 @@ export default function StudioLiveSessionPage() {
   const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
 
   useEffect(() => {
+    const liveNow = connectionStatus === "live" || session?.status === "live";
+    liveSessionRef.current = session;
+    isLiveRef.current = liveNow;
+    sessionEndedRef.current = session?.status === "ended";
+  }, [connectionStatus, session]);
+
+  useEffect(() => {
     if (!session || !selectedVideoDeviceId) return;
     if (session.preferredVideoDeviceId === selectedVideoDeviceId && session.preferredVideoLabel === selectedVideoLabel) return;
 
-    updateStreamSession(session.sessionId, {
+    void updateStreamSession(session.sessionId, {
       preferredVideoDeviceId: selectedVideoDeviceId,
       preferredVideoLabel: selectedVideoLabel,
-    });
+    }).catch(() => undefined);
   }, [selectedVideoDeviceId, selectedVideoLabel, session?.preferredVideoDeviceId, session?.preferredVideoLabel, session?.sessionId]);
 
   const metrics = useMemo(
@@ -372,13 +395,53 @@ export default function StudioLiveSessionPage() {
       setConnectedViewers(0);
     });
 
-    setStreamSessionStatus(session.sessionId, "live");
+    try {
+      const nextSession = await setStreamSessionStatus(session.sessionId, "live");
+      if (nextSession) {
+        sessionEndedRef.current = false;
+        setSession(nextSession);
+      }
+    } catch (error) {
+      setConnectionStatus("failed");
+      setMediaError(error instanceof Error ? error.message : "Failed to start session");
+    }
   };
 
-  const stopBroadcast = () => {
-    if (!session) return;
+  const stopBroadcast = async () => {
+    if (!session) return false;
+    if (stoppingRef.current) return false;
+
+    stoppingRef.current = true;
     cleanupConnection();
-    setStreamSessionStatus(session.sessionId, "ended");
+    try {
+      const nextSession = await setStreamSessionStatus(session.sessionId, "ended");
+      sessionEndedRef.current = true;
+      if (nextSession) setSession(nextSession);
+      return true;
+    } catch (error) {
+      setMediaError(error instanceof Error ? error.message : "Failed to end session");
+      return false;
+    } finally {
+      stoppingRef.current = false;
+    }
+  };
+
+  const stopBroadcastAndClose = async () => {
+    if (!isLive) {
+      window.close();
+      window.setTimeout(() => setCloseFallbackVisible(true), 600);
+      return;
+    }
+
+    if (!window.confirm(tx("配信を終了してこのタブを閉じますか？", "End the stream and close this tab?"))) {
+      return;
+    }
+
+    const stopped = await stopBroadcast();
+    if (!stopped) return;
+
+    setCloseFallbackVisible(false);
+    setCloseCountdown(5);
   };
 
   const copyParticipantLink = async () => {
@@ -394,6 +457,31 @@ export default function StudioLiveSessionPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!hydrated || !isDedicatedLiveTab) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isLiveRef.current || sessionEndedRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const handlePageHide = () => {
+      const activeSession = liveSessionRef.current;
+      if (!activeSession || !isLiveRef.current || sessionEndedRef.current) return;
+
+      sessionEndedRef.current = true;
+      notifyStreamEndedOnUnload(activeSession.sessionId);
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [hydrated, isDedicatedLiveTab]);
+
   const shouldAutoStart = searchParams.get("autostart") === "1";
 
   useEffect(() => {
@@ -406,7 +494,26 @@ export default function StudioLiveSessionPage() {
     void startBroadcast();
   }, [shouldAutoStart, hydrated, notFound, session, connectionStatus, selectedVideoDeviceId, micOn, camOn]);
 
-  if (!isVtuber) return null;
+  useEffect(() => {
+    if (closeCountdown === null) return;
+
+    if (closeCountdown <= 0) {
+      const fallbackTimer = window.setTimeout(() => {
+        window.close();
+        window.setTimeout(() => setCloseFallbackVisible(true), 600);
+      }, 0);
+
+      return () => window.clearTimeout(fallbackTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      setCloseCountdown((current) => (current === null ? null : current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [closeCountdown]);
+
+  if (loading || !isVtuber) return null;
 
   if (!hydrated) {
     return (
@@ -450,10 +557,21 @@ export default function StudioLiveSessionPage() {
             <div>
               <h1 className="text-xl font-bold">Live Studio</h1>
               <p className="line-clamp-1 text-xs text-[var(--brand-text-muted)]">{session.title}</p>
+              {isDedicatedLiveTab && (
+                <p className="mt-1 text-[11px] text-[var(--brand-text-muted)]">
+                  {tx("このタブを閉じると配信終了の確認が表示されます。", "Closing this tab will ask to end the stream.")}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={isLive ? stopBroadcast : startBroadcast}
+                onClick={() => {
+                  if (isLive) {
+                    void stopBroadcastAndClose();
+                    return;
+                  }
+                  void startBroadcast();
+                }}
                 className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-extrabold ${
                   isLive
                     ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
@@ -464,11 +582,13 @@ export default function StudioLiveSessionPage() {
                 {isLive ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
               </button>
               <button
-                onClick={() => { stopBroadcast(); router.push("/"); }}
+                onClick={() => {
+                  void stopBroadcastAndClose();
+                }}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
               >
                 <XMarkIcon className="h-4 w-4" aria-hidden />
-                {tx("閉じる", "Close")}
+                {isLive ? tx("終了して閉じる", "End & Close") : tx("タブを閉じる", "Close Tab")}
               </button>
             </div>
           </div>
@@ -478,6 +598,18 @@ export default function StudioLiveSessionPage() {
               {startWarnings.map((w) => (
                 <p key={w}>{w}</p>
               ))}
+            </div>
+          )}
+
+          {closeCountdown !== null && (
+            <div className="mb-2 rounded-xl bg-[var(--brand-primary)]/15 p-2.5 text-xs text-[var(--brand-primary)]">
+              <p>{tx(`配信を終了しました。${closeCountdown}秒後にこのタブを閉じます。`, `Stream ended. Closing this tab in ${closeCountdown}s.`)}</p>
+            </div>
+          )}
+
+          {closeFallbackVisible && (
+            <div className="mb-2 rounded-xl bg-[var(--brand-bg-900)] p-2.5 text-xs text-[var(--brand-text-muted)]">
+              <p>{tx("ブラウザが自動クローズを許可しない場合は、このタブを手動で閉じてください。", "If the browser blocks auto-close, close this tab manually.")}</p>
             </div>
           )}
 

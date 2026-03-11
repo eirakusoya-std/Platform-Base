@@ -2,15 +2,7 @@ import express from "express";
 import http from "http";
 import cors from "cors";
 import { Server } from "socket.io";
-
-const EVENTS = {
-  JOIN_ROOM: "join-room",
-  PEER_JOINED: "peer-joined",
-  OFFER: "offer",
-  ANSWER: "answer",
-  ICE_CANDIDATE: "ice-candidate",
-  PEER_LEFT: "peer-left",
-};
+import { EVENTS } from "@repo/shared";
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .split(",")

@@ -10,6 +10,7 @@ export type StartingSoonSession = {
   slotsTotal: number;
   slotsLeft: number;
   participationType: ParticipationType;
+  reservationRequired?: boolean;
   isSubscribed: boolean;
   tags: string[];
   description: string;
@@ -26,6 +27,7 @@ export type LiveSession = {
   slotsTotal: number;
   slotsLeft: number;
   participationType: "First-come" | "Lottery";
+  reservationRequired?: boolean;
   isSubscribed: boolean;
   tags: string[];
   description: string;
@@ -47,6 +49,9 @@ export type ModalSession = {
   duration: string;
   participationType: "First-come" | "Lottery";
   isSubscribed: boolean;
+  streamStatus?: "prelive" | "live" | "ended";
+  reservationRequired?: boolean;
+  reserved?: boolean;
   userHistory?: {
     totalParticipations: number;
     lastParticipation: string;

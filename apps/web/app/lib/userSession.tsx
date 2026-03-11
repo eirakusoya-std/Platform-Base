@@ -1,36 +1,76 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
-
-export type UserRole = "listener" | "vtuber";
-
-type SessionUser = {
-  id: string;
-  name: string;
-  role: UserRole;
-};
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import type { AuthSession, SessionUser } from "./apiTypes";
 
 type UserSessionContextValue = {
-  user: SessionUser;
+  user: SessionUser | null;
+  isAuthenticated: boolean;
   isVtuber: boolean;
+  loading: boolean;
+  refreshSession: () => Promise<void>;
+  logout: () => Promise<void>;
 };
 
 const UserSessionContext = createContext<UserSessionContextValue | null>(null);
 
+async function readSession() {
+  const response = await fetch("/api/auth/session", { cache: "no-store" });
+  const payload = (await response.json()) as AuthSession;
+  return payload;
+}
+
 export function UserSessionProvider({ children }: { children: React.ReactNode }) {
-  // TODO: replace with real auth session.
-  const [user] = useState<SessionUser>({
-    id: "demo-vtuber",
-    name: "田中太郎",
-    role: "vtuber",
-  });
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refreshSession = useCallback(async () => {
+    const session = await readSession();
+    setUser(session.user);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const sync = async () => {
+      try {
+        const session = await readSession();
+        if (!cancelled) {
+          setUser(session.user);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void sync();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const logout = useCallback(async () => {
+    setLoading(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const value = useMemo(
     () => ({
       user,
-      isVtuber: user.role === "vtuber",
+      isAuthenticated: Boolean(user),
+      isVtuber: user?.role === "vtuber",
+      loading,
+      refreshSession,
+      logout,
     }),
-    [user],
+    [loading, logout, refreshSession, user],
   );
 
   return <UserSessionContext.Provider value={value}>{children}</UserSessionContext.Provider>;

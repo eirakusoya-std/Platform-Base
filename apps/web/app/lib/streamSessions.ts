@@ -1,144 +1,143 @@
 "use client";
 
-export type StreamSessionStatus = "prelive" | "live" | "ended";
+import type {
+  CreateStreamSessionInput,
+  StreamSession,
+  StreamSessionStatus,
+  UpdateStreamSessionInput,
+} from "./apiTypes";
 
-export type StreamSession = {
-  sessionId: string;
-  hostUserId: string;
-  title: string;
-  status: StreamSessionStatus;
-  createdAt: string;
-  startsAt: string;
-  description: string;
-  category: string;
-  thumbnail: string;
-  hostName: string;
-  participationType: "First-come" | "Lottery";
-  slotsTotal: number;
-  slotsLeft: number;
-  preferredVideoDeviceId?: string;
-  preferredVideoLabel?: string;
-};
-
-type CreateStreamSessionInput = {
-  hostUserId: string;
-  title: string;
-  description: string;
-  category: string;
-  thumbnail?: string;
-  hostName?: string;
-  startsAt?: string;
-  participationType?: "First-come" | "Lottery";
-  slotsTotal?: number;
-  preferredVideoDeviceId?: string;
-  preferredVideoLabel?: string;
-};
-
-const STORAGE_KEY = "aiment.stream-sessions.v1";
 const UPDATE_EVENT = "aiment-stream-sessions-updated";
+const BROADCAST_CHANNEL = "aiment-stream-sessions";
 
-let memorySessions: StreamSession[] = [];
+function emitUpdate() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 
-function isBrowser() {
-  return typeof window !== "undefined";
-}
-
-function parseSessions(raw: string | null): StreamSession[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item) => typeof item?.sessionId === "string");
-  } catch {
-    return [];
+  if (typeof BroadcastChannel !== "undefined") {
+    const channel = new BroadcastChannel(BROADCAST_CHANNEL);
+    channel.postMessage("updated");
+    channel.close();
   }
 }
 
-function readSessions(): StreamSession[] {
-  if (!isBrowser()) return memorySessions;
-  const parsed = parseSessions(window.localStorage.getItem(STORAGE_KEY));
-  memorySessions = parsed;
-  return parsed;
+export function notifyStreamSessionsUpdated() {
+  emitUpdate();
 }
 
-function writeSessions(next: StreamSession[]) {
-  memorySessions = next;
-  if (!isBrowser()) return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-}
-
-function makeSessionId() {
-  const seed = Math.random().toString(36).slice(2, 7);
-  return `session-${Date.now().toString(36)}-${seed}`;
-}
-
-export function listAllStreamSessions(): StreamSession[] {
-  return readSessions().slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-}
-
-export function listActiveStreamSessions(): StreamSession[] {
-  return listAllStreamSessions().filter((session) => session.status === "prelive" || session.status === "live");
-}
-
-export function getStreamSession(sessionId: string): StreamSession | null {
-  return readSessions().find((session) => session.sessionId === sessionId) ?? null;
-}
-
-export function createStreamSession(input: CreateStreamSessionInput): StreamSession {
-  const now = new Date();
-  const startsAt = input.startsAt ?? new Date(now.getTime() + 5 * 60 * 1000).toISOString();
-
-  const created: StreamSession = {
-    sessionId: makeSessionId(),
-    hostUserId: input.hostUserId,
-    title: input.title,
-    status: "prelive",
-    createdAt: now.toISOString(),
-    startsAt,
-    description: input.description,
-    category: input.category,
-    thumbnail: input.thumbnail ?? "/image/thumbnail/thumbnail_5.png",
-    hostName: input.hostName ?? "あなたのチャンネル",
-    participationType: input.participationType ?? "First-come",
-    slotsTotal: input.slotsTotal ?? 10,
-    slotsLeft: input.slotsTotal ?? 10,
-    preferredVideoDeviceId: input.preferredVideoDeviceId,
-    preferredVideoLabel: input.preferredVideoLabel,
-  };
-
-  writeSessions([created, ...readSessions()]);
-  return created;
-}
-
-export function updateStreamSession(sessionId: string, patch: Partial<StreamSession>): StreamSession | null {
-  const current = readSessions();
-  let updated: StreamSession | null = null;
-
-  const next = current.map((session) => {
-    if (session.sessionId !== sessionId) return session;
-    updated = { ...session, ...patch, sessionId: session.sessionId };
-    return updated;
+async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
   });
 
-  if (!updated) return null;
-  writeSessions(next);
-  return updated;
+  const payload = (await response.json().catch(() => null)) as ({ error?: string } & T) | null;
+  if (!response.ok) {
+    throw new Error(payload?.error ?? "Request failed");
+  }
+
+  if (!payload) {
+    throw new Error("Empty response");
+  }
+
+  return payload;
 }
 
-export function setStreamSessionStatus(sessionId: string, status: StreamSessionStatus) {
-  return updateStreamSession(sessionId, { status });
+export type { StreamSession, StreamSessionStatus };
+
+export async function listAllStreamSessions(): Promise<StreamSession[]> {
+  const payload = await requestJson<{ sessions: StreamSession[] }>("/api/stream-sessions");
+  return payload.sessions;
+}
+
+export async function listActiveStreamSessions(): Promise<StreamSession[]> {
+  const payload = await requestJson<{ sessions: StreamSession[] }>("/api/stream-sessions?status=prelive,live");
+  return payload.sessions;
+}
+
+export async function getStreamSession(sessionId: string): Promise<StreamSession | null> {
+  try {
+    const payload = await requestJson<{ session: StreamSession }>(`/api/stream-sessions/${encodeURIComponent(sessionId)}`);
+    return payload.session;
+  } catch {
+    return null;
+  }
+}
+
+export async function createStreamSession(input: CreateStreamSessionInput): Promise<StreamSession> {
+  const payload = await requestJson<{ session: StreamSession }>("/api/stream-sessions", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  emitUpdate();
+  return payload.session;
+}
+
+export async function updateStreamSession(sessionId: string, patch: UpdateStreamSessionInput): Promise<StreamSession | null> {
+  const payload = await requestJson<{ session: StreamSession }>(`/api/stream-sessions/${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  emitUpdate();
+  return payload.session;
+}
+
+export async function setStreamSessionStatus(sessionId: string, status: StreamSessionStatus): Promise<StreamSession | null> {
+  const action = status === "live" ? "start" : status === "ended" ? "end" : null;
+  if (!action) {
+    throw new Error("Direct transition to prelive is not supported");
+  }
+
+  const payload = await requestJson<{ session: StreamSession }>(`/api/stream-sessions/${encodeURIComponent(sessionId)}/${action}`, {
+    method: "POST",
+  });
+  emitUpdate();
+  return payload.session;
+}
+
+export function notifyStreamEndedOnUnload(sessionId: string) {
+  const url = `/api/stream-sessions/${encodeURIComponent(sessionId)}/end`;
+
+  if (typeof window === "undefined") return;
+
+  try {
+    if (navigator.sendBeacon) {
+      const ok = navigator.sendBeacon(url, new Blob(["{}"], { type: "application/json" }));
+      if (ok) {
+        emitUpdate();
+        return;
+      }
+    }
+  } catch {
+    // Fall back to keepalive fetch below.
+  }
+
+  void fetch(url, {
+    method: "POST",
+    body: "{}",
+    keepalive: true,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  }).finally(() => {
+    emitUpdate();
+  });
 }
 
 export function subscribeStreamSessions(onUpdate: () => void): () => void {
-  if (!isBrowser()) return () => undefined;
+  if (typeof window === "undefined") return () => undefined;
 
-  const handler = () => onUpdate();
-  window.addEventListener(UPDATE_EVENT, handler);
-  window.addEventListener("storage", handler);
+  window.addEventListener(UPDATE_EVENT, onUpdate);
+  const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(BROADCAST_CHANNEL) : null;
+  channel?.addEventListener("message", onUpdate);
 
   return () => {
-    window.removeEventListener(UPDATE_EVENT, handler);
-    window.removeEventListener("storage", handler);
+    window.removeEventListener(UPDATE_EVENT, onUpdate);
+    channel?.removeEventListener("message", onUpdate);
+    channel?.close();
   };
 }

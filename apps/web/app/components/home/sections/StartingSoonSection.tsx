@@ -11,8 +11,7 @@ type StartingSoonSectionProps = {
  countdown: Record<string, number>;
  reservedSet: Set<string>;
  onOpenSession: (session: ModalSession) => void;
- onToggleReserve: (event: MouseEvent, sessionId: string) => void;
- onParticipate: (sessionId: string) => void;
+ onToggleReserve: (event: MouseEvent, sessionId: string) => void | Promise<void>;
 };
 
 export function StartingSoonSection({
@@ -21,7 +20,6 @@ export function StartingSoonSection({
  reservedSet,
  onOpenSession,
  onToggleReserve,
- onParticipate,
 }: StartingSoonSectionProps) {
   const { tx } = useI18n();
   return (
@@ -62,6 +60,9 @@ export function StartingSoonSection({
                     duration: session.duration,
                     participationType: session.participationType === "Members-only" ? "Lottery" : session.participationType,
                     isSubscribed: session.isSubscribed,
+                    streamStatus: "prelive",
+                    reservationRequired: session.reservationRequired,
+                    reserved,
                   })
                 }
               >
@@ -100,7 +101,6 @@ export function StartingSoonSection({
                       onClick={(event) => {
                         event.stopPropagation();
                         onToggleReserve(event, session.id);
-                        onParticipate(session.id);
                       }}
                     >
                       {reserved ? tx("予約済み", "Reserved") : tx("参加する", "Join")}
