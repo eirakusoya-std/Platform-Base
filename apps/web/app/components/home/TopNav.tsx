@@ -3,7 +3,8 @@
 import { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDaysIcon, HomeIcon, SparklesIcon, UserCircleIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import { CalendarDaysIcon, HomeIcon, SparklesIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import { AuthProfileControl } from "../auth/AuthProfileControl";
 import { useI18n } from "../../lib/i18n";
 import { useUserSession } from "../../lib/userSession";
 
@@ -29,8 +30,9 @@ export function TopNav({ mode = "default" }: TopNavProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { locale, setLocale, tx } = useI18n();
-  const { user, isAuthenticated, isVtuber, loading, logout } = useUserSession();
+  const { isVtuber } = useUserSession();
   const isStudioMode = mode === "studio";
+
   const openStudioTab = () => {
     const href = "/studio/pre-live?studioTab=1";
     const opened = window.open(href, "_blank");
@@ -38,7 +40,6 @@ export function TopNav({ mode = "default" }: TopNavProps) {
       opened.focus();
       return;
     }
-
     router.push(href);
   };
 
@@ -120,38 +121,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                 </button>
               )}
 
-              {!isAuthenticated ? (
-                <div className="flex items-center gap-2">
-                  <Link href="/auth" className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)]">
-                    {tx("ログイン", "Log in")}
-                  </Link>
-                  <Link href="/auth?mode=signup" className="rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-white">
-                    {tx("サインアップ", "Sign up")}
-                  </Link>
-                </div>
-              ) : (
-                <div className="hidden items-center gap-2 rounded-lg bg-[var(--brand-bg-900)] px-2.5 py-1.5 sm:flex">
-                  <UserCircleIcon className="h-7 w-7 text-[var(--brand-primary)]" aria-hidden />
-                  <div className="leading-tight">
-                    <span className="block text-sm text-[var(--brand-text)]">{user?.name}</span>
-                    <span className="block text-[10px] uppercase tracking-wide text-[var(--brand-text-muted)]">{user?.role}</span>
-                  </div>
-                  <Link href="/account" className="rounded-md bg-[var(--brand-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--brand-text)]">
-                    {tx("管理", "Account")}
-                  </Link>
-                  <button
-                    onClick={() => {
-                      void logout().then(() => {
-                        router.push("/");
-                      });
-                    }}
-                    disabled={loading}
-                    className="rounded-md bg-[var(--brand-bg-900)] px-2.5 py-1.5 text-xs font-semibold text-[var(--brand-text-muted)]"
-                  >
-                    {tx("ログアウト", "Log out")}
-                  </button>
-                </div>
-              )}
+              <AuthProfileControl />
             </div>
           </div>
         </div>

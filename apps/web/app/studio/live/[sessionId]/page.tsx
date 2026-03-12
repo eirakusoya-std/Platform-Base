@@ -14,10 +14,12 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { io, type Socket } from "socket.io-client";
+import { EVENTS, type JoinedRoomPayload } from "@repo/shared";
 import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
 import { useI18n } from "../../../lib/i18n";
+import { reportMonitoringEvent } from "../../../lib/monitoring";
 import {
   getStreamSession,
   notifyStreamEndedOnUnload,
@@ -27,6 +29,7 @@ import {
   updateStreamSession,
 } from "../../../lib/streamSessions";
 import { useUserSession } from "../../../lib/userSession";
+import { loadIceServers } from "../../../lib/webrtcConfig";
 
 type ParticipantItem = {
   id: string;
@@ -35,16 +38,7 @@ type ParticipantItem = {
   muted: boolean;
 };
 
-type ConnectionStatus = "idle" | "starting" | "live" | "failed";
-
-const EVENTS = {
-  JOIN_ROOM: "join-room",
-  PEER_JOINED: "peer-joined",
-  OFFER: "offer",
-  ANSWER: "answer",
-  ICE_CANDIDATE: "ice-candidate",
-  PEER_LEFT: "peer-left",
-} as const;
+type ConnectionStatus = "idle" | "starting" | "live" | "reconnecting" | "failed";
 
 const INITIAL_PARTICIPANTS: ParticipantItem[] = [
   { id: "p1", name: "Kaito", status: "watching", muted: false },
@@ -120,6 +114,9 @@ export default function StudioLiveSessionPage() {
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const peerIdRef = useRef<string>("");
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const reportedAttemptRef = useRef(false);
+  const reportedFailureRef = useRef(false);
   const autoStartDoneRef = useRef(false);
   const liveSessionRef = useRef<StreamSession | null>(null);
   const isLiveRef = useRef(false);
@@ -127,7 +124,7 @@ export default function StudioLiveSessionPage() {
   const stoppingRef = useRef(false);
 
   const signalingUrl = process.env.NEXT_PUBLIC_SIGNALING_URL;
-  const iceServers = useMemo(() => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), []);
+  const [iceServers, setIceServers] = useState<RTCIceServer[]>([{ urls: ["stun:stun.l.google.com:19302"] }]);
   const isDedicatedLiveTab = searchParams.get("liveTab") === "1";
 
   useEffect(() => {
@@ -137,6 +134,12 @@ export default function StudioLiveSessionPage() {
   useEffect(() => {
     setHydrated(true);
     peerIdRef.current = createPeerId();
+  }, []);
+
+  useEffect(() => {
+    void loadIceServers().then((servers) => {
+      setIceServers(servers);
+    });
   }, []);
 
   useEffect(() => {
@@ -235,6 +238,30 @@ export default function StudioLiveSessionPage() {
     setParticipantLink(`${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`);
   }, [hydrated, session]);
 
+  useEffect(() => {
+    if (!sessionId || reportedAttemptRef.current) return;
+    reportedAttemptRef.current = true;
+    void reportMonitoringEvent({
+      source: "webrtc",
+      level: "info",
+      code: "webrtc.connect.attempt",
+      message: "Host prepared a live session",
+      meta: { sessionId },
+    }).catch(() => undefined);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (connectionStatus !== "failed" || reportedFailureRef.current) return;
+    reportedFailureRef.current = true;
+    void reportMonitoringEvent({
+      source: "webrtc",
+      level: "error",
+      code: "webrtc.connect.failed",
+      message: "Host live session connection failed",
+      meta: { sessionId },
+    }).catch(() => undefined);
+  }, [connectionStatus, sessionId]);
+
   const selectedVideoLabel = useMemo(() => {
     return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? session?.preferredVideoLabel ?? tx("デフォルトカメラ", "Default camera");
   }, [selectedVideoDeviceId, session?.preferredVideoLabel, tx, videoDevices]);
@@ -290,9 +317,45 @@ export default function StudioLiveSessionPage() {
 
     pcRef.current?.close();
     pcRef.current = null;
+    pendingCandidatesRef.current = [];
 
     setConnectedViewers(0);
     setConnectionStatus("idle");
+  };
+
+  const flushPendingCandidates = async () => {
+    if (!pcRef.current || !pcRef.current.remoteDescription) return;
+    const pending = [...pendingCandidatesRef.current];
+    pendingCandidatesRef.current = [];
+    for (const candidate of pending) {
+      try {
+        await pcRef.current.addIceCandidate(candidate);
+      } catch {
+        // ignore invalid candidates after reconnects
+      }
+    }
+  };
+
+  const addIceCandidateSafely = async (candidate: RTCIceCandidateInit) => {
+    if (!pcRef.current) return;
+    if (!pcRef.current.remoteDescription) {
+      pendingCandidatesRef.current.push(candidate);
+      return;
+    }
+    try {
+      await pcRef.current.addIceCandidate(candidate);
+    } catch {
+      // ignore invalid candidate
+    }
+  };
+
+  const sendHostOffer = async (iceRestart = false) => {
+    if (!pcRef.current || !socketRef.current || !session) return;
+    if (pcRef.current.signalingState !== "stable") return;
+
+    const offer = await pcRef.current.createOffer(iceRestart ? { iceRestart: true } : undefined);
+    await pcRef.current.setLocalDescription(offer);
+    socketRef.current.emit(EVENTS.OFFER, { roomId: session.sessionId, from: peerIdRef.current, sdp: offer });
   };
 
   const startBroadcast = async () => {
@@ -319,7 +382,7 @@ export default function StudioLiveSessionPage() {
     cleanupConnection();
     setConnectionStatus("starting");
 
-    const pc = new RTCPeerConnection(iceServers);
+    const pc = new RTCPeerConnection({ iceServers });
     pcRef.current = pc;
 
     localStream.getTracks().forEach((track) => {
@@ -338,15 +401,27 @@ export default function StudioLiveSessionPage() {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") {
         setConnectionStatus("live");
+      } else if (pc.connectionState === "disconnected") {
+        setConnectionStatus("reconnecting");
+        void sendHostOffer(true).catch(() => undefined);
       } else if (pc.connectionState === "failed") {
         setConnectionStatus("failed");
+        void sendHostOffer(true).catch(() => undefined);
       }
     };
 
-    const socket = io(signalingUrl, { transports: ["polling", "websocket"] });
+    const socket = io(signalingUrl, {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
+    });
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      setConnectionStatus((current) => (current === "live" ? "live" : "starting"));
       socket.emit(EVENTS.JOIN_ROOM, {
         roomId: session.sessionId,
         peerId: peerIdRef.current,
@@ -354,19 +429,41 @@ export default function StudioLiveSessionPage() {
       });
     });
 
-    socket.on("room-full", () => {
+    socket.on("disconnect", (reason) => {
+      if (reason === "io client disconnect") return;
+      setConnectionStatus("reconnecting");
+      setConnectedViewers(0);
+    });
+
+    socket.on("connect_error", () => {
+      setConnectionStatus("reconnecting");
+    });
+
+    socket.on(EVENTS.JOINED_ROOM, async (payload: JoinedRoomPayload) => {
+      if (payload.role !== "host") return;
+      if (payload.peers.length > 0) {
+        await sendHostOffer(payload.reconnected);
+      }
+    });
+
+    socket.on(EVENTS.ROOM_FULL, () => {
       setConnectionStatus("failed");
       setMediaError(tx("現在の構成では同時接続は1名までです。", "Current signaling supports one viewer at a time."));
     });
 
     socket.on(EVENTS.PEER_JOINED, async () => {
       try {
-        if (!pcRef.current || pcRef.current.signalingState !== "stable") return;
-        const offer = await pcRef.current.createOffer();
-        await pcRef.current.setLocalDescription(offer);
-        socket.emit(EVENTS.OFFER, { roomId: session.sessionId, from: peerIdRef.current, sdp: offer });
+        await sendHostOffer();
         setConnectedViewers(1);
         setConnectionStatus("live");
+      } catch {
+        setConnectionStatus("failed");
+      }
+    });
+
+    socket.on(EVENTS.REQUEST_RENEGOTIATION, async () => {
+      try {
+        await sendHostOffer(true);
       } catch {
         setConnectionStatus("failed");
       }
@@ -377,18 +474,14 @@ export default function StudioLiveSessionPage() {
         if (!pcRef.current) return;
         if (pcRef.current.signalingState !== "have-local-offer") return;
         await pcRef.current.setRemoteDescription(payload.sdp);
+        await flushPendingCandidates();
       } catch {
         setConnectionStatus("failed");
       }
     });
 
     socket.on(EVENTS.ICE_CANDIDATE, async (payload: { candidate: RTCIceCandidateInit }) => {
-      try {
-        if (!pcRef.current) return;
-        await pcRef.current.addIceCandidate(payload.candidate);
-      } catch {
-        // ignore invalid candidate
-      }
+      await addIceCandidateSafely(payload.candidate);
     });
 
     socket.on(EVENTS.PEER_LEFT, () => {

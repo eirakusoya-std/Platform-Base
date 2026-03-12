@@ -76,6 +76,7 @@ export default function StudioPreLivePage() {
   const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]>("英語");
   const [description, setDescription] = useState("視聴者参加で英語フレーズを実際に使いながら会話する配信です。");
   const [participationType, setParticipationType] = useState<StreamSession["participationType"]>("First-come");
+  const [requiredPlan, setRequiredPlan] = useState<StreamSession["requiredPlan"]>("free");
   const [reservationRequired, setReservationRequired] = useState(false);
   const [slotsTotal, setSlotsTotal] = useState(10);
   const [micOn, setMicOn] = useState(true);
@@ -214,6 +215,7 @@ export default function StudioPreLivePage() {
     setCategory("英語");
     setDescription("視聴者参加で英語フレーズを実際に使いながら会話する配信です。");
     setParticipationType("First-come");
+    setRequiredPlan("free");
     setReservationRequired(false);
     setSlotsTotal(10);
     setPublishMode("go_live_now");
@@ -229,6 +231,7 @@ export default function StudioPreLivePage() {
     setCategory(CATEGORY_OPTIONS.includes(session.category as (typeof CATEGORY_OPTIONS)[number]) ? (session.category as (typeof CATEGORY_OPTIONS)[number]) : "雑談");
     setDescription(session.description);
     setParticipationType(session.participationType);
+    setRequiredPlan(session.requiredPlan);
     setReservationRequired(session.reservationRequired);
     setSlotsTotal(session.slotsTotal);
     setScheduledAt(toLocalDateTimeInputValue(session.startsAt));
@@ -310,6 +313,7 @@ export default function StudioPreLivePage() {
         thumbnail: "/image/thumbnail/thumbnail_5.png",
         startsAt,
         participationType,
+        requiredPlan,
         reservationRequired,
         slotsTotal,
         preferredVideoDeviceId: selectedVideoDeviceId || undefined,
@@ -499,6 +503,19 @@ export default function StudioPreLivePage() {
                 >
                   <option value="First-come">{tx("先着順", "First-come")}</option>
                   <option value="Lottery">{tx("抽選制", "Lottery")}</option>
+                </select>
+              </label>
+
+              <label className="grid gap-1 text-sm">
+                <span className="text-[var(--brand-text-muted)]">{tx("必要プラン", "Required Plan")}</span>
+                <select
+                  value={requiredPlan}
+                  onChange={(e) => setRequiredPlan(e.target.value as StreamSession["requiredPlan"])}
+                  className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
+                >
+                  <option value="free">{tx("Free", "Free")}</option>
+                  <option value="supporter">{tx("Supporter", "Supporter")}</option>
+                  <option value="premium">{tx("Premium", "Premium")}</option>
                 </select>
               </label>
 

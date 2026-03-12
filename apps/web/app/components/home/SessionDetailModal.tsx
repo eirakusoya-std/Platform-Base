@@ -2,6 +2,7 @@
 
 import { ModalSession } from "./types";
 import { useI18n } from "../../lib/i18n";
+import { planLabel } from "../../lib/planAccess";
 
 type SessionDetailModalProps = {
  session: ModalSession;
@@ -12,25 +13,32 @@ type SessionDetailModalProps = {
 export function SessionDetailModal({ session, onClose, onParticipate }: SessionDetailModalProps) {
  const { tx } = useI18n();
  const isPrelive = session.streamStatus === "prelive";
+ const joinBlockedByPlan = session.requiredPlan != null && session.requiredPlan !== "free" && !session.isSubscribed;
  const joinBlockedByReservation = session.streamStatus === "live" && session.reservationRequired && !session.reserved;
- const primaryLabel = isPrelive
+ const primaryLabel = joinBlockedByPlan
+   ? tx("プランが必要", "Plan Required")
+   : isPrelive
    ? session.reserved
      ? tx("予約を取り消す", "Cancel Reservation")
      : tx("予約する", "Reserve")
    : joinBlockedByReservation
      ? tx("予約が必要", "Reservation Required")
      : tx("参加する", "Join");
- const availabilityTitle = isPrelive
+ const availabilityTitle = joinBlockedByPlan
+   ? tx("上位プランが必要です", "Paid plan required")
+   : isPrelive
    ? tx("まだ開始前です", "Not live yet")
    : joinBlockedByReservation
      ? tx("予約が必要です", "Reservation required")
      : tx("参加可能", "Available to Join");
- const availabilityText = isPrelive
+ const availabilityText = joinBlockedByPlan
+   ? tx(`この配信は ${planLabel(session.requiredPlan)} プラン限定です。先にプランを有効化してください。`, `This stream requires the ${planLabel(session.requiredPlan)} plan.`)
+   : isPrelive
    ? tx("この枠はまだ配信前です。参加ではなく予約を行ってください。", "This stream has not started yet. Reserve instead of joining.")
    : joinBlockedByReservation
      ? tx("このライブは予約必須の枠です。先に予約してから参加してください。", "This live session requires a reservation before joining.")
      : tx("現在は検証モードのため、サブスクなしで参加できます。", "Demo mode: join without subscription.");
- const primaryDisabled = joinBlockedByReservation;
+ const primaryDisabled = joinBlockedByReservation || joinBlockedByPlan;
  return (
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
  <div
@@ -68,6 +76,11 @@ export function SessionDetailModal({ session, onClose, onParticipate }: SessionD
  <div className="rounded-lg bg-[var(--brand-surface)] p-4">
  <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">{tx("配信時間", "Duration")}</p>
  <p className="text-sm font-bold text-[var(--brand-text)]">{session.duration}</p>
+ </div>
+
+ <div className="mb-6 rounded-lg bg-[var(--brand-surface)] p-4">
+ <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">{tx("アクセスプラン", "Access Plan")}</p>
+ <p className="text-sm font-bold text-[var(--brand-text)]">{planLabel(session.requiredPlan)}</p>
  </div>
  <div className="rounded-lg bg-[var(--brand-surface)] p-4">
  <p className="mb-0.5 text-xs text-[var(--brand-text-muted)]">{tx("参加方式", "Entry Type")}</p>

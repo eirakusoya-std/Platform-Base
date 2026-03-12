@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { SessionUser, UserRole } from "../apiTypes";
 import { getUserById } from "./aimentStore";
+import { attachBillingState } from "./billingStore";
 
 export const SESSION_COOKIE = "aiment_dev_session";
 
@@ -10,7 +11,7 @@ export async function resolveSessionUser() {
   const fromCookie = cookieStore.get(SESSION_COOKIE)?.value;
   if (!fromCookie) return null;
   const user = await getUserById(fromCookie);
-  return user ?? null;
+  return attachBillingState(user);
 }
 
 export async function requireSessionUser() {

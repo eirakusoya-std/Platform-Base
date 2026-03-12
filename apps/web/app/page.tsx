@@ -13,6 +13,7 @@ import { UpcomingTicker } from "./components/home/UpcomingTicker";
 import { LiveSession, ModalSession, StartingSoonSession } from "./components/home/types";
 import { matchesFilter } from "./components/home/utils";
 import { cancelReservation, createReservation, listMyReservations, subscribeReservations } from "./lib/reservations";
+import { canAccessRequiredPlan, planLabel } from "./lib/planAccess";
 import { listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "./lib/streamSessions";
 import { useUserSession } from "./lib/userSession";
 
@@ -25,7 +26,7 @@ function toSecondsUntil(startsAt: string) {
 
 export default function HomePage() {
   const router = useRouter();
-  const { isAuthenticated, loading } = useUserSession();
+  const { user, isAuthenticated, loading } = useUserSession();
 
   const [hydrated, setHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -120,10 +121,12 @@ export default function HomePage() {
         reserved: reservedSet.has(current.id),
         streamStatus: dynamicSession?.status ?? current.streamStatus,
         reservationRequired: dynamicSession?.reservationRequired ?? current.reservationRequired,
+        requiredPlan: dynamicSession?.requiredPlan ?? current.requiredPlan,
+        isSubscribed: dynamicSession ? canAccessRequiredPlan(user?.plan, dynamicSession.requiredPlan) : current.isSubscribed,
         slotsLeft: dynamicSession?.slotsLeft ?? current.slotsLeft,
       };
     });
-  }, [dynamicSessions, reservedSet]);
+  }, [dynamicSessions, reservedSet, user?.plan]);
 
   const dynamicStartingSoon = useMemo<StartingSoonSession[]>(
     () =>
@@ -138,14 +141,15 @@ export default function HomePage() {
           slotsTotal: session.slotsTotal,
           slotsLeft: session.slotsLeft,
           participationType: session.participationType,
+          requiredPlan: session.requiredPlan,
           reservationRequired: session.reservationRequired,
-          isSubscribed: true,
+          isSubscribed: canAccessRequiredPlan(user?.plan, session.requiredPlan),
           tags: [session.category, "参加型"],
           description: session.description,
           duration: "約60分",
           glowColor: "rgba(124,106,230,0.35)",
         })),
-    [dynamicSessions],
+    [dynamicSessions, user?.plan],
   );
 
   const dynamicLive = useMemo<LiveSession[]>(
@@ -161,13 +165,14 @@ export default function HomePage() {
           slotsTotal: session.slotsTotal,
           slotsLeft: session.slotsLeft,
           participationType: session.participationType,
+          requiredPlan: session.requiredPlan,
           reservationRequired: session.reservationRequired,
-          isSubscribed: true,
+          isSubscribed: canAccessRequiredPlan(user?.plan, session.requiredPlan),
           tags: [session.category, "参加型"],
           description: session.description,
           duration: "配信中",
         })),
-    [dynamicSessions],
+    [dynamicSessions, user?.plan],
   );
 
   const allStartingSoon = useMemo(() => [...dynamicStartingSoon, ...STARTING_SOON_SESSIONS], [dynamicStartingSoon]);
@@ -246,6 +251,10 @@ export default function HomePage() {
 
     try {
       const existingReservationId = reservationIds[sessionId];
+      const targetSession = dynamicSessions.find((entry) => entry.sessionId === sessionId);
+      if (targetSession && !canAccessRequiredPlan(user?.plan, targetSession.requiredPlan)) {
+        throw new Error(`この枠は ${planLabel(targetSession.requiredPlan)} プランが必要です。`);
+      }
       if (existingReservationId) {
         await cancelReservation(existingReservationId);
         return;
@@ -277,6 +286,12 @@ export default function HomePage() {
   };
 
   const handleSessionPrimaryAction = async (session: ModalSession) => {
+    if (!canAccessRequiredPlan(user?.plan, session.requiredPlan)) {
+      setReservationError(`この枠は ${planLabel(session.requiredPlan)} プランが必要です。`);
+      router.push("/account");
+      return;
+    }
+
     if (session.streamStatus === "prelive") {
       await toggleReservation(session.id);
       return;

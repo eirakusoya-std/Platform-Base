@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useI18n } from "../../lib/i18n";
+import { canAccessRequiredPlan, planLabel } from "../../lib/planAccess";
 import { listMyReservations } from "../../lib/reservations";
 import { getStreamSession, type StreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
@@ -68,7 +69,7 @@ const SESSION_MAP: Record<string, SessionMeta> = {
 export default function PreJoinPage() {
  const router = useRouter();
  const { tx } = useI18n();
- const { isAuthenticated } = useUserSession();
+ const { user, isAuthenticated } = useUserSession();
  const params = useParams<{ sessionId: string }>();
  const sessionId = params?.sessionId ?? "";
  const [dynamicSession, setDynamicSession] = useState<StreamSession | null>(null);
@@ -247,15 +248,17 @@ export default function PreJoinPage() {
  };
 
  const joinBlockedReason = dynamicSession
- ? dynamicSession.status !== "live"
- ? tx("配信開始前なのでまだ参加できません。開始まで予約でお待ちください。", "This stream is not live yet. Reserve first and wait for the start.")
- : dynamicSession.reservationRequired && !isAuthenticated
- ? tx("この配信は予約必須です。ログインして予約状態を確認してください。", "This stream requires a reservation. Log in to verify your reservation.")
- : dynamicSession.reservationRequired && checkingReservation
- ? tx("予約状態を確認しています。少し待ってください。", "Checking your reservation. Please wait.")
- : dynamicSession.reservationRequired && !hasReservation
- ? tx("この配信は予約必須です。先に予約したアカウントで参加してください。", "This stream requires a reservation. Join with an account that reserved first.")
- : null
+ ? !canAccessRequiredPlan(user?.plan, dynamicSession.requiredPlan)
+   ? tx(`この配信は ${planLabel(dynamicSession.requiredPlan)} プラン限定です。`, `This stream requires the ${planLabel(dynamicSession.requiredPlan)} plan.`)
+   : dynamicSession.status !== "live"
+     ? tx("配信開始前なのでまだ参加できません。開始まで予約でお待ちください。", "This stream is not live yet. Reserve first and wait for the start.")
+     : dynamicSession.reservationRequired && !isAuthenticated
+       ? tx("この配信は予約必須です。ログインして予約状態を確認してください。", "This stream requires a reservation. Log in to verify your reservation.")
+       : dynamicSession.reservationRequired && checkingReservation
+         ? tx("予約状態を確認しています。少し待ってください。", "Checking your reservation. Please wait.")
+         : dynamicSession.reservationRequired && !hasReservation
+           ? tx("この配信は予約必須です。先に予約したアカウントで参加してください。", "This stream requires a reservation. Join with an account that reserved first.")
+           : null
  : null;
 
  return (

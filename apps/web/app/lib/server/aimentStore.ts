@@ -14,6 +14,7 @@ import type {
   StreamSessionStatus,
   UpdateStreamSessionInput,
 } from "../apiTypes";
+import { canAccessPlan, getEffectivePlanForUser } from "./billingStore";
 
 type StoredUser = SessionUser & {
   passwordHash?: string;
@@ -135,6 +136,7 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
     thumbnail: entry.thumbnail,
     hostName: entry.hostName,
     participationType,
+    requiredPlan: entry.requiredPlan === "premium" ? "premium" : entry.requiredPlan === "supporter" ? "supporter" : "free",
     reservationRequired: entry.reservationRequired === true,
     slotsTotal,
     slotsLeft,
@@ -487,6 +489,7 @@ export async function createStreamSession(hostUser: SessionUser, input: CreateSt
       thumbnail: input.thumbnail ?? "/image/thumbnail/thumbnail_5.png",
       hostName: input.hostName?.trim() || hostUser.name,
       participationType: input.participationType ?? "First-come",
+      requiredPlan: input.requiredPlan ?? "free",
       reservationRequired: input.reservationRequired === true,
       slotsTotal,
       slotsLeft: slotsTotal,
@@ -516,6 +519,7 @@ export async function updateStreamSession(sessionId: string, actor: SessionUser,
     const nextSlotsTotal = patch.slotsTotal ?? current.slotsTotal;
     const nextParticipationType = patch.participationType ?? current.participationType;
     const nextReservationRequired = patch.reservationRequired ?? current.reservationRequired;
+    const nextRequiredPlan = patch.requiredPlan ?? current.requiredPlan;
     if (nextSlotsTotal < reservedCount) {
       throw new Error("slotsTotal cannot be lower than active reservations");
     }
@@ -535,6 +539,7 @@ export async function updateStreamSession(sessionId: string, actor: SessionUser,
       category: patch.category?.trim() ?? current.category,
       hostName: patch.hostName?.trim() ?? current.hostName,
       participationType: nextParticipationType,
+      requiredPlan: nextRequiredPlan,
       reservationRequired: nextReservationRequired,
       slotsTotal: nextSlotsTotal,
       slotsLeft: Math.max(0, nextSlotsTotal - reservedCount),
@@ -572,12 +577,14 @@ export async function createReservation(actor: SessionUser, input: CreateReserva
   requireListener(actor);
 
   if (!input.sessionId?.trim()) throw new Error("sessionId is required");
+  const actorPlan = await getEffectivePlanForUser(actor.id);
 
   return mutateStore((store) => {
     const session = store.streamSessions.find((entry) => entry.sessionId === input.sessionId);
     if (!session) throw new Error("Session not found");
     if (session.status !== "prelive") throw new Error("Reservations are only available before the stream starts");
     if (session.participationType !== "First-come") throw new Error("Reservation API currently supports first-come sessions only");
+    if (!canAccessPlan(actorPlan, session.requiredPlan)) throw new Error(`This session requires the ${session.requiredPlan} plan`);
     if (findActiveReservation(store, session.sessionId, actor.id)) throw new Error("You already reserved this session");
 
     const reservedCount = countActiveReservations(store, session.sessionId);
