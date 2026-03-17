@@ -1,76 +1,80 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { AuthSession, SessionUser } from "./apiTypes";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+
+export type UserRole = "listener" | "vtuber";
+
+export type SessionUser = {
+  id: string;
+  name: string;
+  role: UserRole;
+  email?: string;
+  avatarUrl?: string;
+};
 
 type UserSessionContextValue = {
   user: SessionUser | null;
+  hydrated: boolean;
   isAuthenticated: boolean;
   isVtuber: boolean;
-  loading: boolean;
-  refreshSession: () => Promise<void>;
-  logout: () => Promise<void>;
+  login: (user: SessionUser) => void;
+  updateUser: (updates: Partial<SessionUser>) => void;
+  logout: () => void;
 };
 
 const UserSessionContext = createContext<UserSessionContextValue | null>(null);
-
-async function readSession() {
-  const response = await fetch("/api/auth/session", { cache: "no-store" });
-  const payload = (await response.json()) as AuthSession;
-  return payload;
-}
+const STORAGE_KEY = "aiment.user-session.v1";
 
 export function UserSessionProvider({ children }: { children: React.ReactNode }) {
+  const [hydrated, setHydrated] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const refreshSession = useCallback(async () => {
-    const session = await readSession();
-    setUser(session.user);
-  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const sync = async () => {
-      try {
-        const session = await readSession();
-        if (!cancelled) {
-          setUser(session.user);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as SessionUser;
+        if (parsed?.id && parsed?.name && parsed?.role) {
+          setUser(parsed);
         }
       }
-    };
-
-    void sync();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const logout = useCallback(async () => {
-    setLoading(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
       setUser(null);
     } finally {
-      setLoading(false);
+      setHydrated(true);
     }
   }, []);
+
+  const login = (nextUser: SessionUser) => {
+    setUser(nextUser);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
+  };
+
+  const updateUser = (updates: Partial<SessionUser>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const merged = { ...prev, ...updates };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      return merged;
+    });
+  };
+
+  const logout = () => {
+    setUser(null);
+    window.localStorage.removeItem(STORAGE_KEY);
+  };
 
   const value = useMemo(
     () => ({
       user,
+      hydrated,
       isAuthenticated: Boolean(user),
       isVtuber: user?.role === "vtuber",
-      loading,
-      refreshSession,
+      login,
+      updateUser,
       logout,
     }),
-    [loading, logout, refreshSession, user],
+    [hydrated, user],
   );
 
   return <UserSessionContext.Provider value={value}>{children}</UserSessionContext.Provider>;

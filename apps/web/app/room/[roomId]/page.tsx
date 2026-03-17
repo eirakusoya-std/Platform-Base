@@ -3,13 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { io, Socket } from "socket.io-client";
-import { EVENTS, type JoinedRoomPayload, type RequestRenegotiationPayload } from "@repo/shared";
 import { useI18n } from "../../lib/i18n";
-import { reportMonitoringEvent } from "../../lib/monitoring";
-import { canAccessRequiredPlan, planLabel } from "../../lib/planAccess";
-import { getStreamSession } from "../../lib/streamSessions";
-import { useUserSession } from "../../lib/userSession";
-import { loadIceServers } from "../../lib/webrtcConfig";
+import { EVENTS } from "@repo/shared";
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
@@ -17,7 +12,11 @@ function generateId() {
 
 type Role = "host" | "listener" | "speaker" | "unknown";
 type RequestedRole = "host" | "listener" | "speaker";
-type Status = "idle" | "connecting" | "connected" | "reconnecting" | "failed";
+type Status = "idle" | "connecting" | "connected" | "failed";
+
+type JoinedRoomPayload = {
+  role: Role;
+};
 
 type SessionDescriptionPayload = {
   sdp: RTCSessionDescriptionInit;
@@ -64,7 +63,6 @@ function parseRequestedRole(value: string | null): RequestedRole {
 export default function RoomPage() {
   const router = useRouter();
   const { tx } = useI18n();
-  const { user } = useUserSession();
   const params = useParams<{ roomId: string }>();
   const searchParams = useSearchParams();
   const roomId = params?.roomId ?? "";
@@ -78,7 +76,6 @@ export default function RoomPage() {
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT);
   const [chatInput, setChatInput] = useState("");
-  const [planBlockedMessage, setPlanBlockedMessage] = useState<string | null>(null);
 
   const [micOn, setMicOn] = useState(requestedRole !== "listener" && searchParams.get("mic") !== "0");
   const [camOn, setCamOn] = useState(requestedRole === "host" && searchParams.get("cam") !== "0");
@@ -92,21 +89,12 @@ export default function RoomPage() {
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
-  const reportedAttemptRef = useRef(false);
-  const reportedFailureRef = useRef(false);
 
   const signalingUrl = process.env.NEXT_PUBLIC_SIGNALING_URL;
-  const [iceServers, setIceServers] = useState<RTCIceServer[]>([{ urls: ["stun:stun.l.google.com:19302"] }]);
+  const iceServers = useMemo(() => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), []);
 
   const canSendMic = assignedRole === "host" || assignedRole === "speaker";
   const canSendCam = assignedRole === "host";
-
-  useEffect(() => {
-    void loadIceServers().then((servers) => {
-      setIceServers(servers);
-    });
-  }, []);
 
   const cleanup = useCallback(() => {
     if (socketRef.current) {
@@ -117,7 +105,6 @@ export default function RoomPage() {
 
     pcRef.current?.close();
     pcRef.current = null;
-    pendingCandidatesRef.current = [];
 
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
@@ -130,42 +117,6 @@ export default function RoomPage() {
     setRemoteConnected(false);
     setStatus("idle");
   }, []);
-
-  const flushPendingCandidates = useCallback(async () => {
-    if (!pcRef.current || !pcRef.current.remoteDescription) return;
-    const pending = [...pendingCandidatesRef.current];
-    pendingCandidatesRef.current = [];
-    for (const candidate of pending) {
-      try {
-        await pcRef.current.addIceCandidate(candidate);
-      } catch {
-        // ignore invalid candidates that fail after reconnection
-      }
-    }
-  }, []);
-
-  const addIceCandidateSafely = useCallback(async (candidate: RTCIceCandidateInit) => {
-    if (!pcRef.current) return;
-    if (!pcRef.current.remoteDescription) {
-      pendingCandidatesRef.current.push(candidate);
-      return;
-    }
-    try {
-      await pcRef.current.addIceCandidate(candidate);
-    } catch {
-      // ignore invalid candidates
-    }
-  }, []);
-
-  const sendOffer = useCallback(async (iceRestart = false) => {
-    if (roleRef.current !== "host") return;
-    if (!pcRef.current || !socketRef.current) return;
-    if (pcRef.current.signalingState !== "stable") return;
-
-    const offer = await pcRef.current.createOffer(iceRestart ? { iceRestart: true } : undefined);
-    await pcRef.current.setLocalDescription(offer);
-    socketRef.current.emit(EVENTS.OFFER, { roomId, from: peerId, sdp: offer });
-  }, [peerId, roomId]);
 
   const applyMic = useCallback((enabled: boolean) => {
     if (!canSendMic) return;
@@ -214,59 +165,14 @@ export default function RoomPage() {
   }, [chatInput]);
 
   useEffect(() => {
-    if (!roomId || requestedRole === "host") return;
-    let cancelled = false;
-
-    const syncSession = async () => {
-      const session = await getStreamSession(roomId);
-      if (!session || cancelled) return;
-      if (!canAccessRequiredPlan(user?.plan, session.requiredPlan)) {
-        setPlanBlockedMessage(tx(`この配信は ${planLabel(session.requiredPlan)} プラン限定です。`, `This stream requires the ${planLabel(session.requiredPlan)} plan.`));
-      } else {
-        setPlanBlockedMessage(null);
-      }
-    };
-
-    void syncSession();
-    return () => {
-      cancelled = true;
-    };
-  }, [requestedRole, roomId, tx, user?.plan]);
-
-  useEffect(() => {
-    if (!roomId || reportedAttemptRef.current) return;
-    reportedAttemptRef.current = true;
-    void reportMonitoringEvent({
-      source: "webrtc",
-      level: "info",
-      code: "webrtc.connect.attempt",
-      message: "Viewer attempted to connect",
-      meta: { roomId, requestedRole },
-    }).catch(() => undefined);
-  }, [requestedRole, roomId]);
-
-  useEffect(() => {
-    if (status !== "failed" || reportedFailureRef.current) return;
-    reportedFailureRef.current = true;
-    void reportMonitoringEvent({
-      source: "webrtc",
-      level: "error",
-      code: "webrtc.connect.failed",
-      message: "Viewer connection failed",
-      meta: { roomId, requestedRole },
-    }).catch(() => undefined);
-  }, [requestedRole, roomId, status]);
-
-  useEffect(() => {
     if (!roomId || !signalingUrl) return;
-    if (planBlockedMessage) return;
 
     let mounted = true;
 
     const start = async () => {
       setStatus("connecting");
 
-      const pc = new RTCPeerConnection({ iceServers });
+      const pc = new RTCPeerConnection(iceServers);
       pcRef.current = pc;
 
       let stream: MediaStream | null = null;
@@ -325,82 +231,40 @@ export default function RoomPage() {
         if (!mounted) return;
         if (pc.connectionState === "connected") setStatus("connected");
         if (pc.connectionState === "connecting") setStatus("connecting");
-        if (pc.connectionState === "disconnected") {
-          setStatus("reconnecting");
-          if (roleRef.current === "host") {
-            void sendOffer(true).catch(() => undefined);
-          } else {
-            socketRef.current?.emit(EVENTS.REQUEST_RENEGOTIATION, { roomId, from: peerId } satisfies RequestRenegotiationPayload);
-          }
-        }
-        if (pc.connectionState === "failed") {
-          setStatus("failed");
-          if (roleRef.current === "host") {
-            void sendOffer(true).catch(() => undefined);
-          } else {
-            socketRef.current?.emit(EVENTS.REQUEST_RENEGOTIATION, { roomId, from: peerId } satisfies RequestRenegotiationPayload);
-          }
-        }
+        if (pc.connectionState === "failed") setStatus("failed");
+        if (pc.connectionState === "disconnected") setStatus("idle");
       };
 
-      const socket = io(signalingUrl, {
-        transports: ["websocket", "polling"],
-        reconnection: true,
-        reconnectionAttempts: 20,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 10000,
-      });
+      const socket = io(signalingUrl, { transports: ["polling", "websocket"] });
       socketRef.current = socket;
 
       socket.on("connect", () => {
-        if (!mounted) return;
-        setStatus("connecting");
         socket.emit(EVENTS.JOIN_ROOM, { roomId, peerId, requestedRole });
       });
 
-      socket.on("disconnect", (reason) => {
-        if (!mounted) return;
-        if (reason === "io client disconnect") return;
-        setStatus("reconnecting");
-        setRemoteConnected(false);
-      });
-
-      socket.on("connect_error", () => {
-        if (!mounted) return;
-        setStatus("reconnecting");
-      });
-
-      socket.on(EVENTS.JOINED_ROOM, (payload: JoinedRoomPayload) => {
+      socket.on("joined-room", (payload: JoinedRoomPayload) => {
         roleRef.current = payload.role;
         setAssignedRole(payload.role);
-        if (payload.role === "host" && payload.peers.length > 0) {
-          void sendOffer(payload.reconnected).catch(() => {
-            if (mounted) setStatus("failed");
-          });
-        }
       });
 
-      socket.on(EVENTS.ROOM_FULL, () => {
+      socket.on("room-full", () => {
         if (!mounted) return;
         setStatus("failed");
       });
 
       socket.on(EVENTS.PEER_JOINED, async () => {
         if (roleRef.current !== "host") return;
-        await sendOffer();
-      });
+        if (!pcRef.current || pcRef.current.signalingState !== "stable") return;
 
-      socket.on(EVENTS.REQUEST_RENEGOTIATION, async () => {
-        if (roleRef.current !== "host") return;
-        await sendOffer(true);
+        const offer = await pcRef.current.createOffer();
+        await pcRef.current.setLocalDescription(offer);
+        socket.emit(EVENTS.OFFER, { roomId, from: peerId, sdp: offer });
       });
 
       socket.on(EVENTS.OFFER, async (payload: SessionDescriptionPayload) => {
         if (!pcRef.current) return;
         if (pcRef.current.signalingState !== "stable") return;
         await pcRef.current.setRemoteDescription(payload.sdp);
-        await flushPendingCandidates();
         const answer = await pcRef.current.createAnswer();
         await pcRef.current.setLocalDescription(answer);
         socket.emit(EVENTS.ANSWER, { roomId, from: peerId, sdp: answer });
@@ -410,18 +274,21 @@ export default function RoomPage() {
         if (!pcRef.current) return;
         if (pcRef.current.signalingState !== "have-local-offer") return;
         await pcRef.current.setRemoteDescription(payload.sdp);
-        await flushPendingCandidates();
       });
 
       socket.on(EVENTS.ICE_CANDIDATE, async (payload: IceCandidatePayload) => {
-        await addIceCandidateSafely(payload.candidate);
+        try {
+          if (!pcRef.current) return;
+          await pcRef.current.addIceCandidate(payload.candidate);
+        } catch {
+          // ignore invalid ICE candidates
+        }
       });
 
       socket.on(EVENTS.PEER_LEFT, () => {
         if (!mounted) return;
         setRemoteConnected(false);
         if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-        setStatus("idle");
       });
     };
 
@@ -434,7 +301,7 @@ export default function RoomPage() {
       mounted = false;
       cleanup();
     };
-  }, [addIceCandidateSafely, cleanup, flushPendingCandidates, iceServers, peerId, planBlockedMessage, requestedRole, roomId, sendOffer, signalingUrl]);
+  }, [cleanup, iceServers, peerId, requestedRole, roomId, signalingUrl]);
 
   useEffect(() => {
     if (remoteVideoRef.current) {
@@ -451,32 +318,12 @@ export default function RoomPage() {
       ? tx("接続済み", "Connected")
       : status === "connecting"
         ? tx("接続中", "Connecting")
-        : status === "reconnecting"
-          ? tx("再接続中", "Reconnecting")
         : status === "failed"
           ? tx("接続失敗", "Failed")
           : tx("待機中", "Idle");
 
   if (!roomId) {
     return <div className="p-8">{tx("Room IDを読み込んでいます...", "Loading room ID...")}</div>;
-  }
-
-  if (planBlockedMessage) {
-    return (
-      <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
-        <div className="mx-auto flex max-w-[900px] flex-col items-center gap-4 px-4 py-16 text-center">
-          <h1 className="text-2xl font-bold">{tx("参加プランが不足しています", "Plan upgrade required")}</h1>
-          <p className="text-sm text-[var(--brand-text-muted)]">{planBlockedMessage}</p>
-          <button
-            type="button"
-            onClick={() => router.push("/account")}
-            className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white"
-          >
-            {tx("アカウント管理へ", "Go to Account")}
-          </button>
-        </div>
-      </div>
-    );
   }
 
   return (

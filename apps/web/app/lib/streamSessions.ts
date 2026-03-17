@@ -1,143 +1,143 @@
 "use client";
 
-import type {
-  CreateStreamSessionInput,
-  StreamSession,
-  StreamSessionStatus,
-  UpdateStreamSessionInput,
-} from "./apiTypes";
+import { API_ROUTES, type StreamSession, type StreamSessionStatus } from "@repo/shared";
+
+type CreateStreamSessionInput = {
+  hostUserId: string;
+  title: string;
+  description: string;
+  category: string;
+  thumbnail?: string;
+  hostName?: string;
+  startsAt?: string;
+  participationType?: "First-come" | "Lottery";
+  slotsTotal?: number;
+  preferredVideoDeviceId?: string;
+  preferredVideoLabel?: string;
+};
 
 const UPDATE_EVENT = "aiment-stream-sessions-updated";
-const BROADCAST_CHANNEL = "aiment-stream-sessions";
+const DEFAULT_API_BASE = "http://localhost:3002";
 
-function emitUpdate() {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
-
-  if (typeof BroadcastChannel !== "undefined") {
-    const channel = new BroadcastChannel(BROADCAST_CHANNEL);
-    channel.postMessage("updated");
-    channel.close();
-  }
+function getApiBase() {
+  const base = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_BASE;
+  return base.endsWith("/") ? base.slice(0, -1) : base;
 }
 
-export function notifyStreamSessionsUpdated() {
-  emitUpdate();
+function url(path: string) {
+  return `${getApiBase()}${path}`;
 }
 
-async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
+function isBrowser() {
+  return typeof window !== "undefined";
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url(path), {
     ...init,
-    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
+    cache: "no-store",
   });
 
-  const payload = (await response.json().catch(() => null)) as ({ error?: string } & T) | null;
   if (!response.ok) {
-    throw new Error(payload?.error ?? "Request failed");
+    let message = `Request failed: ${response.status}`;
+    try {
+      const body = await response.json();
+      if (typeof body?.message === "string") message = body.message;
+    } catch {
+      // no-op
+    }
+    throw new Error(message);
   }
 
-  if (!payload) {
-    throw new Error("Empty response");
-  }
+  if (response.status === 204) return {} as T;
+  return (await response.json()) as T;
+}
 
-  return payload;
+function notifyUpdated() {
+  if (!isBrowser()) return;
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 }
 
 export type { StreamSession, StreamSessionStatus };
 
 export async function listAllStreamSessions(): Promise<StreamSession[]> {
-  const payload = await requestJson<{ sessions: StreamSession[] }>("/api/stream-sessions");
-  return payload.sessions;
+  const { sessions } = await requestJson<{ sessions: StreamSession[] }>(API_ROUTES.SESSIONS);
+  return sessions.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
 export async function listActiveStreamSessions(): Promise<StreamSession[]> {
-  const payload = await requestJson<{ sessions: StreamSession[] }>("/api/stream-sessions?status=prelive,live");
-  return payload.sessions;
+  const { sessions } = await requestJson<{ sessions: StreamSession[] }>(`${API_ROUTES.SESSIONS}?status=active`);
+  return sessions.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
 export async function getStreamSession(sessionId: string): Promise<StreamSession | null> {
   try {
-    const payload = await requestJson<{ session: StreamSession }>(`/api/stream-sessions/${encodeURIComponent(sessionId)}`);
-    return payload.session;
+    const { session } = await requestJson<{ session: StreamSession }>(API_ROUTES.SESSION_BY_ID(sessionId));
+    return session;
   } catch {
     return null;
   }
 }
 
 export async function createStreamSession(input: CreateStreamSessionInput): Promise<StreamSession> {
-  const payload = await requestJson<{ session: StreamSession }>("/api/stream-sessions", {
+  const { session } = await requestJson<{ session: StreamSession }>(API_ROUTES.SESSIONS, {
     method: "POST",
     body: JSON.stringify(input),
   });
-  emitUpdate();
-  return payload.session;
+  notifyUpdated();
+  return session;
 }
 
-export async function updateStreamSession(sessionId: string, patch: UpdateStreamSessionInput): Promise<StreamSession | null> {
-  const payload = await requestJson<{ session: StreamSession }>(`/api/stream-sessions/${encodeURIComponent(sessionId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(patch),
-  });
-  emitUpdate();
-  return payload.session;
+export async function updateStreamSession(sessionId: string, patch: Partial<StreamSession>): Promise<StreamSession | null> {
+  try {
+    const { session } = await requestJson<{ session: StreamSession }>(API_ROUTES.SESSION_BY_ID(sessionId), {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    notifyUpdated();
+    return session;
+  } catch {
+    return null;
+  }
 }
 
 export async function setStreamSessionStatus(sessionId: string, status: StreamSessionStatus): Promise<StreamSession | null> {
-  const action = status === "live" ? "start" : status === "ended" ? "end" : null;
-  if (!action) {
-    throw new Error("Direct transition to prelive is not supported");
-  }
-
-  const payload = await requestJson<{ session: StreamSession }>(`/api/stream-sessions/${encodeURIComponent(sessionId)}/${action}`, {
-    method: "POST",
-  });
-  emitUpdate();
-  return payload.session;
-}
-
-export function notifyStreamEndedOnUnload(sessionId: string) {
-  const url = `/api/stream-sessions/${encodeURIComponent(sessionId)}/end`;
-
-  if (typeof window === "undefined") return;
-
   try {
-    if (navigator.sendBeacon) {
-      const ok = navigator.sendBeacon(url, new Blob(["{}"], { type: "application/json" }));
-      if (ok) {
-        emitUpdate();
-        return;
-      }
-    }
+    const path =
+      status === "live"
+        ? API_ROUTES.SESSION_START(sessionId)
+        : status === "ended"
+          ? API_ROUTES.SESSION_END(sessionId)
+          : API_ROUTES.SESSION_BY_ID(sessionId);
+    const body = status === "prelive" ? JSON.stringify({ status }) : undefined;
+    const { session } = await requestJson<{ session: StreamSession }>(path, {
+      method: "PATCH",
+      body,
+    });
+    notifyUpdated();
+    return session;
   } catch {
-    // Fall back to keepalive fetch below.
+    return null;
   }
-
-  void fetch(url, {
-    method: "POST",
-    body: "{}",
-    keepalive: true,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  }).finally(() => {
-    emitUpdate();
-  });
 }
 
-export function subscribeStreamSessions(onUpdate: () => void): () => void {
-  if (typeof window === "undefined") return () => undefined;
+export function subscribeStreamSessions(onUpdate: () => void, intervalMs = 6000): () => void {
+  if (!isBrowser()) return () => undefined;
 
-  window.addEventListener(UPDATE_EVENT, onUpdate);
-  const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(BROADCAST_CHANNEL) : null;
-  channel?.addEventListener("message", onUpdate);
+  const tick = () => onUpdate();
+  const timer = window.setInterval(tick, intervalMs);
+  window.addEventListener(UPDATE_EVENT, tick);
+  window.addEventListener("focus", tick);
+  document.addEventListener("visibilitychange", tick);
 
   return () => {
-    window.removeEventListener(UPDATE_EVENT, onUpdate);
-    channel?.removeEventListener("message", onUpdate);
-    channel?.close();
+    window.clearInterval(timer);
+    window.removeEventListener(UPDATE_EVENT, tick);
+    window.removeEventListener("focus", tick);
+    document.removeEventListener("visibilitychange", tick);
   };
 }

@@ -13,23 +13,14 @@ import {
   VideoCameraIcon,
   XMarkIcon,
 } from "@heroicons/react/24/solid";
+import { EVENTS } from "@repo/shared";
 import { io, type Socket } from "socket.io-client";
-import { EVENTS, type JoinedRoomPayload } from "@repo/shared";
 import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
 import { useI18n } from "../../../lib/i18n";
-import { reportMonitoringEvent } from "../../../lib/monitoring";
-import {
-  getStreamSession,
-  notifyStreamEndedOnUnload,
-  setStreamSessionStatus,
-  subscribeStreamSessions,
-  type StreamSession,
-  updateStreamSession,
-} from "../../../lib/streamSessions";
+import { getStreamSession, setStreamSessionStatus, subscribeStreamSessions, type StreamSession, updateStreamSession } from "../../../lib/streamSessions";
 import { useUserSession } from "../../../lib/userSession";
-import { loadIceServers } from "../../../lib/webrtcConfig";
 
 type ParticipantItem = {
   id: string;
@@ -38,7 +29,7 @@ type ParticipantItem = {
   muted: boolean;
 };
 
-type ConnectionStatus = "idle" | "starting" | "live" | "reconnecting" | "failed";
+type ConnectionStatus = "idle" | "starting" | "live" | "failed";
 
 const INITIAL_PARTICIPANTS: ParticipantItem[] = [
   { id: "p1", name: "Kaito", status: "watching", muted: false },
@@ -85,11 +76,10 @@ export default function StudioLiveSessionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tx } = useI18n();
-  const { isVtuber, loading } = useUserSession();
+  const { isVtuber, hydrated: sessionHydrated } = useUserSession();
   const params = useParams<{ sessionId: string }>();
   const sessionId = params?.sessionId ?? "";
 
-  const [hydrated, setHydrated] = useState(false);
   const [session, setSession] = useState<StreamSession | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -104,67 +94,51 @@ export default function StudioLiveSessionPage() {
   const [connectedViewers, setConnectedViewers] = useState(0);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
-  const [participantLink, setParticipantLink] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
-  const [closeCountdown, setCloseCountdown] = useState<number | null>(null);
-  const [closeFallbackVisible, setCloseFallbackVisible] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const peerIdRef = useRef<string>("");
-  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
-  const reportedAttemptRef = useRef(false);
-  const reportedFailureRef = useRef(false);
+  const peerIdRef = useRef<string>(createPeerId());
   const autoStartDoneRef = useRef(false);
-  const liveSessionRef = useRef<StreamSession | null>(null);
-  const isLiveRef = useRef(false);
-  const sessionEndedRef = useRef(false);
-  const stoppingRef = useRef(false);
 
   const signalingUrl = process.env.NEXT_PUBLIC_SIGNALING_URL;
-  const [iceServers, setIceServers] = useState<RTCIceServer[]>([{ urls: ["stun:stun.l.google.com:19302"] }]);
-  const isDedicatedLiveTab = searchParams.get("liveTab") === "1";
+  const iceServers = useMemo(() => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), []);
 
   useEffect(() => {
-    if (!loading && !isVtuber) router.replace("/");
-  }, [isVtuber, loading, router]);
+    if (!sessionHydrated) return;
+    if (!isVtuber) router.replace("/");
+  }, [sessionHydrated, isVtuber, router]);
 
   useEffect(() => {
-    setHydrated(true);
-    peerIdRef.current = createPeerId();
-  }, []);
-
-  useEffect(() => {
-    void loadIceServers().then((servers) => {
-      setIceServers(servers);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
+    let cancelled = false;
 
     const sync = async () => {
       if (!sessionId) {
-        setSession(null);
-        setNotFound(true);
+        if (!cancelled) {
+          setSession(null);
+          setNotFound(true);
+        }
         return;
       }
 
       const found = await getStreamSession(sessionId);
+      if (cancelled) return;
       setSession(found);
       setNotFound(!found);
     };
 
     void sync();
-    return subscribeStreamSessions(() => {
-      void sync();
-    });
-  }, [hydrated, sessionId]);
+    const unsubscribe = subscribeStreamSessions(sync);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [sessionId]);
 
   useEffect(() => {
-    if (!hydrated || notFound) return;
+    if (notFound) return;
 
     let cancelled = false;
 
@@ -231,49 +205,17 @@ export default function StudioLiveSessionPage() {
       streamRef.current = null;
       if (previewRef.current) previewRef.current.srcObject = null;
     };
-  }, [hydrated, notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId, micOn, camOn, tx]);
-
-  useEffect(() => {
-    if (!hydrated || !session) return;
-    setParticipantLink(`${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`);
-  }, [hydrated, session]);
-
-  useEffect(() => {
-    if (!sessionId || reportedAttemptRef.current) return;
-    reportedAttemptRef.current = true;
-    void reportMonitoringEvent({
-      source: "webrtc",
-      level: "info",
-      code: "webrtc.connect.attempt",
-      message: "Host prepared a live session",
-      meta: { sessionId },
-    }).catch(() => undefined);
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (connectionStatus !== "failed" || reportedFailureRef.current) return;
-    reportedFailureRef.current = true;
-    void reportMonitoringEvent({
-      source: "webrtc",
-      level: "error",
-      code: "webrtc.connect.failed",
-      message: "Host live session connection failed",
-      meta: { sessionId },
-    }).catch(() => undefined);
-  }, [connectionStatus, sessionId]);
+  }, [notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId, micOn, camOn, tx]);
 
   const selectedVideoLabel = useMemo(() => {
     return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? session?.preferredVideoLabel ?? tx("デフォルトカメラ", "Default camera");
   }, [selectedVideoDeviceId, session?.preferredVideoLabel, tx, videoDevices]);
 
   const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
-
-  useEffect(() => {
-    const liveNow = connectionStatus === "live" || session?.status === "live";
-    liveSessionRef.current = session;
-    isLiveRef.current = liveNow;
-    sessionEndedRef.current = session?.status === "ended";
-  }, [connectionStatus, session]);
+  const participantLink = useMemo(() => {
+    if (!session || typeof window === "undefined") return "";
+    return `${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`;
+  }, [session]);
 
   useEffect(() => {
     if (!session || !selectedVideoDeviceId) return;
@@ -282,7 +224,7 @@ export default function StudioLiveSessionPage() {
     void updateStreamSession(session.sessionId, {
       preferredVideoDeviceId: selectedVideoDeviceId,
       preferredVideoLabel: selectedVideoLabel,
-    }).catch(() => undefined);
+    });
   }, [selectedVideoDeviceId, selectedVideoLabel, session?.preferredVideoDeviceId, session?.preferredVideoLabel, session?.sessionId]);
 
   const metrics = useMemo(
@@ -317,45 +259,9 @@ export default function StudioLiveSessionPage() {
 
     pcRef.current?.close();
     pcRef.current = null;
-    pendingCandidatesRef.current = [];
 
     setConnectedViewers(0);
     setConnectionStatus("idle");
-  };
-
-  const flushPendingCandidates = async () => {
-    if (!pcRef.current || !pcRef.current.remoteDescription) return;
-    const pending = [...pendingCandidatesRef.current];
-    pendingCandidatesRef.current = [];
-    for (const candidate of pending) {
-      try {
-        await pcRef.current.addIceCandidate(candidate);
-      } catch {
-        // ignore invalid candidates after reconnects
-      }
-    }
-  };
-
-  const addIceCandidateSafely = async (candidate: RTCIceCandidateInit) => {
-    if (!pcRef.current) return;
-    if (!pcRef.current.remoteDescription) {
-      pendingCandidatesRef.current.push(candidate);
-      return;
-    }
-    try {
-      await pcRef.current.addIceCandidate(candidate);
-    } catch {
-      // ignore invalid candidate
-    }
-  };
-
-  const sendHostOffer = async (iceRestart = false) => {
-    if (!pcRef.current || !socketRef.current || !session) return;
-    if (pcRef.current.signalingState !== "stable") return;
-
-    const offer = await pcRef.current.createOffer(iceRestart ? { iceRestart: true } : undefined);
-    await pcRef.current.setLocalDescription(offer);
-    socketRef.current.emit(EVENTS.OFFER, { roomId: session.sessionId, from: peerIdRef.current, sdp: offer });
   };
 
   const startBroadcast = async () => {
@@ -382,7 +288,7 @@ export default function StudioLiveSessionPage() {
     cleanupConnection();
     setConnectionStatus("starting");
 
-    const pc = new RTCPeerConnection({ iceServers });
+    const pc = new RTCPeerConnection(iceServers);
     pcRef.current = pc;
 
     localStream.getTracks().forEach((track) => {
@@ -401,27 +307,15 @@ export default function StudioLiveSessionPage() {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") {
         setConnectionStatus("live");
-      } else if (pc.connectionState === "disconnected") {
-        setConnectionStatus("reconnecting");
-        void sendHostOffer(true).catch(() => undefined);
       } else if (pc.connectionState === "failed") {
         setConnectionStatus("failed");
-        void sendHostOffer(true).catch(() => undefined);
       }
     };
 
-    const socket = io(signalingUrl, {
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: 20,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000,
-    });
+    const socket = io(signalingUrl, { transports: ["polling", "websocket"] });
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      setConnectionStatus((current) => (current === "live" ? "live" : "starting"));
       socket.emit(EVENTS.JOIN_ROOM, {
         roomId: session.sessionId,
         peerId: peerIdRef.current,
@@ -429,41 +323,19 @@ export default function StudioLiveSessionPage() {
       });
     });
 
-    socket.on("disconnect", (reason) => {
-      if (reason === "io client disconnect") return;
-      setConnectionStatus("reconnecting");
-      setConnectedViewers(0);
-    });
-
-    socket.on("connect_error", () => {
-      setConnectionStatus("reconnecting");
-    });
-
-    socket.on(EVENTS.JOINED_ROOM, async (payload: JoinedRoomPayload) => {
-      if (payload.role !== "host") return;
-      if (payload.peers.length > 0) {
-        await sendHostOffer(payload.reconnected);
-      }
-    });
-
-    socket.on(EVENTS.ROOM_FULL, () => {
+    socket.on("room-full", () => {
       setConnectionStatus("failed");
       setMediaError(tx("現在の構成では同時接続は1名までです。", "Current signaling supports one viewer at a time."));
     });
 
     socket.on(EVENTS.PEER_JOINED, async () => {
       try {
-        await sendHostOffer();
+        if (!pcRef.current || pcRef.current.signalingState !== "stable") return;
+        const offer = await pcRef.current.createOffer();
+        await pcRef.current.setLocalDescription(offer);
+        socket.emit(EVENTS.OFFER, { roomId: session.sessionId, from: peerIdRef.current, sdp: offer });
         setConnectedViewers(1);
         setConnectionStatus("live");
-      } catch {
-        setConnectionStatus("failed");
-      }
-    });
-
-    socket.on(EVENTS.REQUEST_RENEGOTIATION, async () => {
-      try {
-        await sendHostOffer(true);
       } catch {
         setConnectionStatus("failed");
       }
@@ -474,67 +346,31 @@ export default function StudioLiveSessionPage() {
         if (!pcRef.current) return;
         if (pcRef.current.signalingState !== "have-local-offer") return;
         await pcRef.current.setRemoteDescription(payload.sdp);
-        await flushPendingCandidates();
       } catch {
         setConnectionStatus("failed");
       }
     });
 
     socket.on(EVENTS.ICE_CANDIDATE, async (payload: { candidate: RTCIceCandidateInit }) => {
-      await addIceCandidateSafely(payload.candidate);
+      try {
+        if (!pcRef.current) return;
+        await pcRef.current.addIceCandidate(payload.candidate);
+      } catch {
+        // ignore invalid candidate
+      }
     });
 
     socket.on(EVENTS.PEER_LEFT, () => {
       setConnectedViewers(0);
     });
 
-    try {
-      const nextSession = await setStreamSessionStatus(session.sessionId, "live");
-      if (nextSession) {
-        sessionEndedRef.current = false;
-        setSession(nextSession);
-      }
-    } catch (error) {
-      setConnectionStatus("failed");
-      setMediaError(error instanceof Error ? error.message : "Failed to start session");
-    }
+    void setStreamSessionStatus(session.sessionId, "live");
   };
 
-  const stopBroadcast = async () => {
-    if (!session) return false;
-    if (stoppingRef.current) return false;
-
-    stoppingRef.current = true;
+  const stopBroadcast = () => {
+    if (!session) return;
     cleanupConnection();
-    try {
-      const nextSession = await setStreamSessionStatus(session.sessionId, "ended");
-      sessionEndedRef.current = true;
-      if (nextSession) setSession(nextSession);
-      return true;
-    } catch (error) {
-      setMediaError(error instanceof Error ? error.message : "Failed to end session");
-      return false;
-    } finally {
-      stoppingRef.current = false;
-    }
-  };
-
-  const stopBroadcastAndClose = async () => {
-    if (!isLive) {
-      window.close();
-      window.setTimeout(() => setCloseFallbackVisible(true), 600);
-      return;
-    }
-
-    if (!window.confirm(tx("配信を終了してこのタブを閉じますか？", "End the stream and close this tab?"))) {
-      return;
-    }
-
-    const stopped = await stopBroadcast();
-    if (!stopped) return;
-
-    setCloseFallbackVisible(false);
-    setCloseCountdown(5);
+    void setStreamSessionStatus(session.sessionId, "ended");
   };
 
   const copyParticipantLink = async () => {
@@ -550,74 +386,22 @@ export default function StudioLiveSessionPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!hydrated || !isDedicatedLiveTab) return;
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!isLiveRef.current || sessionEndedRef.current) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-
-    const handlePageHide = () => {
-      const activeSession = liveSessionRef.current;
-      if (!activeSession || !isLiveRef.current || sessionEndedRef.current) return;
-
-      sessionEndedRef.current = true;
-      notifyStreamEndedOnUnload(activeSession.sessionId);
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("pagehide", handlePageHide);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("pagehide", handlePageHide);
-    };
-  }, [hydrated, isDedicatedLiveTab]);
-
   const shouldAutoStart = searchParams.get("autostart") === "1";
 
   useEffect(() => {
     if (!shouldAutoStart || autoStartDoneRef.current) return;
-    if (!hydrated || notFound || !session) return;
+    if (notFound || !session) return;
     if (connectionStatus !== "idle") return;
     if (!streamRef.current || !selectedVideoDeviceId || !micOn || !camOn) return;
 
     autoStartDoneRef.current = true;
-    void startBroadcast();
-  }, [shouldAutoStart, hydrated, notFound, session, connectionStatus, selectedVideoDeviceId, micOn, camOn]);
-
-  useEffect(() => {
-    if (closeCountdown === null) return;
-
-    if (closeCountdown <= 0) {
-      const fallbackTimer = window.setTimeout(() => {
-        window.close();
-        window.setTimeout(() => setCloseFallbackVisible(true), 600);
-      }, 0);
-
-      return () => window.clearTimeout(fallbackTimer);
-    }
-
     const timer = window.setTimeout(() => {
-      setCloseCountdown((current) => (current === null ? null : current - 1));
-    }, 1000);
-
+      void startBroadcast();
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [closeCountdown]);
+  }, [shouldAutoStart, notFound, session, connectionStatus, selectedVideoDeviceId, micOn, camOn]);
 
-  if (loading || !isVtuber) return null;
-
-  if (!hydrated) {
-    return (
-      <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 text-[var(--brand-text)] md:pb-0">
-        <TopNav mode="studio" />
-        <main className="mx-auto flex max-w-[900px] flex-col items-center gap-4 px-4 py-16 text-center">
-          <p className="text-sm text-[var(--brand-text-muted)]">{tx("読み込み中...", "Loading...")}</p>
-        </main>
-      </div>
-    );
-  }
+  if (!sessionHydrated || !isVtuber) return null;
 
   if (notFound || !session) {
     return (
@@ -650,21 +434,10 @@ export default function StudioLiveSessionPage() {
             <div>
               <h1 className="text-xl font-bold">Live Studio</h1>
               <p className="line-clamp-1 text-xs text-[var(--brand-text-muted)]">{session.title}</p>
-              {isDedicatedLiveTab && (
-                <p className="mt-1 text-[11px] text-[var(--brand-text-muted)]">
-                  {tx("このタブを閉じると配信終了の確認が表示されます。", "Closing this tab will ask to end the stream.")}
-                </p>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  if (isLive) {
-                    void stopBroadcastAndClose();
-                    return;
-                  }
-                  void startBroadcast();
-                }}
+                onClick={isLive ? stopBroadcast : startBroadcast}
                 className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-extrabold ${
                   isLive
                     ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
@@ -675,13 +448,11 @@ export default function StudioLiveSessionPage() {
                 {isLive ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
               </button>
               <button
-                onClick={() => {
-                  void stopBroadcastAndClose();
-                }}
+                onClick={() => { stopBroadcast(); router.push("/"); }}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
               >
                 <XMarkIcon className="h-4 w-4" aria-hidden />
-                {isLive ? tx("終了して閉じる", "End & Close") : tx("タブを閉じる", "Close Tab")}
+                {tx("閉じる", "Close")}
               </button>
             </div>
           </div>
@@ -691,18 +462,6 @@ export default function StudioLiveSessionPage() {
               {startWarnings.map((w) => (
                 <p key={w}>{w}</p>
               ))}
-            </div>
-          )}
-
-          {closeCountdown !== null && (
-            <div className="mb-2 rounded-xl bg-[var(--brand-primary)]/15 p-2.5 text-xs text-[var(--brand-primary)]">
-              <p>{tx(`配信を終了しました。${closeCountdown}秒後にこのタブを閉じます。`, `Stream ended. Closing this tab in ${closeCountdown}s.`)}</p>
-            </div>
-          )}
-
-          {closeFallbackVisible && (
-            <div className="mb-2 rounded-xl bg-[var(--brand-bg-900)] p-2.5 text-xs text-[var(--brand-text-muted)]">
-              <p>{tx("ブラウザが自動クローズを許可しない場合は、このタブを手動で閉じてください。", "If the browser blocks auto-close, close this tab manually.")}</p>
             </div>
           )}
 
