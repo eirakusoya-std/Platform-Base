@@ -95,6 +95,9 @@ export type CreateReservationRequest = {
   name?: string;
 };
 
+// LiveKit role for token generation (distinct from signaling Role)
+export type LiveKitRole = "vtuber" | "speaker";
+
 export type JoinRoomPayload = { roomId: string; peerId: string; requestedRole?: Role };
 export type JoinedRoomPayload = {
   roomId: string;

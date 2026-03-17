@@ -1,6 +1,18 @@
 {
   "users": [
     {
+      "id": "listener-mmo8zmah-27bf91",
+      "name": "a",
+      "role": "listener",
+      "email": "a@gmail.com",
+      "authProvider": "password",
+      "createdAt": "2026-03-13T01:58:28.504Z",
+      "lastLoginAt": "2026-03-13T01:58:28.504Z",
+      "termsAcceptedAt": "2026-03-13T01:58:28.504Z",
+      "privacyAcceptedAt": "2026-03-13T01:58:28.504Z",
+      "passwordHash": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+    },
+    {
       "id": "vtuber-mmn4eq2p-0f8483",
       "name": "test",
       "role": "vtuber",
