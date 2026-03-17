@@ -1,0 +1,94 @@
+{
+  "subscriptions": [
+    {
+      "subscriptionId": "sub_mmn4hrso_3b3deedb",
+      "userId": "listener-mmn4ao8k-3fad4c",
+      "provider": "mock",
+      "plan": "premium",
+      "status": "active",
+      "cancelAtPeriodEnd": false,
+      "createdAt": "2026-03-12T07:04:51.192Z",
+      "updatedAt": "2026-03-12T07:04:51.192Z",
+      "currentPeriodEnd": "2026-04-11T07:04:51.192Z"
+    },
+    {
+      "subscriptionId": "sub_mmn4grvb_513c35bc",
+      "userId": "listener-mmn4ao8k-3fad4c",
+      "provider": "mock",
+      "plan": "supporter",
+      "status": "canceled",
+      "cancelAtPeriodEnd": false,
+      "createdAt": "2026-03-12T07:04:04.631Z",
+      "updatedAt": "2026-03-12T07:04:51.192Z",
+      "currentPeriodEnd": "2026-04-11T07:04:04.631Z"
+    },
+    {
+      "subscriptionId": "sub_mmn4bgdu_19c4fed8",
+      "userId": "listener-mmn4ao8k-3fad4c",
+      "provider": "mock",
+      "plan": "premium",
+      "status": "canceled",
+      "cancelAtPeriodEnd": false,
+      "createdAt": "2026-03-12T06:59:56.466Z",
+      "updatedAt": "2026-03-12T07:04:04.631Z",
+      "currentPeriodEnd": "2026-04-11T06:59:56.466Z"
+    },
+    {
+      "subscriptionId": "sub_mmn4atnl_fadedf17",
+      "userId": "listener-mmn4ao8k-3fad4c",
+      "provider": "mock",
+      "plan": "supporter",
+      "status": "canceled",
+      "cancelAtPeriodEnd": false,
+      "createdAt": "2026-03-12T06:59:27.009Z",
+      "updatedAt": "2026-03-12T06:59:56.466Z",
+      "currentPeriodEnd": "2026-04-11T06:59:27.009Z"
+    }
+  ],
+  "paymentEvents": [
+    {
+      "eventId": "payevt_mmn4hrso_bff6ef6f",
+      "provider": "mock",
+      "providerEventId": "mock_checkout_sub_mmn4hrso_3b3deedb",
+      "type": "checkout.session.completed",
+      "status": "processed",
+      "createdAt": "2026-03-12T07:04:51.192Z",
+      "summary": "Mock subscription activated for premium",
+      "relatedUserId": "listener-mmn4ao8k-3fad4c",
+      "relatedSubscriptionId": "sub_mmn4hrso_3b3deedb"
+    },
+    {
+      "eventId": "payevt_mmn4grvb_46ca5aa0",
+      "provider": "mock",
+      "providerEventId": "mock_checkout_sub_mmn4grvb_513c35bc",
+      "type": "checkout.session.completed",
+      "status": "processed",
+      "createdAt": "2026-03-12T07:04:04.631Z",
+      "summary": "Mock subscription activated for supporter",
+      "relatedUserId": "listener-mmn4ao8k-3fad4c",
+      "relatedSubscriptionId": "sub_mmn4grvb_513c35bc"
+    },
+    {
+      "eventId": "payevt_mmn4bgdu_58527c01",
+      "provider": "mock",
+      "providerEventId": "mock_checkout_sub_mmn4bgdu_19c4fed8",
+      "type": "checkout.session.completed",
+      "status": "processed",
+      "createdAt": "2026-03-12T06:59:56.466Z",
+      "summary": "Mock subscription activated for premium",
+      "relatedUserId": "listener-mmn4ao8k-3fad4c",
+      "relatedSubscriptionId": "sub_mmn4bgdu_19c4fed8"
+    },
+    {
+      "eventId": "payevt_mmn4atnl_f9cfd1ba",
+      "provider": "mock",
+      "providerEventId": "mock_checkout_sub_mmn4atnl_fadedf17",
+      "type": "checkout.session.completed",
+      "status": "processed",
+      "createdAt": "2026-03-12T06:59:27.009Z",
+      "summary": "Mock subscription activated for supporter",
+      "relatedUserId": "listener-mmn4ao8k-3fad4c",
+      "relatedSubscriptionId": "sub_mmn4atnl_fadedf17"
+    }
+  ]
+}

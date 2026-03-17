@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Aiment Web
+
+Next.js app for listener auth, VTuber studio flow, stream session APIs, and reservation handling.
 
 ## Getting Started
 
-First, run the development server:
+1. Copy `.env.example` to `.env.local`
+2. Start the development server
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Reservation API
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `GET /api/reservations`
+  returns the current user's reservations
+- `GET /api/reservations?sessionId=...`
+  listener: returns their reservation for that session
+  vtuber: returns reservations for their own session
+- `POST /api/reservations`
+  creates a reservation for a `prelive` first-come session
+- `DELETE /api/reservations/:reservationId`
+  cancels the caller's reservation
 
-## Learn More
+Reservation rules:
 
-To learn more about Next.js, take a look at the following resources:
+- only authenticated listeners can reserve
+- duplicate reservation for the same session is rejected
+- first-come sessions only
+- full sessions are rejected
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Production API Settings
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+API routes are protected by middleware-based CORS and in-memory rate limiting.
 
-## Deploy on Vercel
+Environment variables:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `NEXT_PUBLIC_APP_URL`
+  primary app origin
+- `AIMENT_ALLOWED_ORIGINS`
+  comma-separated extra origins allowed for `/api/*`
+- `AIMENT_RATE_LIMIT_WINDOW_MS`
+  rate-limit window in milliseconds
+- `AIMENT_RATE_LIMIT_MAX`
+  default API requests per window
+- `AIMENT_AUTH_RATE_LIMIT_MAX`
+  stricter limit for `/api/auth/*`
+- `AIMENT_RESERVATION_RATE_LIMIT_MAX`
+  stricter limit for `/api/reservations*`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Current rate limiting is process-memory based. It is suitable for a single instance or staging. For multi-instance production, move the limiter to Redis or the deployment platform's native edge rate limiting.

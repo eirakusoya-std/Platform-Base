@@ -55,6 +55,8 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                     duration: session.duration,
                     participationType: session.participationType,
                     isSubscribed: session.isSubscribed,
+                    streamStatus: "live",
+                    reservationRequired: session.reservationRequired,
                     userHistory: session.userHistory,
                   })
                 }

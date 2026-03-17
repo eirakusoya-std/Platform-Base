@@ -1,10 +1,13 @@
 export const EVENTS = {
   JOIN_ROOM: "join-room",
+  JOINED_ROOM: "joined-room",
   PEER_JOINED: "peer-joined",
+  REQUEST_RENEGOTIATION: "request-renegotiation",
   OFFER: "offer",
   ANSWER: "answer",
   ICE_CANDIDATE: "ice-candidate",
   PEER_LEFT: "peer-left",
+  ROOM_FULL: "room-full",
 } as const;
 
 export const API_ROUTES = {
@@ -92,8 +95,19 @@ export type CreateReservationRequest = {
   name?: string;
 };
 
+// LiveKit role for token generation (distinct from signaling Role)
+export type LiveKitRole = "vtuber" | "speaker";
+
 export type JoinRoomPayload = { roomId: string; peerId: string; requestedRole?: Role };
+export type JoinedRoomPayload = {
+  roomId: string;
+  peerId: string;
+  role: Role;
+  reconnected: boolean;
+  peers: Array<{ peerId: string; role: Role }>;
+};
 
 export type OfferPayload = { roomId: string; from: string; sdp: RTCSessionDescriptionInit };
 export type AnswerPayload = { roomId: string; from: string; sdp: RTCSessionDescriptionInit };
 export type IceCandidatePayload = { roomId: string; from: string; candidate: RTCIceCandidateInit };
+export type RequestRenegotiationPayload = { roomId: string; from: string };

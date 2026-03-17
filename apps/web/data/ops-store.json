@@ -1,0 +1,168 @@
+{
+  "consents": [
+    {
+      "consentId": "consent_mmo8zman_6c1ad22e",
+      "userId": "listener-mmo8zmah-27bf91",
+      "version": "2026-03-12",
+      "source": "signup",
+      "termsAcceptedAt": "2026-03-13T01:58:28.504Z",
+      "privacyAcceptedAt": "2026-03-13T01:58:28.504Z"
+    },
+    {
+      "consentId": "consent_mmn4eq2s_94f797ed",
+      "userId": "vtuber-mmn4eq2p-0f8483",
+      "version": "2026-03-12",
+      "source": "signup",
+      "termsAcceptedAt": "2026-03-12T07:02:28.991Z",
+      "privacyAcceptedAt": "2026-03-12T07:02:28.991Z"
+    },
+    {
+      "consentId": "consent_mmn4ao8l_2c6caa7b",
+      "userId": "listener-mmn4ao8k-3fad4c",
+      "version": "2026-03-12",
+      "source": "signup",
+      "termsAcceptedAt": "2026-03-12T06:59:19.987Z",
+      "privacyAcceptedAt": "2026-03-12T06:59:19.987Z"
+    }
+  ],
+  "reports": [
+    {
+      "reportId": "report_mmn4d0nc_fa5b088d",
+      "reporterUserId": "listener-mmn4ao8k-3fad4c",
+      "reporterName": "listener",
+      "targetType": "user",
+      "targetId": "a",
+      "category": "other",
+      "details": "iyagarase",
+      "status": "open",
+      "createdAt": "2026-03-12T07:01:09.384Z"
+    }
+  ],
+  "monitoringEvents": [
+    {
+      "eventId": "metric_mmn54q4m_bc368fa8",
+      "source": "webrtc",
+      "level": "info",
+      "code": "webrtc.connect.attempt",
+      "message": "Host prepared a live session",
+      "createdAt": "2026-03-12T07:22:42.118Z",
+      "meta": {
+        "sessionId": "session-mmn54q08-34afe1"
+      }
+    },
+    {
+      "eventId": "metric_mmn4qa4d_8f5cf83b",
+      "source": "webrtc",
+      "level": "info",
+      "code": "webrtc.connect.attempt",
+      "message": "Host prepared a live session",
+      "createdAt": "2026-03-12T07:11:28.189Z",
+      "meta": {
+        "sessionId": "session-mmn4p6tr-c4f530"
+      }
+    },
+    {
+      "eventId": "metric_mmn4pxut_d6a8d376",
+      "source": "webrtc",
+      "level": "info",
+      "code": "webrtc.connect.attempt",
+      "message": "Viewer attempted to connect",
+      "createdAt": "2026-03-12T07:11:12.293Z",
+      "meta": {
+        "roomId": "session-mmn4p6tr-c4f530",
+        "requestedRole": "listener"
+      }
+    },
+    {
+      "eventId": "metric_mmn4p6zr_02bce722",
+      "source": "webrtc",
+      "level": "info",
+      "code": "webrtc.connect.attempt",
+      "message": "Host prepared a live session",
+      "createdAt": "2026-03-12T07:10:37.479Z",
+      "meta": {
+        "sessionId": "session-mmn4p6tr-c4f530"
+      }
+    },
+    {
+      "eventId": "metric_mmn4hrst_50bd677d",
+      "source": "billing",
+      "level": "info",
+      "code": "billing.mock_subscription.activated",
+      "message": "Mock subscription activated: premium",
+      "createdAt": "2026-03-12T07:04:51.197Z",
+      "meta": {
+        "userId": "listener-mmn4ao8k-3fad4c",
+        "plan": "premium"
+      }
+    },
+    {
+      "eventId": "metric_mmn4grvc_d970a2de",
+      "source": "billing",
+      "level": "info",
+      "code": "billing.mock_subscription.activated",
+      "message": "Mock subscription activated: supporter",
+      "createdAt": "2026-03-12T07:04:04.632Z",
+      "meta": {
+        "userId": "listener-mmn4ao8k-3fad4c",
+        "plan": "supporter"
+      }
+    },
+    {
+      "eventId": "metric_mmn4gfab_fdc89f6f",
+      "source": "webrtc",
+      "level": "info",
+      "code": "webrtc.connect.attempt",
+      "message": "Host prepared a live session",
+      "createdAt": "2026-03-12T07:03:48.323Z",
+      "meta": {
+        "sessionId": "session-mmn4getr-0d1796"
+      }
+    },
+    {
+      "eventId": "metric_mmn4ejmg_39ea9aab",
+      "source": "api",
+      "level": "error",
+      "code": "auth.signup.failed",
+      "message": "This phone number is already registered",
+      "createdAt": "2026-03-12T07:02:20.632Z"
+    },
+    {
+      "eventId": "metric_mmn4d0nd_325cce35",
+      "source": "system",
+      "level": "warn",
+      "code": "report.created",
+      "message": "A user report was created",
+      "createdAt": "2026-03-12T07:01:09.385Z",
+      "meta": {
+        "userId": "listener-mmn4ao8k-3fad4c",
+        "targetType": "user",
+        "category": "other"
+      }
+    },
+    {
+      "eventId": "metric_mmn4bge6_5ee012ba",
+      "source": "billing",
+      "level": "info",
+      "code": "billing.mock_subscription.activated",
+      "message": "Mock subscription activated: premium",
+      "createdAt": "2026-03-12T06:59:56.478Z",
+      "meta": {
+        "userId": "listener-mmn4ao8k-3fad4c",
+        "plan": "premium"
+      }
+    },
+    {
+      "eventId": "metric_mmn4atnm_2082bbb9",
+      "source": "billing",
+      "level": "info",
+      "code": "billing.mock_subscription.activated",
+      "message": "Mock subscription activated: supporter",
+      "createdAt": "2026-03-12T06:59:27.010Z",
+      "meta": {
+        "userId": "listener-mmn4ao8k-3fad4c",
+        "plan": "supporter"
+      }
+    }
+  ]
+}

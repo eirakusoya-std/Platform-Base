@@ -1,3 +1,5 @@
+import type { SubscriptionPlan } from "../../lib/apiTypes";
+
 export type ParticipationType = "First-come" | "Lottery" | "Members-only";
 export type SessionId = string;
 
@@ -10,6 +12,8 @@ export type StartingSoonSession = {
   slotsTotal: number;
   slotsLeft: number;
   participationType: ParticipationType;
+  requiredPlan?: SubscriptionPlan;
+  reservationRequired?: boolean;
   isSubscribed: boolean;
   tags: string[];
   description: string;
@@ -26,6 +30,8 @@ export type LiveSession = {
   slotsTotal: number;
   slotsLeft: number;
   participationType: "First-come" | "Lottery";
+  requiredPlan?: SubscriptionPlan;
+  reservationRequired?: boolean;
   isSubscribed: boolean;
   tags: string[];
   description: string;
@@ -47,6 +53,10 @@ export type ModalSession = {
   duration: string;
   participationType: "First-come" | "Lottery";
   isSubscribed: boolean;
+  streamStatus?: "prelive" | "live" | "ended";
+  requiredPlan?: SubscriptionPlan;
+  reservationRequired?: boolean;
+  reserved?: boolean;
   userHistory?: {
     totalParticipations: number;
     lastParticipation: string;
