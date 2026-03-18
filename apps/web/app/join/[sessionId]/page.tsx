@@ -204,7 +204,7 @@ export default function PreJoinPage() {
 
  const joinNow = () => {
  const roomId = encodeURIComponent(session.id);
- const query = new URLSearchParams({ mic: micOn ? "1" : "0", cam: camOn ? "1" : "0", speaker: speakerOn ? "1" : "0" }).toString();
+ const query = new URLSearchParams({ role: "speaker", mic: micOn ? "1" : "0", cam: camOn ? "1" : "0", speaker: speakerOn ? "1" : "0" }).toString();
  router.push(`/room/${roomId}?${query}`);
  };
 
