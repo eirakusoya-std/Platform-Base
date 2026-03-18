@@ -160,7 +160,7 @@ function normalizeStoredUser(entry: Partial<StoredUser>): StoredUser | null {
     name: entry.name,
     role,
     email,
-    authProvider: (entry.authProvider === "google_demo" || entry.authProvider === "password" ? entry.authProvider : legacyDefaults.authProvider) ?? "password",
+    authProvider: (entry.authProvider === "google" || entry.authProvider === "google_demo" || entry.authProvider === "password" ? entry.authProvider : legacyDefaults.authProvider) ?? "password",
     createdAt,
     lastLoginAt: typeof entry.lastLoginAt === "string" ? entry.lastLoginAt : undefined,
     channelName: typeof entry.channelName === "string" ? entry.channelName : legacyDefaults.channelName,
@@ -374,6 +374,48 @@ export async function loginUser(input: LoginInput) {
     if (!target) throw new Error("Account not found");
     target.lastLoginAt = new Date().toISOString();
     return sanitizeUser(target);
+  });
+}
+
+export async function googleAuthUser(input: {
+  googleSub: string;
+  email: string;
+  name: string;
+  avatarUrl?: string;
+  role: SessionUser["role"];
+}) {
+  const now = new Date().toISOString();
+  return mutateStore((store) => {
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const existing = store.users.find(
+      (u) => typeof u.email === "string" && u.email.toLowerCase() === normalizedEmail,
+    );
+
+    if (existing) {
+      if (existing.authProvider !== "google") {
+        throw new Error("このメールアドレスはすでに別の方法で登録されています。元のログイン方法をお使いください。");
+      }
+      existing.lastLoginAt = now;
+      if (input.avatarUrl) existing.avatarUrl = input.avatarUrl;
+      return sanitizeUser(existing);
+    }
+
+    const nextUser: StoredUser = {
+      id: makeUserId(input.role),
+      name: input.name.trim(),
+      role: input.role,
+      email: normalizedEmail,
+      authProvider: "google",
+      createdAt: now,
+      lastLoginAt: now,
+      avatarUrl: input.avatarUrl,
+      emailVerifiedAt: now,
+      termsAcceptedAt: now,
+      privacyAcceptedAt: now,
+    };
+
+    store.users.unshift(nextUser);
+    return sanitizeUser(nextUser);
   });
 }
 

@@ -104,8 +104,11 @@ export default function AuthPage() {
   );
 
   useEffect(() => {
-    const nextMode = new URLSearchParams(window.location.search).get("mode") === "signup" ? "signup" : "login";
+    const params = new URLSearchParams(window.location.search);
+    const nextMode = params.get("mode") === "signup" ? "signup" : "login";
     setMode(nextMode);
+    const oauthError = params.get("error");
+    if (oauthError) setError(decodeURIComponent(oauthError));
   }, []);
 
   if (isAuthenticated) {
@@ -176,36 +179,13 @@ export default function AuthPage() {
     }
   };
 
-  const handleGoogle = async () => {
-    setProvider("google_demo");
-    setError(null);
-    setMessage(null);
-    setSubmitting(true);
-
-    try {
-      if (mode === "signup") {
-        await postJson("/api/auth/signup", {
-          role,
-          name: name || "Google User",
-          email,
-          provider: "google_demo",
-          channelName: role === "vtuber" ? channelName : undefined,
-          phoneNumber: role === "vtuber" ? phoneNumber : undefined,
-          bio: role === "vtuber" ? bio : undefined,
-          termsAccepted,
-          privacyAccepted,
-        } satisfies SignupInput);
-      } else {
-        await postJson("/api/auth/login", { email, provider: "google_demo" } satisfies LoginInput);
-      }
-      await refreshSession();
-      router.push("/account");
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Google処理に失敗しました。");
-    } finally {
-      setSubmitting(false);
-      setProvider("password");
+  const handleGoogle = () => {
+    if (mode === "signup" && (!termsAccepted || !privacyAccepted)) {
+      setError("利用規約とプライバシーポリシーへの同意が必要です。");
+      return;
     }
+    setError(null);
+    window.location.href = `/api/auth/google?role=${role}`;
   };
 
   return (
@@ -360,8 +340,8 @@ export default function AuthPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={submitting || !email || (mode === "signup" && (!termsAccepted || !privacyAccepted))}
-                  onClick={() => void handleGoogle()}
+                  disabled={submitting}
+                  onClick={handleGoogle}
                   className="h-11 rounded-xl border border-white/10 bg-white/[0.02] px-5 text-sm tracking-[0.12em] text-[var(--brand-text)] transition hover:border-[var(--brand-secondary)]/40 hover:text-[var(--brand-secondary)] disabled:opacity-50"
                 >
                   {googleLabel}

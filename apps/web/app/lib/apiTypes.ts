@@ -1,5 +1,5 @@
 export type UserRole = "listener" | "vtuber";
-export type AuthProvider = "password" | "google_demo";
+export type AuthProvider = "password" | "google" | "google_demo";
 export type SubscriptionPlan = "free" | "supporter" | "premium";
 export type SubscriptionStatus = "inactive" | "trialing" | "active" | "past_due" | "canceled";
 export type BillingProvider = "stripe" | "mock";
