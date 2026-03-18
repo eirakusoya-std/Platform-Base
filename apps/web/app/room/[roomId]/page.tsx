@@ -2,29 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { io, Socket } from "socket.io-client";
+import { Room, RoomEvent, Track } from "livekit-client";
 import { useI18n } from "../../lib/i18n";
-import { EVENTS } from "@repo/shared";
-
-function generateId() {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 type Role = "host" | "listener" | "speaker" | "unknown";
 type RequestedRole = "host" | "listener" | "speaker";
 type Status = "idle" | "connecting" | "connected" | "failed";
-
-type JoinedRoomPayload = {
-  role: Role;
-};
-
-type SessionDescriptionPayload = {
-  sdp: RTCSessionDescriptionInit;
-};
-
-type IceCandidatePayload = {
-  candidate: RTCIceCandidateInit;
-};
 
 type ChatMessage = {
   id: string;
@@ -32,21 +15,6 @@ type ChatMessage = {
   text: string;
   mine?: boolean;
 };
-
-type Participant = {
-  id: string;
-  name: string;
-  avatar: string;
-  status: "watching" | "requested" | "reserved";
-};
-
-const MOCK_PARTICIPANTS: Participant[] = [
-  { id: "p1", name: "Reese", avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=200&h=200&fit=crop", status: "watching" },
-  { id: "p2", name: "Yan", avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop", status: "requested" },
-  { id: "p3", name: "Gela", avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop", status: "reserved" },
-  { id: "p4", name: "Ivie C", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop", status: "watching" },
-  { id: "p5", name: "Marco", avatar: "https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?w=200&h=200&fit=crop", status: "watching" },
-];
 
 const INITIAL_CHAT: ChatMessage[] = [
   { id: "c1", user: "mod_akira", text: "配信開始まであと少しです！音量チェックお願いします。" },
@@ -69,7 +37,6 @@ export default function RoomPage() {
 
   const requestedRole = useMemo<RequestedRole>(() => parseRequestedRole(searchParams.get("role")), [searchParams]);
 
-  const [peerId] = useState<string>(() => generateId());
   const [status, setStatus] = useState<Status>("idle");
   const [assignedRole, setAssignedRole] = useState<Role>("unknown");
   const [copied, setCopied] = useState(false);
@@ -81,58 +48,42 @@ export default function RoomPage() {
   const [camOn, setCamOn] = useState(requestedRole === "host" && searchParams.get("cam") !== "0");
   const [speakerOn, setSpeakerOn] = useState(searchParams.get("speaker") !== "0");
 
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-
-  const roleRef = useRef<Role>("unknown");
-  const socketRef = useRef<Socket | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-
-  const signalingUrl = process.env.NEXT_PUBLIC_SIGNALING_URL;
-  const iceServers = useMemo(() => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), []);
+  const roomRef = useRef<Room | null>(null);
 
   const canSendMic = assignedRole === "host" || assignedRole === "speaker";
   const canSendCam = assignedRole === "host";
 
   const cleanup = useCallback(() => {
-    if (socketRef.current) {
-      socketRef.current.removeAllListeners();
-      socketRef.current.disconnect();
-    }
-    socketRef.current = null;
-
-    pcRef.current?.close();
-    pcRef.current = null;
-
-    localStreamRef.current?.getTracks().forEach((track) => track.stop());
-    localStreamRef.current = null;
-
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-
-    roleRef.current = "unknown";
+    roomRef.current?.disconnect();
+    roomRef.current = null;
     setAssignedRole("unknown");
     setRemoteConnected(false);
     setStatus("idle");
   }, []);
 
-  const applyMic = useCallback((enabled: boolean) => {
-    if (!canSendMic) return;
-    localStreamRef.current?.getAudioTracks().forEach((track) => {
-      track.enabled = enabled;
-    });
-    setMicOn(enabled);
-  }, [canSendMic]);
+  const applyMic = useCallback(
+    (enabled: boolean) => {
+      if (!canSendMic) return;
+      setMicOn(enabled);
+      if (roomRef.current) {
+        void roomRef.current.localParticipant.setMicrophoneEnabled(enabled);
+      }
+    },
+    [canSendMic],
+  );
 
-  const applyCam = useCallback((enabled: boolean) => {
-    if (!canSendCam) return;
-    localStreamRef.current?.getVideoTracks().forEach((track) => {
-      track.enabled = enabled;
-    });
-    setCamOn(enabled);
-  }, [canSendCam]);
+  const applyCam = useCallback(
+    (enabled: boolean) => {
+      if (!canSendCam) return;
+      setCamOn(enabled);
+      if (roomRef.current) {
+        void roomRef.current.localParticipant.setCameraEnabled(enabled);
+      }
+    },
+    [canSendCam],
+  );
 
   const applySpeaker = useCallback((enabled: boolean) => {
     if (remoteVideoRef.current) {
@@ -165,131 +116,86 @@ export default function RoomPage() {
   }, [chatInput]);
 
   useEffect(() => {
-    if (!roomId || !signalingUrl) return;
+    if (!roomId || requestedRole === "listener") return;
 
     let mounted = true;
 
     const start = async () => {
       setStatus("connecting");
 
-      const pc = new RTCPeerConnection(iceServers);
-      pcRef.current = pc;
+      // Get LiveKit token
+      const res = await fetch("/api/livekit/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: roomId,
+          role: requestedRole === "host" ? "vtuber" : "speaker",
+        }),
+      });
 
-      let stream: MediaStream | null = null;
-
-      if (requestedRole === "host") {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-      } else if (requestedRole === "speaker") {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      if (!res.ok) {
+        if (!mounted) return;
+        setStatus("failed");
+        return;
       }
 
-      localStreamRef.current = stream;
+      const { token, livekitUrl } = (await res.json()) as { token: string; livekitUrl: string };
 
-      if (stream) {
-        stream.getAudioTracks().forEach((track) => {
-          track.enabled = micOn;
-        });
-        stream.getVideoTracks().forEach((track) => {
-          track.enabled = camOn;
-        });
+      const room = new Room();
+      roomRef.current = room;
 
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
+      room.on(RoomEvent.Connected, () => {
+        if (!mounted) return;
+        setStatus("connected");
+        setAssignedRole(requestedRole === "host" ? "host" : "speaker");
+
+        // Publish mic (always true here since listener exits early above)
+        void room.localParticipant.setMicrophoneEnabled(micOn);
+        // Publish camera for host only
+        if (requestedRole === "host") {
+          void room.localParticipant.setCameraEnabled(camOn);
         }
+      });
 
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream as MediaStream));
-      }
+      room.on(RoomEvent.Disconnected, () => {
+        if (!mounted) return;
+        setStatus("idle");
+        setAssignedRole("unknown");
+        setRemoteConnected(false);
+      });
 
-      pc.ontrack = (event) => {
-        const [remoteStream] = event.streams;
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
+      room.on(RoomEvent.TrackSubscribed, (track, _pub, _participant) => {
+        if (!mounted) return;
+        if (track.kind === Track.Kind.Video && remoteVideoRef.current) {
+          track.attach(remoteVideoRef.current);
           remoteVideoRef.current.muted = !speakerOn;
           remoteVideoRef.current.play().catch(() => {
             if (!remoteVideoRef.current) return;
-            // Fallback for autoplay restrictions on some devices/browsers.
             remoteVideoRef.current.muted = true;
-            remoteVideoRef.current.play().catch(() => {
+            void remoteVideoRef.current.play().catch(() => {
               // no-op
             });
             setSpeakerOn(false);
           });
+          setRemoteConnected(true);
         }
-        setRemoteConnected(true);
-      };
-
-      pc.onicecandidate = (event) => {
-        if (!event.candidate) return;
-        socketRef.current?.emit(EVENTS.ICE_CANDIDATE, {
-          roomId,
-          from: peerId,
-          candidate: event.candidate.toJSON(),
-        });
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (!mounted) return;
-        if (pc.connectionState === "connected") setStatus("connected");
-        if (pc.connectionState === "connecting") setStatus("connecting");
-        if (pc.connectionState === "failed") setStatus("failed");
-        if (pc.connectionState === "disconnected") setStatus("idle");
-      };
-
-      const socket = io(signalingUrl, { transports: ["polling", "websocket"] });
-      socketRef.current = socket;
-
-      socket.on("connect", () => {
-        socket.emit(EVENTS.JOIN_ROOM, { roomId, peerId, requestedRole });
       });
 
-      socket.on("joined-room", (payload: JoinedRoomPayload) => {
-        roleRef.current = payload.role;
-        setAssignedRole(payload.role);
+      room.on(RoomEvent.TrackUnsubscribed, (track) => {
+        track.detach();
+        if (track.kind === Track.Kind.Video) {
+          setRemoteConnected(false);
+        }
       });
 
-      socket.on("room-full", () => {
+      try {
+        await room.connect(livekitUrl, token);
+      } catch {
         if (!mounted) return;
         setStatus("failed");
-      });
-
-      socket.on(EVENTS.PEER_JOINED, async () => {
-        if (roleRef.current !== "host") return;
-        if (!pcRef.current || pcRef.current.signalingState !== "stable") return;
-
-        const offer = await pcRef.current.createOffer();
-        await pcRef.current.setLocalDescription(offer);
-        socket.emit(EVENTS.OFFER, { roomId, from: peerId, sdp: offer });
-      });
-
-      socket.on(EVENTS.OFFER, async (payload: SessionDescriptionPayload) => {
-        if (!pcRef.current) return;
-        if (pcRef.current.signalingState !== "stable") return;
-        await pcRef.current.setRemoteDescription(payload.sdp);
-        const answer = await pcRef.current.createAnswer();
-        await pcRef.current.setLocalDescription(answer);
-        socket.emit(EVENTS.ANSWER, { roomId, from: peerId, sdp: answer });
-      });
-
-      socket.on(EVENTS.ANSWER, async (payload: SessionDescriptionPayload) => {
-        if (!pcRef.current) return;
-        if (pcRef.current.signalingState !== "have-local-offer") return;
-        await pcRef.current.setRemoteDescription(payload.sdp);
-      });
-
-      socket.on(EVENTS.ICE_CANDIDATE, async (payload: IceCandidatePayload) => {
-        try {
-          if (!pcRef.current) return;
-          await pcRef.current.addIceCandidate(payload.candidate);
-        } catch {
-          // ignore invalid ICE candidates
-        }
-      });
-
-      socket.on(EVENTS.PEER_LEFT, () => {
-        if (!mounted) return;
-        setRemoteConnected(false);
-        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-      });
+        room.disconnect();
+        roomRef.current = null;
+      }
     };
 
     start().catch(() => {
@@ -301,7 +207,7 @@ export default function RoomPage() {
       mounted = false;
       cleanup();
     };
-  }, [cleanup, iceServers, peerId, requestedRole, roomId, signalingUrl]);
+  }, [cleanup, requestedRole, roomId]);
 
   useEffect(() => {
     if (remoteVideoRef.current) {
@@ -328,7 +234,7 @@ export default function RoomPage() {
 
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
-      <header className=" bg-[var(--brand-bg-900)]">
+      <header className="bg-[var(--brand-bg-900)]">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-5 lg:px-12">
           <button onClick={() => router.push("/")} className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-white">A</div>
@@ -355,56 +261,38 @@ export default function RoomPage() {
           <section className="min-w-0 space-y-4">
             <div className="overflow-hidden rounded-2xl bg-[var(--brand-bg-900)] shadow-xl">
               <div className="relative" style={{ aspectRatio: "16/9" }}>
-                <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
-                {!remoteConnected && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
-                    <p className="text-sm font-semibold text-[var(--brand-text)]">配信者の映像を待機中</p>
-                    <p className="text-xs text-[var(--brand-text-muted)]">{tx("接続されると自動でライブ映像に切り替わります", "Stream switches automatically when connected")}</p>
+                {requestedRole === "listener" ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--brand-surface)] text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--brand-primary)]/10">
+                      <span className="text-2xl">👂</span>
+                    </div>
+                    <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("リスナーモード", "Listener Mode")}</p>
+                    <p className="max-w-[260px] text-xs text-[var(--brand-text-muted)]">
+                      {tx("ライブ配信視聴機能は近日公開予定です。", "Live stream viewing is coming soon.")}
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+                    {!remoteConnected && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
+                        <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信者の映像を待機中", "Waiting for host stream")}</p>
+                        <p className="text-xs text-[var(--brand-text-muted)]">
+                          {tx("接続されると自動でライブ映像に切り替わります", "Stream switches automatically when connected")}
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">LIVE</div>
-                <div className="absolute right-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px]">視聴者 126</div>
-                <div className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-xs">配信者メイン</div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-[var(--brand-bg-800)] p-3">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs font-semibold tracking-wide text-[var(--brand-text-muted)]">参加者</p>
-                <p className="text-xs text-[var(--brand-text-muted)]">{MOCK_PARTICIPANTS.length + 1}人</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                <div className="rounded-xl bg-[var(--brand-surface)] p-2">
-                  <div className="relative overflow-hidden rounded-lg bg-[var(--brand-bg-900)]" style={{ aspectRatio: "16/9" }}>
-                    {assignedRole === "listener" ? (
-                      <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-[var(--brand-text-muted)]">NO CAM</div>
-                    ) : (
-                      <video ref={localVideoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-                    )}
-                    {assignedRole === "host" && !camOn && (
-                      <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--brand-text-muted)]">Cam OFF</div>
-                    )}
-                  </div>
-                  <div className="mt-1 flex items-center justify-between">
-                    <p className="truncate text-[11px]">あなた</p>
-                    <span className={`text-[10px] ${micOn ? "text-[var(--brand-primary)]" : "text-[var(--brand-accent)]"}`}>
-                      {canSendMic ? (micOn ? "MIC" : "MUTE") : "LISTEN"}
-                    </span>
-                  </div>
-                </div>
-
-                {MOCK_PARTICIPANTS.map((participant) => (
-                  <div key={participant.id} className="rounded-xl bg-[var(--brand-surface)] p-2">
-                    <div className="relative overflow-hidden rounded-lg" style={{ aspectRatio: "16/9" }}>
-                      <img src={participant.avatar} alt={participant.name} className="h-full w-full object-cover" />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/50 px-1 py-0.5 text-[10px] text-[var(--brand-text)]">
-                        {participant.status === "requested" ? "参加申請中" : participant.status === "reserved" ? "予約済み" : "視聴中"}
-                      </div>
+                {requestedRole !== "listener" && (
+                  <>
+                    <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">LIVE</div>
+                    <div className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-xs">
+                      {assignedRole === "host" ? tx("配信者メイン", "Host Main") : tx("スピーカー", "Speaker")}
                     </div>
-                    <p className="mt-1 truncate text-[11px] text-[var(--brand-text)]">{participant.name}</p>
-                  </div>
-                ))}
+                  </>
+                )}
               </div>
             </div>
 
@@ -444,7 +332,7 @@ export default function RoomPage() {
                 >
                   {speakerOn ? tx("SPK ON", "SPK ON") : tx("SPK OFF", "SPK OFF")}
                 </button>
-                <button onClick={copyRoomLink} className="rounded-lg px-3 py-2 text-xs font-medium text-[var(--brand-text)] transition-colors ">
+                <button onClick={() => { void copyRoomLink(); }} className="rounded-lg px-3 py-2 text-xs font-medium text-[var(--brand-text)] transition-colors">
                   {copied ? tx("COPY OK", "COPY OK") : tx("LINK COPY", "LINK COPY")}
                 </button>
                 <button
@@ -461,7 +349,7 @@ export default function RoomPage() {
           </section>
 
           <aside className="flex min-h-[560px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
-            <div className=" px-4 py-3">
+            <div className="px-4 py-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">{tx("ライブチャット", "Live Chat")}</p>
                 <span className="rounded-full bg-[var(--brand-surface)] px-2 py-0.5 text-[11px] text-[var(--brand-text-muted)]">{chatMessages.length}件</span>
@@ -470,7 +358,10 @@ export default function RoomPage() {
 
             <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
               {chatMessages.map((message) => (
-                <div key={message.id} className={`rounded-lg px-3 py-2 ${message.mine ? "ml-6 bg-[var(--brand-surface-soft)]" : "mr-6 bg-[var(--brand-surface)]"}`}>
+                <div
+                  key={message.id}
+                  className={`rounded-lg px-3 py-2 ${message.mine ? "ml-6 bg-[var(--brand-surface-soft)]" : "mr-6 bg-[var(--brand-surface)]"}`}
+                >
                   <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{message.user}</p>
                   <p className="text-sm leading-relaxed text-[var(--brand-text)]">{message.text}</p>
                 </div>
@@ -478,7 +369,7 @@ export default function RoomPage() {
               <div ref={chatEndRef} />
             </div>
 
-            <div className=" p-3">
+            <div className="p-3">
               <div className="flex gap-2">
                 <input
                   value={chatInput}
@@ -490,7 +381,7 @@ export default function RoomPage() {
                     }
                   }}
                   placeholder={tx("チャットを入力", "Type a message")}
-                  className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)] "
+                  className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
                 />
                 <button
                   onClick={sendChat}

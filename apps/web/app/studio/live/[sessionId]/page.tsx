@@ -1,6 +1,6 @@
 "use client";
 
-import { ComponentType, SVGProps, useEffect, useMemo, useRef, useState } from "react";
+import { ComponentType, SVGProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -13,13 +13,18 @@ import {
   VideoCameraIcon,
   XMarkIcon,
 } from "@heroicons/react/24/solid";
-import { EVENTS } from "@repo/shared";
-import { io, type Socket } from "socket.io-client";
+import { Room, RoomEvent, Track } from "livekit-client";
 import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
 import { useI18n } from "../../../lib/i18n";
-import { getStreamSession, setStreamSessionStatus, subscribeStreamSessions, type StreamSession, updateStreamSession } from "../../../lib/streamSessions";
+import {
+  getStreamSession,
+  setStreamSessionStatus,
+  subscribeStreamSessions,
+  type StreamSession,
+  updateStreamSession,
+} from "../../../lib/streamSessions";
 import { useUserSession } from "../../../lib/userSession";
 
 type ParticipantItem = {
@@ -31,21 +36,11 @@ type ParticipantItem = {
 
 type ConnectionStatus = "idle" | "starting" | "live" | "failed";
 
-const INITIAL_PARTICIPANTS: ParticipantItem[] = [
-  { id: "p1", name: "Kaito", status: "watching", muted: false },
-  { id: "p2", name: "Ren", status: "requested", muted: false },
-  { id: "p3", name: "Yuma", status: "speaking", muted: false },
-];
-
 const INITIAL_CHAT = [
   { id: "m1", user: "mod_nana", text: "参加希望は #join をつけて送ってください" },
   { id: "m2", user: "viewer_21", text: "#join 自己紹介いけます" },
   { id: "m3", user: "viewer_88", text: "音量ちょうどいいです！" },
 ];
-
-function createPeerId() {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 type CircleControlProps = {
   label: string;
@@ -85,7 +80,7 @@ export default function StudioLiveSessionPage() {
 
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
-  const [participants, setParticipants] = useState<ParticipantItem[]>(INITIAL_PARTICIPANTS);
+  const [participants, setParticipants] = useState<ParticipantItem[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chat, setChat] = useState(INITIAL_CHAT);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -98,13 +93,8 @@ export default function StudioLiveSessionPage() {
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const socketRef = useRef<Socket | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const peerIdRef = useRef<string>(createPeerId());
+  const roomRef = useRef<Room | null>(null);
   const autoStartDoneRef = useRef(false);
-
-  const signalingUrl = process.env.NEXT_PUBLIC_SIGNALING_URL;
-  const iceServers = useMemo(() => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), []);
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -137,8 +127,9 @@ export default function StudioLiveSessionPage() {
     };
   }, [sessionId]);
 
+  // Pre-live preview via getUserMedia (skipped while live)
   useEffect(() => {
-    if (notFound) return;
+    if (notFound || connectionStatus === "live" || connectionStatus === "starting") return;
 
     let cancelled = false;
 
@@ -159,15 +150,6 @@ export default function StudioLiveSessionPage() {
         if (previewRef.current) {
           previewRef.current.srcObject = stream;
           previewRef.current.muted = true;
-        }
-
-        if (pcRef.current) {
-          const audioTrack = stream.getAudioTracks()[0];
-          const videoTrack = stream.getVideoTracks()[0];
-          for (const sender of pcRef.current.getSenders()) {
-            if (sender.track?.kind === "audio" && audioTrack) sender.replaceTrack(audioTrack).catch(() => undefined);
-            if (sender.track?.kind === "video" && videoTrack) sender.replaceTrack(videoTrack).catch(() => undefined);
-          }
         }
 
         stream.getAudioTracks().forEach((track) => {
@@ -192,7 +174,9 @@ export default function StudioLiveSessionPage() {
         }
       } catch {
         if (!cancelled) {
-          setMediaError(tx("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。", "Camera/mic access denied. Check browser permissions."));
+          setMediaError(
+            tx("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。", "Camera/mic access denied. Check browser permissions."),
+          );
         }
       }
     };
@@ -205,13 +189,18 @@ export default function StudioLiveSessionPage() {
       streamRef.current = null;
       if (previewRef.current) previewRef.current.srcObject = null;
     };
-  }, [notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId, micOn, camOn, tx]);
+  }, [notFound, selectedVideoDeviceId, session?.preferredVideoDeviceId, micOn, camOn, tx, connectionStatus]);
 
   const selectedVideoLabel = useMemo(() => {
-    return videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? session?.preferredVideoLabel ?? tx("デフォルトカメラ", "Default camera");
+    return (
+      videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ??
+      session?.preferredVideoLabel ??
+      tx("デフォルトカメラ", "Default camera")
+    );
   }, [selectedVideoDeviceId, session?.preferredVideoLabel, tx, videoDevices]);
 
   const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
+
   const participantLink = useMemo(() => {
     if (!session || typeof window === "undefined") return "";
     return `${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`;
@@ -219,7 +208,11 @@ export default function StudioLiveSessionPage() {
 
   useEffect(() => {
     if (!session || !selectedVideoDeviceId) return;
-    if (session.preferredVideoDeviceId === selectedVideoDeviceId && session.preferredVideoLabel === selectedVideoLabel) return;
+    if (
+      session.preferredVideoDeviceId === selectedVideoDeviceId &&
+      session.preferredVideoLabel === selectedVideoLabel
+    )
+      return;
 
     void updateStreamSession(session.sessionId, {
       preferredVideoDeviceId: selectedVideoDeviceId,
@@ -229,10 +222,13 @@ export default function StudioLiveSessionPage() {
 
   const metrics = useMemo(
     () => [
-      { label: tx("視聴者", "Viewers"), value: `${Math.max(connectedViewers, 0)}` },
-      { label: tx("同時会話", "Active Talks"), value: `${participants.filter((p) => p.status === "speaking").length}` },
-      { label: tx("平均遅延", "Avg Latency"), value: "2.1s" },
+      { label: tx("スピーカー", "Speakers"), value: `${participants.length}` },
+      { label: tx("接続数", "Connections"), value: `${connectedViewers}` },
       { label: tx("接続品質", "Connection"), value: connectionStatus === "live" ? "Good" : "-" },
+      {
+        label: tx("ステータス", "Status"),
+        value: connectionStatus === "live" ? "LIVE" : connectionStatus === "starting" ? "..." : "-",
+      },
     ],
     [connectionStatus, connectedViewers, participants, tx],
   );
@@ -252,16 +248,28 @@ export default function StudioLiveSessionPage() {
     setParticipants((prev) => prev.filter((p) => p.id !== id));
   };
 
-  const cleanupConnection = () => {
-    socketRef.current?.removeAllListeners();
-    socketRef.current?.disconnect();
-    socketRef.current = null;
-
-    pcRef.current?.close();
-    pcRef.current = null;
-
+  const cleanupConnection = useCallback(() => {
+    roomRef.current?.disconnect();
+    roomRef.current = null;
     setConnectedViewers(0);
     setConnectionStatus("idle");
+    setParticipants([]);
+  }, []);
+
+  const handleMicToggle = () => {
+    const next = !micOn;
+    setMicOn(next);
+    if (roomRef.current && connectionStatus === "live") {
+      void roomRef.current.localParticipant.setMicrophoneEnabled(next);
+    }
+  };
+
+  const handleCamToggle = () => {
+    const next = !camOn;
+    setCamOn(next);
+    if (roomRef.current && connectionStatus === "live") {
+      void roomRef.current.localParticipant.setCameraEnabled(next);
+    }
   };
 
   const startBroadcast = async () => {
@@ -271,100 +279,93 @@ export default function StudioLiveSessionPage() {
     if (!micOn) warnings.push(tx("マイクをONにしてください。", "Turn MIC ON before starting."));
     if (!camOn) warnings.push(tx("カメラをONにしてください。", "Turn CAM ON before starting."));
     if (!selectedVideoDeviceId) warnings.push(tx("カメラソースを選択してください。", "Choose a camera source."));
-    if (!streamRef.current) warnings.push(tx("カメラ/マイクの準備ができていません。", "Camera/mic is not ready."));
     setStartWarnings(warnings);
     if (warnings.length > 0) return;
 
-    if (!signalingUrl) {
+    setStartWarnings([]);
+    setConnectionStatus("starting");
+    setMediaError(null);
+
+    // Stop preview stream so LiveKit can acquire media
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (previewRef.current) previewRef.current.srcObject = null;
+
+    // Get LiveKit token
+    let tokenData: { token: string; livekitUrl: string };
+    try {
+      const res = await fetch("/api/livekit/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: session.sessionId, role: "vtuber" }),
+      });
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        throw new Error(err.error ?? "Token error");
+      }
+      tokenData = (await res.json()) as { token: string; livekitUrl: string };
+    } catch (err) {
+      setMediaError(err instanceof Error ? err.message : "Failed to get LiveKit token");
       setConnectionStatus("failed");
-      setMediaError("NEXT_PUBLIC_SIGNALING_URL is not set.");
       return;
     }
 
-    const localStream = streamRef.current;
-    if (!localStream) return;
+    // Connect to LiveKit
+    const room = new Room();
+    roomRef.current = room;
 
-    setStartWarnings([]);
-    cleanupConnection();
-    setConnectionStatus("starting");
-
-    const pc = new RTCPeerConnection(iceServers);
-    pcRef.current = pc;
-
-    localStream.getTracks().forEach((track) => {
-      pc.addTrack(track, localStream);
+    room.on(RoomEvent.Connected, () => {
+      setConnectionStatus("live");
+      void setStreamSessionStatus(session.sessionId, "live");
     });
 
-    pc.onicecandidate = (event) => {
-      if (!event.candidate || !session) return;
-      socketRef.current?.emit(EVENTS.ICE_CANDIDATE, {
-        roomId: session.sessionId,
-        from: peerIdRef.current,
-        candidate: event.candidate.toJSON(),
-      });
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "connected") {
-        setConnectionStatus("live");
-      } else if (pc.connectionState === "failed") {
-        setConnectionStatus("failed");
-      }
-    };
-
-    const socket = io(signalingUrl, { transports: ["polling", "websocket"] });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      socket.emit(EVENTS.JOIN_ROOM, {
-        roomId: session.sessionId,
-        peerId: peerIdRef.current,
-        requestedRole: "host",
-      });
-    });
-
-    socket.on("room-full", () => {
-      setConnectionStatus("failed");
-      setMediaError(tx("現在の構成では同時接続は1名までです。", "Current signaling supports one viewer at a time."));
-    });
-
-    socket.on(EVENTS.PEER_JOINED, async () => {
-      try {
-        if (!pcRef.current || pcRef.current.signalingState !== "stable") return;
-        const offer = await pcRef.current.createOffer();
-        await pcRef.current.setLocalDescription(offer);
-        socket.emit(EVENTS.OFFER, { roomId: session.sessionId, from: peerIdRef.current, sdp: offer });
-        setConnectedViewers(1);
-        setConnectionStatus("live");
-      } catch {
-        setConnectionStatus("failed");
-      }
-    });
-
-    socket.on(EVENTS.ANSWER, async (payload: { sdp: RTCSessionDescriptionInit }) => {
-      try {
-        if (!pcRef.current) return;
-        if (pcRef.current.signalingState !== "have-local-offer") return;
-        await pcRef.current.setRemoteDescription(payload.sdp);
-      } catch {
-        setConnectionStatus("failed");
-      }
-    });
-
-    socket.on(EVENTS.ICE_CANDIDATE, async (payload: { candidate: RTCIceCandidateInit }) => {
-      try {
-        if (!pcRef.current) return;
-        await pcRef.current.addIceCandidate(payload.candidate);
-      } catch {
-        // ignore invalid candidate
-      }
-    });
-
-    socket.on(EVENTS.PEER_LEFT, () => {
+    room.on(RoomEvent.Disconnected, () => {
+      setConnectionStatus("idle");
       setConnectedViewers(0);
+      setParticipants([]);
+      roomRef.current = null;
     });
 
-    void setStreamSessionStatus(session.sessionId, "live");
+    room.on(RoomEvent.LocalTrackPublished, (pub) => {
+      if (pub.source === Track.Source.Camera && previewRef.current && pub.track) {
+        pub.track.attach(previewRef.current);
+      }
+    });
+
+    room.on(RoomEvent.ParticipantConnected, (participant) => {
+      setParticipants((prev) => [
+        ...prev.filter((p) => p.id !== participant.identity),
+        {
+          id: participant.identity,
+          name: participant.name ?? participant.identity,
+          status: "speaking",
+          muted: false,
+        },
+      ]);
+      setConnectedViewers((n) => n + 1);
+    });
+
+    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      setParticipants((prev) => prev.filter((p) => p.id !== participant.identity));
+      setConnectedViewers((n) => Math.max(0, n - 1));
+    });
+
+    room.on(RoomEvent.MediaDevicesError, () => {
+      setMediaError(tx("カメラまたはマイクにアクセスできません。", "Camera/mic access denied."));
+    });
+
+    try {
+      await room.connect(tokenData.livekitUrl, tokenData.token);
+      await room.localParticipant.setCameraEnabled(camOn, {
+        deviceId: selectedVideoDeviceId || undefined,
+      });
+      await room.localParticipant.setMicrophoneEnabled(micOn);
+    } catch (err) {
+      setMediaError(err instanceof Error ? err.message : "Failed to connect to LiveKit");
+      setConnectionStatus("failed");
+      room.disconnect();
+      roomRef.current = null;
+    }
   };
 
   const stopBroadcast = () => {
@@ -384,7 +385,7 @@ export default function StudioLiveSessionPage() {
     return () => {
       cleanupConnection();
     };
-  }, []);
+  }, [cleanupConnection]);
 
   const shouldAutoStart = searchParams.get("autostart") === "1";
 
@@ -437,7 +438,13 @@ export default function StudioLiveSessionPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={isLive ? stopBroadcast : startBroadcast}
+                onClick={
+                  isLive
+                    ? stopBroadcast
+                    : () => {
+                        void startBroadcast();
+                      }
+                }
                 className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-extrabold ${
                   isLive
                     ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
@@ -448,7 +455,10 @@ export default function StudioLiveSessionPage() {
                 {isLive ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
               </button>
               <button
-                onClick={() => { stopBroadcast(); router.push("/"); }}
+                onClick={() => {
+                  stopBroadcast();
+                  router.push("/");
+                }}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
               >
                 <XMarkIcon className="h-4 w-4" aria-hidden />
@@ -473,8 +483,8 @@ export default function StudioLiveSessionPage() {
             {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
 
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <CircleControl label="MIC" icon={MicrophoneIcon} on={micOn} onToggle={() => setMicOn((v) => !v)} />
-              <CircleControl label="CAM" icon={VideoCameraIcon} on={camOn} onToggle={() => setCamOn((v) => !v)} />
+              <CircleControl label="MIC" icon={MicrophoneIcon} on={micOn} onToggle={handleMicToggle} />
+              <CircleControl label="CAM" icon={VideoCameraIcon} on={camOn} onToggle={handleCamToggle} />
             </div>
           </section>
 
@@ -492,7 +502,11 @@ export default function StudioLiveSessionPage() {
 
               <label className="grid gap-1 text-sm">
                 <span className="text-[var(--brand-text-muted)]">{tx("配信カメラ", "Camera Source")}</span>
-                <select value={selectedVideoDeviceId} onChange={(event) => setSelectedVideoDeviceId(event.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
+                <select
+                  value={selectedVideoDeviceId}
+                  onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
+                  className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
+                >
                   <option value="">{tx("デフォルトカメラ", "Default camera")}</option>
                   {videoDevices.map((device, index) => (
                     <option key={device.deviceId} value={device.deviceId}>
@@ -504,15 +518,22 @@ export default function StudioLiveSessionPage() {
 
               {!usingVirtualCamera && (
                 <div className="rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
-                  {tx("仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。", "A non-virtual camera is selected. Virtual camera is recommended.")}
+                  {tx(
+                    "仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。",
+                    "A non-virtual camera is selected. Virtual camera is recommended.",
+                  )}
                 </div>
               )}
 
               <div>
-                <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("参加者一覧", "Participants")}</p>
+                <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー一覧", "Speakers")}</p>
                 <div className="space-y-2">
                   {participants.length === 0 ? (
-                    <p className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-3 text-sm text-[var(--brand-text-muted)]">{tx("参加者はいません", "No participants")}</p>
+                    <p className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-3 text-sm text-[var(--brand-text-muted)]">
+                      {connectionStatus === "live"
+                        ? tx("スピーカーはいません", "No speakers yet")
+                        : tx("配信を開始するとスピーカーが表示されます", "Start stream to see speakers")}
+                    </p>
                   ) : (
                     participants.map((p) => (
                       <div key={p.id} className="flex items-center justify-between rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
@@ -525,10 +546,16 @@ export default function StudioLiveSessionPage() {
                           </p>
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => toggleParticipantMute(p.id)} className="rounded-md bg-[var(--brand-primary)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-primary)]">
+                          <button
+                            onClick={() => toggleParticipantMute(p.id)}
+                            className="rounded-md bg-[var(--brand-primary)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-primary)]"
+                          >
                             {p.muted ? tx("解除", "Unmute") : tx("ミュート", "Mute")}
                           </button>
-                          <button onClick={() => kickParticipant(p.id)} className="rounded-md bg-[var(--brand-accent)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-accent)]">
+                          <button
+                            onClick={() => kickParticipant(p.id)}
+                            className="rounded-md bg-[var(--brand-accent)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-accent)]"
+                          >
                             {tx("キック", "Kick")}
                           </button>
                         </div>
@@ -538,7 +565,12 @@ export default function StudioLiveSessionPage() {
                 </div>
               </div>
 
-              <button onClick={copyParticipantLink} className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--brand-primary)] px-3 py-2 text-xs font-semibold text-white">
+              <button
+                onClick={() => {
+                  void copyParticipantLink();
+                }}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--brand-primary)] px-3 py-2 text-xs font-semibold text-white"
+              >
                 <LinkIcon className="h-4 w-4" aria-hidden />
                 {linkCopied ? tx("コピー済み", "Copied") : tx("参加リンクをコピー", "Copy Invite Link")}
               </button>
