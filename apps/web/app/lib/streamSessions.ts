@@ -62,6 +62,10 @@ function notifyUpdated() {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
 }
 
+export function notifyStreamSessionsUpdated() {
+  notifyUpdated();
+}
+
 export type { StreamSession, StreamSessionStatus };
 
 export async function listAllStreamSessions(): Promise<StreamSession[]> {

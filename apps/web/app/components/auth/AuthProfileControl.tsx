@@ -137,9 +137,11 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
               const sessionUser: SessionUser = {
                 id: profile.sub || profile.email || `google-${Date.now().toString(36)}`,
                 name: profile.name || profile.email || "Google User",
-                email: profile.email,
+                email: profile.email ?? "",
                 avatarUrl: profile.picture,
                 role: selectedRole,
+                authProvider: "google_demo",
+                createdAt: new Date().toISOString(),
               };
 
               login(sessionUser);
@@ -165,6 +167,8 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
       name: "田中太郎",
       email: "tanaka@example.com",
       role: selectedRole,
+      authProvider: "password",
+      createdAt: new Date().toISOString(),
     });
   };
 
