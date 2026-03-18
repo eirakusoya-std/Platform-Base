@@ -172,8 +172,6 @@ export default function StudioPreLivePage() {
 
     try {
       const created = await createStreamSession({
-        hostUserId: "vtuber-demo",
-        hostName: "あなたのチャンネル",
         title: title.trim(),
         category,
         description: description.trim(),
