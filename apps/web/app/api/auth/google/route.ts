@@ -15,7 +15,8 @@ export async function GET(request: Request) {
   const role: UserRole = searchParams.get("role") === "vtuber" ? "vtuber" : "listener";
 
   const state = randomBytes(16).toString("hex");
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const reqUrl = new URL(request.url);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${reqUrl.protocol}//${reqUrl.host}`;
   const redirectUri = `${appUrl}/api/auth/callback/google`;
 
   const params = new URLSearchParams({
