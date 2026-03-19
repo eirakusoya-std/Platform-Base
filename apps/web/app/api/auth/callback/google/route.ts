@@ -23,7 +23,8 @@ type GoogleUserInfo = {
 };
 
 export async function GET(request: Request) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const reqUrl = new URL(request.url);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${reqUrl.protocol}//${reqUrl.host}`;
   const { searchParams } = new URL(request.url);
 
   const code = searchParams.get("code");
