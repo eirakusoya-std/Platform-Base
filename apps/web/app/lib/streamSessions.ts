@@ -13,11 +13,14 @@ type CreateStreamSessionInput = {
   startsAt?: string;
   participationType?: "First-come" | "Lottery";
   slotsTotal?: number;
+  speakerSlotsTotal?: number;
+  speakerRequiredPlan?: "free" | "supporter" | "premium";
   preferredVideoDeviceId?: string;
   preferredVideoLabel?: string;
 };
 
 const UPDATE_EVENT = "aiment-stream-sessions-updated";
+const BC_CHANNEL = "aiment-stream-updates";
 const API_BASE = "/api/stream-sessions";
 
 function sessionUrl(sessionId: string) {
@@ -57,6 +60,14 @@ async function requestJson<T>(fetchUrl: string, init?: RequestInit): Promise<T> 
 function notifyUpdated() {
   if (!isBrowser()) return;
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+  // notify other tabs
+  try {
+    const bc = new BroadcastChannel(BC_CHANNEL);
+    bc.postMessage("update");
+    bc.close();
+  } catch {
+    // no-op (BroadcastChannel not available in some environments)
+  }
 }
 
 export function notifyStreamSessionsUpdated() {
@@ -124,7 +135,7 @@ export async function setStreamSessionStatus(sessionId: string, status: StreamSe
   }
 }
 
-export function subscribeStreamSessions(onUpdate: () => void, intervalMs = 6000): () => void {
+export function subscribeStreamSessions(onUpdate: () => void, intervalMs = 2000): () => void {
   if (!isBrowser()) return () => undefined;
 
   const tick = () => onUpdate();
@@ -133,10 +144,20 @@ export function subscribeStreamSessions(onUpdate: () => void, intervalMs = 6000)
   window.addEventListener("focus", tick);
   document.addEventListener("visibilitychange", tick);
 
+  // cross-tab updates via BroadcastChannel
+  let bc: BroadcastChannel | null = null;
+  try {
+    bc = new BroadcastChannel(BC_CHANNEL);
+    bc.onmessage = tick;
+  } catch {
+    // no-op
+  }
+
   return () => {
     window.clearInterval(timer);
     window.removeEventListener(UPDATE_EVENT, tick);
     window.removeEventListener("focus", tick);
     document.removeEventListener("visibilitychange", tick);
+    bc?.close();
   };
 }

@@ -1,7 +1,7 @@
-import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createVtuberToken, createSpeakerToken } from "@repo/livekit";
 import { resolveSessionUser } from "@/app/lib/server/auth";
+import { hasActiveSpeakerReservation } from "@/app/lib/server/aimentStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,14 +18,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "LiveKit not configured" }, { status: 500 });
     }
 
-    // vtuber role requires authentication
+    // both vtuber and speaker require authentication
     const sessionUser = await resolveSessionUser();
-    if (role === "vtuber" && !sessionUser) {
+    if (!sessionUser) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const userId = sessionUser?.id ?? `guest-${randomBytes(6).toString("hex")}`;
-    const userName = sessionUser?.name ?? "Guest";
+    // speaker requires an active reservation
+    if (role === "speaker") {
+      const reserved = await hasActiveSpeakerReservation(sessionUser.id, sessionId);
+      if (!reserved) {
+        return NextResponse.json({ error: "Speaker reservation required" }, { status: 403 });
+      }
+    }
+
+    const userId = sessionUser.id;
+    const userName = sessionUser.name;
 
     const roomName = `session-${sessionId}`;
     const params = { apiKey, apiSecret, roomName, userId, userName };

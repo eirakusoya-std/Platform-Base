@@ -72,10 +72,15 @@ export type StreamSession = {
   thumbnail: string;
   hostName: string;
   participationType: ParticipationType;
+  /** Listener access plan requirement */
   requiredPlan: SubscriptionPlan;
   reservationRequired: boolean;
   slotsTotal: number;
   slotsLeft: number;
+  /** Speaker slot settings */
+  speakerSlotsTotal: number;
+  speakerSlotsLeft: number;
+  speakerRequiredPlan: SubscriptionPlan;
   preferredVideoDeviceId?: string;
   preferredVideoLabel?: string;
 };
@@ -91,6 +96,8 @@ export type CreateStreamSessionInput = {
   requiredPlan?: SubscriptionPlan;
   reservationRequired?: boolean;
   slotsTotal?: number;
+  speakerSlotsTotal?: number;
+  speakerRequiredPlan?: SubscriptionPlan;
   preferredVideoDeviceId?: string;
   preferredVideoLabel?: string;
 };
@@ -109,10 +116,14 @@ export type UpdateStreamSessionInput = Partial<
     | "reservationRequired"
     | "slotsTotal"
     | "slotsLeft"
+    | "speakerSlotsTotal"
+    | "speakerRequiredPlan"
     | "preferredVideoDeviceId"
     | "preferredVideoLabel"
   >
 >;
+
+export type ReservationType = "speaker" | "listener";
 
 export type Reservation = {
   reservationId: string;
@@ -121,11 +132,13 @@ export type Reservation = {
   userName: string;
   createdAt: string;
   status: ReservationStatus;
+  type: ReservationType;
   cancelledAt?: string;
 };
 
 export type CreateReservationInput = {
   sessionId: string;
+  type: ReservationType;
 };
 
 export type BillingSubscription = {

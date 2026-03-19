@@ -103,17 +103,17 @@ export default function RoomPage() {
   const sendChat = useCallback(() => {
     const value = chatInput.trim();
     if (!value) return;
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `${Date.now()}`,
-        user: "you",
-        text: value,
-        mine: true,
-      },
-    ]);
+    const displayName = roomRef.current?.localParticipant.name ?? "you";
+    const msg = { type: "chat", id: `${Date.now()}`, user: displayName, text: value };
+    setChatMessages((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text, mine: true }]);
     setChatInput("");
-  }, [chatInput]);
+    if (roomRef.current && status === "connected") {
+      void roomRef.current.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(msg)),
+        { reliable: true },
+      );
+    }
+  }, [chatInput, status]);
 
   useEffect(() => {
     if (!roomId || requestedRole === "listener") return;
@@ -185,6 +185,25 @@ export default function RoomPage() {
         track.detach();
         if (track.kind === Track.Kind.Video) {
           setRemoteConnected(false);
+        }
+      });
+
+      room.on(RoomEvent.DataReceived, (payload) => {
+        try {
+          const msg = JSON.parse(new TextDecoder().decode(payload)) as {
+            type?: string;
+            id?: string;
+            user?: string;
+            text?: string;
+          };
+          if (msg.type === "chat" && msg.user && msg.text) {
+            setChatMessages((prev) => [
+              ...prev,
+              { id: msg.id ?? `${Date.now()}`, user: msg.user!, text: msg.text! },
+            ]);
+          }
+        } catch {
+          // no-op
         }
       });
 

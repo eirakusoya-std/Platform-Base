@@ -7,6 +7,7 @@ import type {
   CreateStreamSessionInput,
   Reservation,
   ReservationStatus,
+  ReservationType,
   LoginInput,
   SessionUser,
   SignupInput,
@@ -91,6 +92,7 @@ function normalizeReservation(entry: Partial<Reservation>): Reservation | null {
   }
 
   const status: ReservationStatus = entry.status === "cancelled" ? "cancelled" : "reserved";
+  const type: ReservationType = entry.type === "speaker" ? "speaker" : "listener";
 
   return {
     reservationId: entry.reservationId,
@@ -99,6 +101,7 @@ function normalizeReservation(entry: Partial<Reservation>): Reservation | null {
     userName: entry.userName,
     createdAt: entry.createdAt,
     status,
+    type,
     cancelledAt: typeof entry.cancelledAt === "string" ? entry.cancelledAt : undefined,
   };
 }
@@ -123,6 +126,8 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
   const participationType = entry.participationType === "Lottery" ? "Lottery" : "First-come";
   const slotsTotal = typeof entry.slotsTotal === "number" && entry.slotsTotal > 0 ? entry.slotsTotal : 10;
   const slotsLeft = typeof entry.slotsLeft === "number" && entry.slotsLeft >= 0 ? Math.min(entry.slotsLeft, slotsTotal) : slotsTotal;
+  const speakerSlotsTotal = typeof entry.speakerSlotsTotal === "number" && entry.speakerSlotsTotal > 0 ? entry.speakerSlotsTotal : 5;
+  const speakerSlotsLeft = typeof entry.speakerSlotsLeft === "number" && entry.speakerSlotsLeft >= 0 ? Math.min(entry.speakerSlotsLeft, speakerSlotsTotal) : speakerSlotsTotal;
 
   return {
     sessionId: entry.sessionId,
@@ -140,6 +145,9 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
     reservationRequired: entry.reservationRequired === true,
     slotsTotal,
     slotsLeft,
+    speakerSlotsTotal,
+    speakerSlotsLeft,
+    speakerRequiredPlan: entry.speakerRequiredPlan === "premium" ? "premium" : entry.speakerRequiredPlan === "supporter" ? "supporter" : "free",
     preferredVideoDeviceId: typeof entry.preferredVideoDeviceId === "string" ? entry.preferredVideoDeviceId : undefined,
     preferredVideoLabel: typeof entry.preferredVideoLabel === "string" ? entry.preferredVideoLabel : undefined,
   };
@@ -178,16 +186,20 @@ function normalizeStoredUser(entry: Partial<StoredUser>): StoredUser | null {
   };
 }
 
-function countActiveReservations(store: StoreFile, sessionId: string) {
-  return store.reservations.filter((reservation) => reservation.sessionId === sessionId && reservation.status === "reserved").length;
+function countActiveReservations(store: StoreFile, sessionId: string, type?: ReservationType) {
+  return store.reservations.filter(
+    (r) => r.sessionId === sessionId && r.status === "reserved" && (type == null || r.type === type),
+  ).length;
 }
 
 function syncSessionSlots(store: StoreFile) {
   store.streamSessions = store.streamSessions.map((session) => {
-    const reservedCount = countActiveReservations(store, session.sessionId);
+    const listenerCount = countActiveReservations(store, session.sessionId, "listener");
+    const speakerCount = countActiveReservations(store, session.sessionId, "speaker");
     return {
       ...session,
-      slotsLeft: Math.max(0, session.slotsTotal - reservedCount),
+      slotsLeft: Math.max(0, session.slotsTotal - listenerCount),
+      speakerSlotsLeft: Math.max(0, session.speakerSlotsTotal - speakerCount),
     };
   });
 }
@@ -291,8 +303,10 @@ function ensurePhoneAvailable(store: StoreFile, phoneNumber: string, ignoreUserI
   if (found) throw new Error("This phone number is already registered");
 }
 
-function findActiveReservation(store: StoreFile, sessionId: string, userId: string) {
-  return store.reservations.find((reservation) => reservation.sessionId === sessionId && reservation.userId === userId && reservation.status === "reserved");
+function findActiveReservation(store: StoreFile, sessionId: string, userId: string, type?: ReservationType) {
+  return store.reservations.find(
+    (r) => r.sessionId === sessionId && r.userId === userId && r.status === "reserved" && (type == null || r.type === type),
+  );
 }
 
 export async function listUsers() {
@@ -518,6 +532,7 @@ export async function createStreamSession(hostUser: SessionUser, input: CreateSt
   const created = await mutateStore((store) => {
     const now = new Date().toISOString();
     const slotsTotal = input.slotsTotal ?? 10;
+    const speakerSlotsTotal = input.speakerSlotsTotal ?? 5;
 
     const next: StreamSession = {
       sessionId: makeSessionId(),
@@ -535,6 +550,9 @@ export async function createStreamSession(hostUser: SessionUser, input: CreateSt
       reservationRequired: input.reservationRequired === true,
       slotsTotal,
       slotsLeft: slotsTotal,
+      speakerSlotsTotal,
+      speakerSlotsLeft: speakerSlotsTotal,
+      speakerRequiredPlan: input.speakerRequiredPlan ?? "free",
       preferredVideoDeviceId: input.preferredVideoDeviceId,
       preferredVideoLabel: input.preferredVideoLabel,
     };
@@ -557,13 +575,19 @@ export async function updateStreamSession(sessionId: string, actor: SessionUser,
     const current = store.streamSessions[index];
     if (current.hostUserId !== actor.id) throw new Error("Cannot update another VTuber's session");
 
-    const reservedCount = countActiveReservations(store, sessionId);
+    const listenerReservedCount = countActiveReservations(store, sessionId, "listener");
+    const speakerReservedCount = countActiveReservations(store, sessionId, "speaker");
     const nextSlotsTotal = patch.slotsTotal ?? current.slotsTotal;
+    const nextSpeakerSlotsTotal = patch.speakerSlotsTotal ?? current.speakerSlotsTotal;
     const nextParticipationType = patch.participationType ?? current.participationType;
     const nextReservationRequired = patch.reservationRequired ?? current.reservationRequired;
     const nextRequiredPlan = patch.requiredPlan ?? current.requiredPlan;
-    if (nextSlotsTotal < reservedCount) {
-      throw new Error("slotsTotal cannot be lower than active reservations");
+    const nextSpeakerRequiredPlan = patch.speakerRequiredPlan ?? current.speakerRequiredPlan;
+    if (nextSlotsTotal < listenerReservedCount) {
+      throw new Error("slotsTotal cannot be lower than active listener reservations");
+    }
+    if (nextSpeakerSlotsTotal < speakerReservedCount) {
+      throw new Error("speakerSlotsTotal cannot be lower than active speaker reservations");
     }
     if (nextReservationRequired && nextParticipationType !== "First-come") {
       throw new Error("Reservation-required sessions must use first-come participation");
@@ -584,11 +608,14 @@ export async function updateStreamSession(sessionId: string, actor: SessionUser,
       requiredPlan: nextRequiredPlan,
       reservationRequired: nextReservationRequired,
       slotsTotal: nextSlotsTotal,
-      slotsLeft: Math.max(0, nextSlotsTotal - reservedCount),
+      slotsLeft: Math.max(0, nextSlotsTotal - listenerReservedCount),
+      speakerSlotsTotal: nextSpeakerSlotsTotal,
+      speakerSlotsLeft: Math.max(0, nextSpeakerSlotsTotal - speakerReservedCount),
+      speakerRequiredPlan: nextSpeakerRequiredPlan,
     };
 
     if (next.slotsTotal < 1) throw new Error("slotsTotal must be at least 1");
-    if (next.slotsLeft < 0 || next.slotsLeft > next.slotsTotal) throw new Error("slotsLeft is out of range");
+    if (next.speakerSlotsTotal < 1) throw new Error("speakerSlotsTotal must be at least 1");
 
     store.streamSessions[index] = next;
     syncSessionSlots(store);
@@ -616,21 +643,35 @@ export async function setStreamSessionStatus(sessionId: string, actor: SessionUs
 }
 
 export async function createReservation(actor: SessionUser, input: CreateReservationInput) {
-  requireListener(actor);
-
   if (!input.sessionId?.trim()) throw new Error("sessionId is required");
+  const reservationType: ReservationType = input.type === "speaker" ? "speaker" : "listener";
   const actorPlan = await getEffectivePlanForUser(actor.id);
 
   return mutateStore((store) => {
     const session = store.streamSessions.find((entry) => entry.sessionId === input.sessionId);
     if (!session) throw new Error("Session not found");
     if (session.status !== "prelive") throw new Error("Reservations are only available before the stream starts");
-    if (session.participationType !== "First-come") throw new Error("Reservation API currently supports first-come sessions only");
-    if (!canAccessPlan(actorPlan, session.requiredPlan)) throw new Error(`This session requires the ${session.requiredPlan} plan`);
-    if (findActiveReservation(store, session.sessionId, actor.id)) throw new Error("You already reserved this session");
 
-    const reservedCount = countActiveReservations(store, session.sessionId);
-    if (reservedCount >= session.slotsTotal) throw new Error("No reservation slots left");
+    if (reservationType === "speaker") {
+      if (!canAccessPlan(actorPlan, session.speakerRequiredPlan)) {
+        throw new Error(`Speaker slots require the ${session.speakerRequiredPlan} plan`);
+      }
+      if (findActiveReservation(store, session.sessionId, actor.id, "speaker")) {
+        throw new Error("You already have a speaker reservation for this session");
+      }
+      const speakerCount = countActiveReservations(store, session.sessionId, "speaker");
+      if (speakerCount >= session.speakerSlotsTotal) throw new Error("No speaker slots left");
+    } else {
+      if (session.participationType !== "First-come") throw new Error("Reservation API currently supports first-come sessions only");
+      if (!canAccessPlan(actorPlan, session.requiredPlan)) {
+        throw new Error(`This session requires the ${session.requiredPlan} plan`);
+      }
+      if (findActiveReservation(store, session.sessionId, actor.id, "listener")) {
+        throw new Error("You already reserved this session");
+      }
+      const listenerCount = countActiveReservations(store, session.sessionId, "listener");
+      if (listenerCount >= session.slotsTotal) throw new Error("No reservation slots left");
+    }
 
     const reservation: Reservation = {
       reservationId: makeReservationId(),
@@ -639,6 +680,7 @@ export async function createReservation(actor: SessionUser, input: CreateReserva
       userName: actor.name,
       createdAt: new Date().toISOString(),
       status: "reserved",
+      type: reservationType,
     };
 
     store.reservations.unshift(reservation);
@@ -647,8 +689,12 @@ export async function createReservation(actor: SessionUser, input: CreateReserva
   });
 }
 
+export async function hasActiveSpeakerReservation(userId: string, sessionId: string): Promise<boolean> {
+  const store = await readStore();
+  return !!findActiveReservation(store, sessionId, userId, "speaker");
+}
+
 export async function cancelReservation(actor: SessionUser, reservationId: string) {
-  requireListener(actor);
 
   return mutateStore((store) => {
     const reservation = store.reservations.find((entry) => entry.reservationId === reservationId);

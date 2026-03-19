@@ -60,6 +60,9 @@ export default function StudioPreLivePage() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [startWarnings, setStartWarnings] = useState<string[]>([]);
 
+  const [speakerSlotsTotal, setSpeakerSlotsTotal] = useState(5);
+  const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<"free" | "supporter" | "premium">("free");
+
   const [chatInput, setChatInput] = useState("");
   const [chat, setChat] = useState([
     { id: "m1", user: "mod_nana", text: "配信前チェック中です。音量テスト歓迎です。" },
@@ -178,7 +181,9 @@ export default function StudioPreLivePage() {
         thumbnail: "/image/thumbnail/thumbnail_5.png",
         startsAt,
         participationType: "First-come",
-        slotsTotal: 10,
+        slotsTotal: 50,
+        speakerSlotsTotal,
+        speakerRequiredPlan,
         preferredVideoDeviceId: selectedVideoDeviceId || undefined,
         preferredVideoLabel: selectedVideoLabel || undefined,
       });
@@ -367,6 +372,35 @@ export default function StudioPreLivePage() {
                   />
                 </label>
               )}
+
+              <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
+                <p className="mb-2 text-[11px] font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー枠設定", "Speaker Slot Settings")}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="grid gap-1 text-xs">
+                    <span className="text-[var(--brand-text-muted)]">{tx("最大人数", "Max speakers")}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={speakerSlotsTotal}
+                      onChange={(e) => setSpeakerSlotsTotal(Math.max(1, Math.min(10, Number(e.target.value))))}
+                      className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs">
+                    <span className="text-[var(--brand-text-muted)]">{tx("必要プラン", "Required plan")}</span>
+                    <select
+                      value={speakerRequiredPlan}
+                      onChange={(e) => setSpeakerRequiredPlan(e.target.value as "free" | "supporter" | "premium")}
+                      className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
+                    >
+                      <option value="free">{tx("なし", "None (free)")}</option>
+                      <option value="supporter">Supporter</option>
+                      <option value="premium">Premium</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
 
               <label className="grid gap-1 text-sm">
                 <span className="text-[var(--brand-text-muted)]">{tx("概要", "Description")}</span>

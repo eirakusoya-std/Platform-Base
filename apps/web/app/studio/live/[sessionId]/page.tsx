@@ -236,8 +236,15 @@ export default function StudioLiveSessionPage() {
   const sendChat = () => {
     const text = chatInput.trim();
     if (!text) return;
-    setChat((prev) => [...prev, { id: `${Date.now()}`, user: "host", text }]);
+    const msg = { type: "chat", id: `${Date.now()}`, user: "host", text };
+    setChat((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text }]);
     setChatInput("");
+    if (roomRef.current && connectionStatus === "live") {
+      void roomRef.current.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(msg)),
+        { reliable: true },
+      );
+    }
   };
 
   const toggleParticipantMute = (id: string) => {
@@ -352,6 +359,25 @@ export default function StudioLiveSessionPage() {
 
     room.on(RoomEvent.MediaDevicesError, () => {
       setMediaError(tx("カメラまたはマイクにアクセスできません。", "Camera/mic access denied."));
+    });
+
+    room.on(RoomEvent.DataReceived, (payload) => {
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(payload)) as {
+          type?: string;
+          id?: string;
+          user?: string;
+          text?: string;
+        };
+        if (msg.type === "chat" && msg.user && msg.text) {
+          setChat((prev) => [
+            ...prev,
+            { id: msg.id ?? `${Date.now()}`, user: msg.user!, text: msg.text! },
+          ]);
+        }
+      } catch {
+        // no-op
+      }
     });
 
     try {

@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useI18n } from "../../lib/i18n";
 import { getStreamSession } from "../../lib/streamSessions";
+
+type AuthStatus = "loading" | "guest" | "logged-in";
+type ReservationStatus = "loading" | "none" | "reserved" | "error";
 
 type SessionMeta = {
  id: string;
@@ -70,6 +73,12 @@ export default function PreJoinPage() {
  const sessionId = params?.sessionId ?? "";
  const [dynamicSession, setDynamicSession] = useState<Awaited<ReturnType<typeof getStreamSession>>>(null);
 
+ // Auth + reservation state
+ const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
+ const [reservationStatus, setReservationStatus] = useState<ReservationStatus>("loading");
+ const [reserving, setReserving] = useState(false);
+ const [reserveError, setReserveError] = useState<string | null>(null);
+
  useEffect(() => {
  let cancelled = false;
  const load = async () => {
@@ -81,6 +90,76 @@ export default function PreJoinPage() {
  cancelled = true;
  };
  }, [sessionId]);
+
+ // Check auth status
+ useEffect(() => {
+ let cancelled = false;
+ const check = async () => {
+ try {
+ const res = await fetch("/api/auth/session", { cache: "no-store" });
+ if (!cancelled) {
+ if (res.ok) {
+ const data = (await res.json()) as { isAuthenticated?: boolean };
+ setAuthStatus(data.isAuthenticated ? "logged-in" : "guest");
+ } else {
+ setAuthStatus("guest");
+ }
+ }
+ } catch {
+ if (!cancelled) setAuthStatus("guest");
+ }
+ };
+ void check();
+ return () => { cancelled = true; };
+ }, []);
+
+ // Check reservation status (only when logged in)
+ const checkReservation = useCallback(async () => {
+ if (!sessionId) return;
+ try {
+ const res = await fetch(`/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations`, { cache: "no-store" });
+ if (res.ok) {
+ const data = (await res.json()) as { hasSpeakerReservation?: boolean };
+ setReservationStatus(data.hasSpeakerReservation ? "reserved" : "none");
+ } else if (res.status === 401) {
+ setReservationStatus("none");
+ } else {
+ setReservationStatus("error");
+ }
+ } catch {
+ setReservationStatus("error");
+ }
+ }, [sessionId]);
+
+ useEffect(() => {
+ if (authStatus === "logged-in") {
+ void checkReservation();
+ } else if (authStatus === "guest") {
+ setReservationStatus("none");
+ }
+ }, [authStatus, checkReservation]);
+
+ const handleReserve = async () => {
+ setReserving(true);
+ setReserveError(null);
+ try {
+ const res = await fetch(`/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations`, {
+ method: "POST",
+ headers: { "Content-Type": "application/json" },
+ body: JSON.stringify({ type: "speaker" }),
+ });
+ if (res.ok) {
+ setReservationStatus("reserved");
+ } else {
+ const data = (await res.json()) as { error?: string };
+ setReserveError(data.error ?? "予約に失敗しました");
+ }
+ } catch {
+ setReserveError("予約に失敗しました");
+ } finally {
+ setReserving(false);
+ }
+ };
 
  const session = useMemo<SessionMeta>(
  () => {
@@ -251,6 +330,77 @@ export default function PreJoinPage() {
  </section>
 
  <aside className="rounded-2xl bg-[var(--brand-bg-800)] p-5">
+ {/* ── Phase 1: Auth / Reservation gate ── */}
+ {(authStatus === "loading" || reservationStatus === "loading") && (
+ <div className="flex h-40 items-center justify-center">
+ <p className="text-sm text-[var(--brand-text-muted)]">{tx("確認中...", "Checking...")}</p>
+ </div>
+ )}
+
+ {authStatus === "guest" && reservationStatus !== "loading" && (
+ <div className="flex flex-col items-center gap-4 py-8 text-center">
+ <p className="text-sm text-[var(--brand-text)]">
+ {tx(
+ "スピーカーとして参加するにはアカウントが必要です。",
+ "You need an account to join as a speaker.",
+ )}
+ </p>
+ <p className="text-xs text-[var(--brand-text-muted)]">
+ {tx(
+ "予約するためにはアカウントにログインまたはサインアップしてください。",
+ "Please log in or sign up to make a reservation.",
+ )}
+ </p>
+ <button
+ onClick={() => router.push(`/auth/login?redirect=${encodeURIComponent(`/join/${sessionId}`)}`)}
+ className="w-full rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-white"
+ >
+ {tx("ログイン / アカウント作成", "Log in / Sign up")}
+ </button>
+ <button
+ onClick={() => router.push("/")}
+ className="text-sm text-[var(--brand-text-muted)] hover:text-[var(--brand-primary)]"
+ >
+ {tx("戻る", "Back")}
+ </button>
+ </div>
+ )}
+
+ {authStatus === "logged-in" && reservationStatus === "none" && (
+ <div className="flex flex-col items-center gap-4 py-8 text-center">
+ <h2 className="text-base font-semibold text-[var(--brand-text)]">
+ {tx("スピーカー枠に申し込む", "Apply for Speaker Slot")}
+ </h2>
+ <p className="text-sm text-[var(--brand-text-muted)]">
+ {dynamicSession
+ ? tx(
+ `残り ${dynamicSession.speakerSlotsLeft} 枠 / ${dynamicSession.speakerSlotsTotal} 枠`,
+ `${dynamicSession.speakerSlotsLeft} / ${dynamicSession.speakerSlotsTotal} slots left`,
+ )
+ : tx("スピーカー枠の詳細を確認しています", "Checking speaker slots...")}
+ </p>
+ {reserveError && (
+ <p className="rounded-xl bg-[var(--brand-accent)]/15 px-4 py-3 text-sm text-[var(--brand-accent)]">{reserveError}</p>
+ )}
+ <button
+ onClick={() => void handleReserve()}
+ disabled={reserving || (dynamicSession != null && dynamicSession.speakerSlotsLeft === 0)}
+ className="w-full rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[var(--brand-text-muted)]"
+ >
+ {reserving ? tx("申し込み中...", "Applying...") : tx("スピーカーとして参加を申し込む", "Apply as Speaker")}
+ </button>
+ <button
+ onClick={() => router.push("/")}
+ className="text-sm text-[var(--brand-text-muted)] hover:text-[var(--brand-primary)]"
+ >
+ {tx("戻る", "Back")}
+ </button>
+ </div>
+ )}
+
+ {/* ── Phase 2: Device check (only after reservation confirmed) ── */}
+ {authStatus === "logged-in" && reservationStatus === "reserved" && (
+ <>
  <div className="mb-4 flex items-center justify-between">
  <h2 className="text-sm font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("デバイス確認", "Device Check")}</h2>
  <span
@@ -324,6 +474,8 @@ export default function PreJoinPage() {
  {tx("この設定で参加", "Join with this setup")}
  </button>
  </div>
+ </>
+ )}
  </aside>
  </main>
  </div>
