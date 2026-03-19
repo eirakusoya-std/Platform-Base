@@ -178,7 +178,6 @@ export default function HomePage() {
           reservedSet={reservedSet}
           onOpenSession={setSelectedSession}
           onToggleReserve={handleToggleReserve}
-          onParticipate={goPreJoin}
         />
 
         <NowLiveSection
@@ -191,7 +190,7 @@ export default function HomePage() {
 
       <Footer />
 
-      {selectedSession && <SessionDetailModal session={selectedSession} onClose={() => setSelectedSession(null)} onParticipate={goPreJoin} />}
+      {selectedSession && <SessionDetailModal session={selectedSession} onClose={() => setSelectedSession(null)} onParticipate={(s) => goPreJoin(s.id)} />}
     </div>
   );
 }

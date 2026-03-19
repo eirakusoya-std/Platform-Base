@@ -5,50 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { SessionUser, useUserSession } from "../../lib/userSession";
 import { WireframeAccountCardAiment } from "../../wireframes/page";
 
-declare global {
-  interface Window {
-    google?: {
-      accounts?: {
-        oauth2?: {
-          initTokenClient: (config: {
-            client_id: string;
-            scope: string;
-            callback: (resp: { access_token?: string; error?: string }) => void;
-          }) => { requestAccessToken: (opts?: { prompt?: string }) => void };
-        };
-      };
-    };
-  }
-}
 
-const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-
-let googleScriptPromise: Promise<void> | null = null;
-
-function loadGoogleScript() {
-  if (typeof window === "undefined") return Promise.reject(new Error("No window"));
-  if (window.google?.accounts?.oauth2) return Promise.resolve();
-  if (googleScriptPromise) return googleScriptPromise;
-
-  googleScriptPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[src=\"${GOOGLE_SCRIPT_SRC}\"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Google script load failed")), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = GOOGLE_SCRIPT_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Google script load failed"));
-    document.head.appendChild(script);
-  });
-
-  return googleScriptPromise;
-}
 
 function MiniHudAccountCard({ user }: { user: SessionUser | null }) {
   const displayName = user?.name?.trim() || "XXXX XXXXX";
@@ -85,78 +42,10 @@ function MiniHudAccountCard({ user }: { user: SessionUser | null }) {
 function AuthDropdown({ onClose }: { onClose: () => void }) {
   const { user, isAuthenticated, login, logout } = useUserSession();
   const [selectedRole, setSelectedRole] = useState<SessionUser["role"]>("listener");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGoogleLogin = async () => {
-    setError(null);
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-
-    if (!clientId) {
-      setError("NEXT_PUBLIC_GOOGLE_CLIENT_ID が未設定です。");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await loadGoogleScript();
-      if (!window.google?.accounts?.oauth2?.initTokenClient) {
-        throw new Error("Google OAuth client is unavailable");
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const tokenClient = window.google!.accounts!.oauth2!.initTokenClient({
-          client_id: clientId,
-          scope: "openid email profile",
-          callback: async (resp) => {
-            if (!resp.access_token || resp.error) {
-              reject(new Error(resp.error || "Google token error"));
-              return;
-            }
-
-            try {
-              const profileResp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-                headers: {
-                  Authorization: `Bearer ${resp.access_token}`,
-                },
-              });
-
-              if (!profileResp.ok) {
-                reject(new Error("Failed to fetch Google profile"));
-                return;
-              }
-
-              const profile = (await profileResp.json()) as {
-                sub?: string;
-                name?: string;
-                email?: string;
-                picture?: string;
-              };
-
-              const sessionUser: SessionUser = {
-                id: profile.sub || profile.email || `google-${Date.now().toString(36)}`,
-                name: profile.name || profile.email || "Google User",
-                email: profile.email,
-                avatarUrl: profile.picture,
-                role: selectedRole,
-              };
-
-              login(sessionUser);
-              resolve();
-            } catch (e) {
-              reject(e instanceof Error ? e : new Error("Google auth failed"));
-            }
-          },
-        });
-
-        tokenClient.requestAccessToken({ prompt: "consent" });
-      });
-    } catch {
-      setError("Googleログインに失敗しました。設定またはブラウザ制限を確認してください。");
-    } finally {
-      setLoading(false);
-    }
+  const handleGoogleLogin = () => {
+    window.location.href = `/api/auth/google?role=${selectedRole}`;
   };
 
   const handleMockLogin = () => {
@@ -165,6 +54,8 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
       name: "田中太郎",
       email: "tanaka@example.com",
       role: selectedRole,
+      authProvider: "password",
+      createdAt: new Date().toISOString(),
     });
   };
 
@@ -203,10 +94,9 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={handleGoogleLogin}
-            disabled={loading}
-            className="h-10 w-full rounded-lg bg-[color-mix(in_srgb,var(--brand-secondary)_18%,var(--brand-surface))] px-4 text-sm font-semibold text-[var(--brand-secondary)] transition hover:brightness-110 disabled:opacity-60"
+            className="h-10 w-full rounded-lg bg-[color-mix(in_srgb,var(--brand-secondary)_18%,var(--brand-surface))] px-4 text-sm font-semibold text-[var(--brand-secondary)] transition hover:brightness-110"
           >
-            {loading ? "認証中..." : "Googleでログイン"}
+            Googleでログイン
           </button>
           <button
             type="button"
@@ -232,8 +122,7 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={() => {
-                logout();
-                onClose();
+                void logout().then(onClose);
               }}
               className="h-11 rounded-lg bg-[var(--brand-accent)] px-4 text-sm font-semibold text-white transition hover:brightness-110"
             >
