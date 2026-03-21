@@ -17,6 +17,7 @@ export async function PATCH(request: Request) {
       name?: string;
       channelName?: string;
       bio?: string;
+      phoneNumber?: string;
     };
     const user = await updateAccountProfile(currentUser.id, body);
     if (!user) {

@@ -207,6 +207,7 @@ export default function AccountPage() {
           name: draft.name,
           channelName: draft.channelName,
           bio: draft.bio,
+          phoneNumber: draft.phoneNumber ?? "",
         }),
       });
       window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(uiSettings));
@@ -459,60 +460,77 @@ export default function AccountPage() {
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-[var(--brand-text)]">電話番号確認</p>
+                  <p className="text-sm font-semibold text-[var(--brand-text)]">電話番号</p>
                   <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
-                    {draft.phoneNumber ? `${draft.phoneNumber} / ${draft.phoneVerifiedAt ? "確認済み" : "未確認"}` : "未登録"}
+                    {draft.phoneVerifiedAt ? "確認済み" : draft.phoneNumber ? "未確認 — 下記で認証してください" : "未登録"}
                   </p>
                 </div>
-                {draft.role === "vtuber" && draft.phoneNumber && !draft.phoneVerifiedAt ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void request<{ devCode: string }>("/api/account/verify/phone/request", { method: "POST" }).then((payload) => {
-                        setDevPhoneCode(payload.devCode);
-                        setMessage("電話確認コードを発行しました。");
-                        setError(null);
-                      }).catch((caughtError) => {
-                        setError(caughtError instanceof Error ? caughtError.message : "失敗しました。");
-                      });
-                    }}
-                    className="rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
-                  >
-                    コード送信
-                  </button>
-                ) : null}
               </div>
-              {draft.role === "vtuber" && draft.phoneNumber && !draft.phoneVerifiedAt ? (
+              {!draft.phoneVerifiedAt ? (
+                <input
+                  type="tel"
+                  value={draft.phoneNumber ?? ""}
+                  onChange={(event) => {
+                    setDraft((prev) => (prev ? { ...prev, phoneNumber: event.target.value || undefined } : prev));
+                    setHasChanges(true);
+                  }}
+                  placeholder="+81 90-0000-0000"
+                  className="mt-3 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
+                />
+              ) : (
+                <p className="mt-2 text-sm text-[var(--brand-text)]">{draft.phoneNumber}</p>
+              )}
+              {draft.phoneNumber && !draft.phoneVerifiedAt ? (
                 <div className="mt-3 space-y-2">
-                  {devPhoneCode ? <p className="text-xs text-[var(--brand-secondary)]">開発用コード: {devPhoneCode}</p> : null}
+                  <p className="text-xs text-[var(--brand-text-muted)]">「変更を保存」後にコードを送信できます。</p>
                   <div className="flex gap-2">
-                    <input
-                      value={phoneCode}
-                      onChange={(event) => setPhoneCode(event.target.value)}
-                      placeholder="SMSコード"
-                      className="h-10 flex-1 rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm outline-none"
-                    />
                     <button
                       type="button"
                       onClick={() => {
-                        void request("/api/account/verify/phone/confirm", {
-                          method: "POST",
-                          body: JSON.stringify({ code: phoneCode }),
-                        }).then(async () => {
-                          await refreshSession();
-                          setMessage("電話番号確認が完了しました。");
-                          setDevPhoneCode(null);
-                          setPhoneCode("");
+                        void request<{ devCode: string }>("/api/account/verify/phone/request", { method: "POST" }).then((payload) => {
+                          setDevPhoneCode(payload.devCode);
+                          setMessage("電話確認コードを発行しました。");
                           setError(null);
                         }).catch((caughtError) => {
                           setError(caughtError instanceof Error ? caughtError.message : "失敗しました。");
                         });
                       }}
-                      className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs font-semibold text-[var(--brand-text)]"
+                      className="rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
                     >
-                      確認する
+                      コード送信
                     </button>
                   </div>
+                  {devPhoneCode ? <p className="text-xs text-[var(--brand-secondary)]">開発用コード: {devPhoneCode}</p> : null}
+                  {devPhoneCode ? (
+                    <div className="flex gap-2">
+                      <input
+                        value={phoneCode}
+                        onChange={(event) => setPhoneCode(event.target.value)}
+                        placeholder="SMSコード"
+                        className="h-10 flex-1 rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void request("/api/account/verify/phone/confirm", {
+                            method: "POST",
+                            body: JSON.stringify({ code: phoneCode }),
+                          }).then(async () => {
+                            await refreshSession();
+                            setMessage("電話番号確認が完了しました。");
+                            setDevPhoneCode(null);
+                            setPhoneCode("");
+                            setError(null);
+                          }).catch((caughtError) => {
+                            setError(caughtError instanceof Error ? caughtError.message : "失敗しました。");
+                          });
+                        }}
+                        className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs font-semibold text-[var(--brand-text)]"
+                      >
+                        確認する
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
