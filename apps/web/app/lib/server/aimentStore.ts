@@ -435,7 +435,7 @@ export async function googleAuthUser(input: {
   });
 }
 
-export async function updateAccountProfile(userId: string, patch: { name?: string; channelName?: string; bio?: string }) {
+export async function updateAccountProfile(userId: string, patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string }) {
   return mutateStore((store) => {
     const target = store.users.find((entry) => entry.id === userId);
     if (!target) return null;
@@ -443,6 +443,15 @@ export async function updateAccountProfile(userId: string, patch: { name?: strin
     if (patch.name != null) target.name = patch.name.trim();
     if (patch.channelName != null) target.channelName = patch.channelName.trim() || undefined;
     if (patch.bio != null) target.bio = patch.bio.trim() || undefined;
+    if (patch.phoneNumber != null) {
+      const normalized = patch.phoneNumber.trim() || undefined;
+      if (normalized !== target.phoneNumber) {
+        if (normalized) ensurePhoneAvailable(store, normalized, target.id);
+        target.phoneNumber = normalized;
+        target.phoneVerifiedAt = undefined;
+        delete target.pendingPhoneCode;
+      }
+    }
 
     return sanitizeUser(target);
   });
