@@ -467,22 +467,26 @@ export default function AccountPage() {
                 </div>
               </div>
               {!draft.phoneVerifiedAt ? (
-                <input
-                  type="tel"
-                  value={draft.phoneNumber ?? ""}
-                  onChange={(event) => {
-                    setDraft((prev) => (prev ? { ...prev, phoneNumber: event.target.value || undefined } : prev));
-                    setHasChanges(true);
-                  }}
-                  placeholder="+81 90-0000-0000"
-                  className="mt-3 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
-                />
+                <>
+                  <input
+                    type="tel"
+                    value={draft.phoneNumber ?? ""}
+                    onChange={(event) => {
+                      setDraft((prev) => (prev ? { ...prev, phoneNumber: event.target.value || undefined } : prev));
+                      setHasChanges(true);
+                    }}
+                    placeholder="+81 90-0000-0000"
+                    className="mt-3 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
+                  />
+                  {draft.phoneNumber && draft.phoneNumber !== user?.phoneNumber ? (
+                    <p className="mt-1 text-xs text-[var(--brand-text-muted)]">「変更を保存」後にコードを送信できます。</p>
+                  ) : null}
+                </>
               ) : (
                 <p className="mt-2 text-sm text-[var(--brand-text)]">{draft.phoneNumber}</p>
               )}
-              {draft.phoneNumber && !draft.phoneVerifiedAt ? (
+              {user?.phoneNumber && user.phoneNumber === draft.phoneNumber && !draft.phoneVerifiedAt ? (
                 <div className="mt-3 space-y-2">
-                  <p className="text-xs text-[var(--brand-text-muted)]">「変更を保存」後にコードを送信できます。</p>
                   <div className="flex gap-2">
                     <button
                       type="button"
