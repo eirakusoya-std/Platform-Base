@@ -21,6 +21,9 @@ const DATA_DIR = process.env.VERCEL
   ? "/tmp"
   : path.join(process.cwd(), "data");
 const STORE_FILE = path.join(DATA_DIR, "ops-store.json");
+const SEED_FILE = process.env.VERCEL
+  ? path.join(process.cwd(), "data", "ops-store.json")
+  : null;
 const DEFAULT_STORE: OpsStoreFile = { consents: [], reports: [], monitoringEvents: [] };
 
 let writeQueue: Promise<unknown> = Promise.resolve();
@@ -42,7 +45,15 @@ async function ensureStoreFile() {
   try {
     await readFile(STORE_FILE, "utf8");
   } catch {
-    await writeFile(STORE_FILE, JSON.stringify(DEFAULT_STORE, null, 2), "utf8");
+    let seedData = JSON.stringify(DEFAULT_STORE, null, 2);
+    if (SEED_FILE) {
+      try {
+        seedData = await readFile(SEED_FILE, "utf8");
+      } catch {
+        // seed file not readable, use DEFAULT_STORE
+      }
+    }
+    await writeFile(STORE_FILE, seedData, "utf8");
   }
 }
 

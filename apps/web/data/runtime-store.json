@@ -1,6 +1,32 @@
 {
   "users": [
     {
+      "id": "listener-mmwy78ft-3adf8c",
+      "name": "早雲楓人",
+      "role": "listener",
+      "email": "huutohayakumo@gmail.com",
+      "authProvider": "google",
+      "createdAt": "2026-03-19T04:06:23.606Z",
+      "lastLoginAt": "2026-03-19T04:06:23.606Z",
+      "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocKHyiVttuEZvlTg0inNCRpBlFwV079gPc9OwdTq_SRWgBfpkw=s96-c",
+      "emailVerifiedAt": "2026-03-19T04:06:23.606Z",
+      "termsAcceptedAt": "2026-03-19T04:06:23.606Z",
+      "privacyAcceptedAt": "2026-03-19T04:06:23.606Z"
+    },
+    {
+      "id": "listener-mmwy705e-740adf",
+      "name": "meowtwit",
+      "role": "listener",
+      "email": "meowtwit222@gmail.com",
+      "authProvider": "google",
+      "createdAt": "2026-03-19T04:06:12.863Z",
+      "lastLoginAt": "2026-03-19T04:06:12.863Z",
+      "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocJ4QY1jafl2tJpOSq1VJGmTXmIoQ6uRDAtk77yIO8Sl601Lgw=s96-c",
+      "emailVerifiedAt": "2026-03-19T04:06:12.863Z",
+      "termsAcceptedAt": "2026-03-19T04:06:12.863Z",
+      "privacyAcceptedAt": "2026-03-19T04:06:12.863Z"
+    },
+    {
       "id": "listener-mmo8zmah-27bf91",
       "name": "a",
       "role": "listener",
@@ -76,6 +102,9 @@
       "reservationRequired": false,
       "slotsTotal": 10,
       "slotsLeft": 10,
+      "speakerSlotsTotal": 5,
+      "speakerSlotsLeft": 5,
+      "speakerRequiredPlan": "free",
       "preferredVideoDeviceId": "6022cd41875042d2e8bc9cdf77da070df20ac7fb78362713e780fbc7f362aedf",
       "preferredVideoLabel": "OBS Virtual Camera"
     },
@@ -95,6 +124,9 @@
       "reservationRequired": false,
       "slotsTotal": 10,
       "slotsLeft": 10,
+      "speakerSlotsTotal": 5,
+      "speakerSlotsLeft": 5,
+      "speakerRequiredPlan": "free",
       "preferredVideoDeviceId": "4bb3fc372364c22f404e18509ee053ac96e0b105fd09b305718f0263a9455c87",
       "preferredVideoLabel": "OBS Virtual Camera"
     },
@@ -114,6 +146,9 @@
       "reservationRequired": true,
       "slotsTotal": 10,
       "slotsLeft": 10,
+      "speakerSlotsTotal": 5,
+      "speakerSlotsLeft": 5,
+      "speakerRequiredPlan": "free",
       "preferredVideoDeviceId": "4bb3fc372364c22f404e18509ee053ac96e0b105fd09b305718f0263a9455c87",
       "preferredVideoLabel": "OBS Virtual Camera"
     },
@@ -133,6 +168,9 @@
       "reservationRequired": true,
       "slotsTotal": 10,
       "slotsLeft": 10,
+      "speakerSlotsTotal": 5,
+      "speakerSlotsLeft": 5,
+      "speakerRequiredPlan": "free",
       "preferredVideoDeviceId": "6022cd41875042d2e8bc9cdf77da070df20ac7fb78362713e780fbc7f362aedf",
       "preferredVideoLabel": "OBS Virtual Camera"
     }
@@ -145,6 +183,7 @@
       "userName": "listener",
       "createdAt": "2026-03-12T07:10:53.803Z",
       "status": "cancelled",
+      "type": "listener",
       "cancelledAt": "2026-03-12T07:10:58.246Z"
     }
   ]
