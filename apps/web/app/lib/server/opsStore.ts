@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { kv } from "@vercel/kv";
 import type {
   ConsentRecord,
   CreateMonitoringEventInput,
@@ -17,6 +18,8 @@ type OpsStoreFile = {
   monitoringEvents: MonitoringEvent[];
 };
 
+const USE_KV = Boolean(process.env.KV_REST_API_URL);
+const KV_KEY = "ops:store";
 const DATA_DIR = process.env.VERCEL
   ? "/tmp"
   : path.join(process.cwd(), "data");
@@ -40,6 +43,15 @@ function makeId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
 }
 
+function parseStoreFile(raw: string): OpsStoreFile {
+  const parsed = JSON.parse(raw) as Partial<OpsStoreFile>;
+  return {
+    consents: Array.isArray(parsed.consents) ? parsed.consents as ConsentRecord[] : [],
+    reports: Array.isArray(parsed.reports) ? parsed.reports as ReportRecord[] : [],
+    monitoringEvents: Array.isArray(parsed.monitoringEvents) ? parsed.monitoringEvents as MonitoringEvent[] : [],
+  };
+}
+
 async function ensureStoreFile() {
   await mkdir(DATA_DIR, { recursive: true });
   try {
@@ -58,18 +70,24 @@ async function ensureStoreFile() {
 }
 
 async function readStore(): Promise<OpsStoreFile> {
+  if (USE_KV) {
+    const stored = await kv.get<OpsStoreFile>(KV_KEY);
+    if (stored) {
+      try { return parseStoreFile(JSON.stringify(stored)); } catch { return cloneStore(DEFAULT_STORE); }
+    }
+    const seedPath = path.join(process.cwd(), "data", "ops-store.json");
+    try {
+      const seed = parseStoreFile(await readFile(seedPath, "utf8"));
+      await kv.set(KV_KEY, seed);
+      return seed;
+    } catch {
+      return cloneStore(DEFAULT_STORE);
+    }
+  }
+
   await ensureStoreFile();
   const raw = await readFile(STORE_FILE, "utf8");
-  try {
-    const parsed = JSON.parse(raw) as Partial<OpsStoreFile>;
-    return {
-      consents: Array.isArray(parsed.consents) ? parsed.consents as ConsentRecord[] : [],
-      reports: Array.isArray(parsed.reports) ? parsed.reports as ReportRecord[] : [],
-      monitoringEvents: Array.isArray(parsed.monitoringEvents) ? parsed.monitoringEvents as MonitoringEvent[] : [],
-    };
-  } catch {
-    return cloneStore(DEFAULT_STORE);
-  }
+  try { return parseStoreFile(raw); } catch { return cloneStore(DEFAULT_STORE); }
 }
 
 async function mutateStore<T>(mutator: (store: OpsStoreFile) => Promise<T> | T): Promise<T> {
@@ -77,7 +95,11 @@ async function mutateStore<T>(mutator: (store: OpsStoreFile) => Promise<T> | T):
     const store = await readStore();
     const nextStore = cloneStore(store);
     const result = await mutator(nextStore);
-    await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
+    if (USE_KV) {
+      await kv.set(KV_KEY, nextStore);
+    } else {
+      await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
+    }
     return result;
   };
 
