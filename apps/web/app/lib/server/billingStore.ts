@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { kv } from "@vercel/kv";
 import type {
   BillingProvider,
   BillingSubscription,
@@ -16,6 +17,8 @@ type BillingStoreFile = {
   paymentEvents: PaymentEvent[];
 };
 
+const USE_KV = Boolean(process.env.KV_REST_API_URL);
+const KV_KEY = "billing:store";
 const DATA_DIR = process.env.VERCEL
   ? "/tmp"
   : path.join(process.cwd(), "data");
@@ -112,6 +115,18 @@ function normalizePaymentEvent(entry: Partial<PaymentEvent>): PaymentEvent | nul
   };
 }
 
+function parseStoreFile(raw: string): BillingStoreFile {
+  const parsed = JSON.parse(raw) as Partial<BillingStoreFile>;
+  return {
+    subscriptions: Array.isArray(parsed.subscriptions)
+      ? parsed.subscriptions.map((entry) => normalizeSubscription(entry as Partial<BillingSubscription>)).filter((entry): entry is BillingSubscription => entry != null)
+      : [],
+    paymentEvents: Array.isArray(parsed.paymentEvents)
+      ? parsed.paymentEvents.map((entry) => normalizePaymentEvent(entry as Partial<PaymentEvent>)).filter((entry): entry is PaymentEvent => entry != null)
+      : [],
+  };
+}
+
 async function ensureStoreFile() {
   await mkdir(DATA_DIR, { recursive: true });
   try {
@@ -130,22 +145,24 @@ async function ensureStoreFile() {
 }
 
 async function readStore(): Promise<BillingStoreFile> {
+  if (USE_KV) {
+    const stored = await kv.get<BillingStoreFile>(KV_KEY);
+    if (stored) {
+      try { return parseStoreFile(JSON.stringify(stored)); } catch { return cloneStore(DEFAULT_STORE); }
+    }
+    const seedPath = path.join(process.cwd(), "data", "billing-store.json");
+    try {
+      const seed = parseStoreFile(await readFile(seedPath, "utf8"));
+      await kv.set(KV_KEY, seed);
+      return seed;
+    } catch {
+      return cloneStore(DEFAULT_STORE);
+    }
+  }
+
   await ensureStoreFile();
   const raw = await readFile(STORE_FILE, "utf8");
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<BillingStoreFile>;
-    return {
-      subscriptions: Array.isArray(parsed.subscriptions)
-        ? parsed.subscriptions.map((entry) => normalizeSubscription(entry as Partial<BillingSubscription>)).filter((entry): entry is BillingSubscription => entry != null)
-        : [],
-      paymentEvents: Array.isArray(parsed.paymentEvents)
-        ? parsed.paymentEvents.map((entry) => normalizePaymentEvent(entry as Partial<PaymentEvent>)).filter((entry): entry is PaymentEvent => entry != null)
-        : [],
-    };
-  } catch {
-    return cloneStore(DEFAULT_STORE);
-  }
+  try { return parseStoreFile(raw); } catch { return cloneStore(DEFAULT_STORE); }
 }
 
 async function mutateStore<T>(mutator: (store: BillingStoreFile) => Promise<T> | T): Promise<T> {
@@ -153,7 +170,11 @@ async function mutateStore<T>(mutator: (store: BillingStoreFile) => Promise<T> |
     const store = await readStore();
     const nextStore = cloneStore(store);
     const result = await mutator(nextStore);
-    await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
+    if (USE_KV) {
+      await kv.set(KV_KEY, nextStore);
+    } else {
+      await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
+    }
     return result;
   };
 

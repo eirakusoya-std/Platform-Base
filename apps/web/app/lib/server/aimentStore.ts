@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { kv } from "@vercel/kv";
 import type {
   AuthProvider,
   CreateReservationInput,
@@ -52,6 +53,8 @@ const LEGACY_USER_DEFAULTS: Record<string, Partial<StoredUser>> = {
   },
 };
 
+const USE_KV = Boolean(process.env.KV_REST_API_URL);
+const KV_KEY = "aiment:store";
 const DATA_DIR = process.env.VERCEL
   ? "/tmp"
   : path.join(process.cwd(), "data");
@@ -209,9 +212,33 @@ function syncSessionSlots(store: StoreFile) {
   });
 }
 
+function parseStoreFile(raw: string): StoreFile {
+  const parsed = JSON.parse(raw) as Partial<StoreFile>;
+  const store = {
+    users: Array.isArray(parsed.users) ? parsed.users.map((entry) => normalizeStoredUser(entry as Partial<StoredUser>)).filter((entry): entry is StoredUser => entry != null) : [],
+    streamSessions: Array.isArray(parsed.streamSessions)
+      ? parsed.streamSessions.map((entry) => normalizeStreamSession(entry as Partial<StreamSession>)).filter((entry): entry is StreamSession => entry != null)
+      : [],
+    reservations: Array.isArray(parsed.reservations)
+      ? parsed.reservations.map((entry) => normalizeReservation(entry as Partial<Reservation>)).filter((entry): entry is Reservation => entry != null)
+      : [],
+  };
+  syncSessionSlots(store);
+  return store;
+}
+
+async function getSeedStore(): Promise<StoreFile> {
+  const seedPath = path.join(process.cwd(), "data", "runtime-store.json");
+  try {
+    const raw = await readFile(seedPath, "utf8");
+    return parseStoreFile(raw);
+  } catch {
+    return cloneStore(DEFAULT_STORE);
+  }
+}
+
 async function ensureStoreFile() {
   await mkdir(DATA_DIR, { recursive: true });
-
   try {
     await readFile(STORE_FILE, "utf8");
   } catch {
@@ -228,22 +255,24 @@ async function ensureStoreFile() {
 }
 
 async function readStore(): Promise<StoreFile> {
+  if (USE_KV) {
+    const stored = await kv.get<StoreFile>(KV_KEY);
+    if (stored) {
+      try {
+        return parseStoreFile(JSON.stringify(stored));
+      } catch {
+        return cloneStore(DEFAULT_STORE);
+      }
+    }
+    const seed = await getSeedStore();
+    await kv.set(KV_KEY, seed);
+    return seed;
+  }
+
   await ensureStoreFile();
   const raw = await readFile(STORE_FILE, "utf8");
-
   try {
-    const parsed = JSON.parse(raw) as Partial<StoreFile>;
-    const store = {
-      users: Array.isArray(parsed.users) ? parsed.users.map((entry) => normalizeStoredUser(entry as Partial<StoredUser>)).filter((entry): entry is StoredUser => entry != null) : [],
-      streamSessions: Array.isArray(parsed.streamSessions)
-        ? parsed.streamSessions.map((entry) => normalizeStreamSession(entry as Partial<StreamSession>)).filter((entry): entry is StreamSession => entry != null)
-        : [],
-      reservations: Array.isArray(parsed.reservations)
-        ? parsed.reservations.map((entry) => normalizeReservation(entry as Partial<Reservation>)).filter((entry): entry is Reservation => entry != null)
-        : [],
-    };
-    syncSessionSlots(store);
-    return store;
+    return parseStoreFile(raw);
   } catch {
     return cloneStore(DEFAULT_STORE);
   }
@@ -254,7 +283,11 @@ async function mutateStore<T>(mutator: (store: StoreFile) => Promise<T> | T): Pr
     const store = await readStore();
     const nextStore = cloneStore(store);
     const result = await mutator(nextStore);
-    await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
+    if (USE_KV) {
+      await kv.set(KV_KEY, nextStore);
+    } else {
+      await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
+    }
     return result;
   };
 
