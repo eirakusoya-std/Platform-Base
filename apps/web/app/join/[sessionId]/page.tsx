@@ -124,10 +124,10 @@ export default function PreJoinPage() {
  } else if (res.status === 401) {
  setReservationStatus("none");
  } else {
- setReservationStatus("error");
+ setReservationStatus("none");
  }
  } catch {
- setReservationStatus("error");
+ setReservationStatus("none");
  }
  }, [sessionId]);
 

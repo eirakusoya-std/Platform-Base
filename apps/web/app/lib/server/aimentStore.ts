@@ -705,7 +705,8 @@ export async function createReservation(actor: SessionUser, input: CreateReserva
   return mutateStore((store) => {
     const session = store.streamSessions.find((entry) => entry.sessionId === input.sessionId);
     if (!session) throw new Error("Session not found");
-    if (session.status !== "prelive") throw new Error("Reservations are only available before the stream starts");
+    if (session.status === "ended") throw new Error("This stream has ended");
+    if (session.status === "live" && session.reservationRequired) throw new Error("Reservations for this session must be made before the stream starts");
 
     if (reservationType === "speaker") {
       if (!canAccessPlan(actorPlan, session.speakerRequiredPlan)) {
