@@ -103,6 +103,7 @@ export default function StudioLiveSessionPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let everFound = false;
 
     const sync = async () => {
       if (!sessionId) {
@@ -115,8 +116,14 @@ export default function StudioLiveSessionPage() {
 
       const found = await getStreamSession(sessionId);
       if (cancelled) return;
-      setSession(found);
-      setNotFound(!found);
+      if (found) {
+        everFound = true;
+        setSession(found);
+        setNotFound(false);
+      } else if (!everFound) {
+        setNotFound(true);
+      }
+      // once found, polling failures are treated as transient — keep showing last state
     };
 
     void sync();
