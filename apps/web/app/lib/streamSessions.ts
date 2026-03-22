@@ -125,7 +125,7 @@ export async function setStreamSessionStatus(sessionId: string, status: StreamSe
           : sessionUrl(sessionId);
     const body = status === "prelive" ? JSON.stringify({ status }) : undefined;
     const { session } = await requestJson<{ session: StreamSession }>(fetchUrl, {
-      method: "PATCH",
+      method: status === "live" || status === "ended" ? "POST" : "PATCH",
       body,
     });
     notifyUpdated();

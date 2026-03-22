@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     const userId = sessionUser.id;
     const userName = sessionUser.name;
 
-    const roomName = `session-${sessionId}`;
+    const roomName = sessionId;
     const params = { apiKey, apiSecret, roomName, userId, userName };
 
     const token =
