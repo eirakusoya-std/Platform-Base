@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { kv } from "@vercel/kv";
+import { createClient } from "@vercel/kv";
+
+const kv = createClient({
+  url: (process.env.KV_REST_API_URL ?? process.env.STORAGE_REST_API_URL) as string,
+  token: (process.env.KV_REST_API_TOKEN ?? process.env.STORAGE_REST_API_TOKEN) as string,
+});
 import type {
   BillingProvider,
   BillingSubscription,
@@ -17,7 +22,7 @@ type BillingStoreFile = {
   paymentEvents: PaymentEvent[];
 };
 
-const USE_KV = Boolean(process.env.KV_REST_API_URL);
+const USE_KV = Boolean(process.env.KV_REST_API_URL ?? process.env.STORAGE_REST_API_URL);
 const KV_KEY = "billing:store";
 const DATA_DIR = process.env.VERCEL
   ? "/tmp"
