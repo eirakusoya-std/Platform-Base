@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SessionUser, useUserSession } from "../../lib/userSession";
 import { WireframeAccountCardAiment } from "../../wireframes/page";
+import { useRouter } from "next/navigation";
 
 
 
@@ -40,23 +41,17 @@ function MiniHudAccountCard({ user }: { user: SessionUser | null }) {
 }
 
 function AuthDropdown({ onClose }: { onClose: () => void }) {
-  const { user, isAuthenticated, login, logout } = useUserSession();
+  const { user, isAuthenticated, logout } = useUserSession();
   const [selectedRole, setSelectedRole] = useState<SessionUser["role"]>("listener");
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   const handleGoogleLogin = () => {
     window.location.href = `/api/auth/google?role=${selectedRole}`;
   };
 
-  const handleMockLogin = () => {
-    login({
-      id: `mock-${Date.now().toString(36)}`,
-      name: "田中太郎",
-      email: "tanaka@example.com",
-      role: selectedRole,
-      authProvider: "password",
-      createdAt: new Date().toISOString(),
-    });
+  const handleEmailLogin = () => {
+    onClose();
+    router.push("/auth");
   };
 
   return (
@@ -65,7 +60,7 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
         <div className="space-y-3">
           <p className="text-sm text-[var(--brand-text-muted)]">ログイン方法を選択してください。</p>
           <div className="rounded-lg bg-[var(--brand-surface)] p-2">
-            <p className="mb-2 text-xs text-[var(--brand-text-muted)]">ログインロール（仮）</p>
+            <p className="mb-2 text-xs text-[var(--brand-text-muted)]">ロール</p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -100,12 +95,11 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="button"
-            onClick={handleMockLogin}
+            onClick={handleEmailLogin}
             className="h-10 w-full rounded-lg bg-[var(--brand-surface)] px-4 text-sm font-medium text-[var(--brand-text)] transition hover:brightness-110"
           >
-            仮ログイン
+            メール / パスワードでログイン
           </button>
-          {error && <p className="text-xs text-[var(--brand-accent)]">{error}</p>}
         </div>
       ) : (
         <div className="space-y-3">
@@ -175,7 +169,7 @@ export function AuthProfileControl() {
           )}
           <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-[var(--brand-secondary)] bg-[var(--brand-bg-900)]" />
         </span>
-        <span className="max-w-[110px] truncate text-sm text-[var(--brand-text)]">{hydrated ? (isAuthenticated ? user?.name : "田中太郎") : "..."}</span>
+        <span className="max-w-[110px] truncate text-sm text-[var(--brand-text)]">{hydrated ? (isAuthenticated ? user?.name : "ログイン") : "..."}</span>
       </button>
 
       {open && <AuthDropdown onClose={() => setOpen(false)} />}
