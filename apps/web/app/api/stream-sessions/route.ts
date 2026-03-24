@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { StreamSessionStatus } from "@/app/lib/apiTypes";
-import { createStreamSession, listStreamSessions } from "@/app/lib/server/aimentStore";
-import { requireSessionUser } from "@/app/lib/server/auth";
+import { createStreamSession, listStreamSessions, listStreamSessionsByHost } from "@/app/lib/server/aimentStore";
+import { resolveSessionUser, requireSessionUser } from "@/app/lib/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +17,15 @@ function parseStatuses(url: URL) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const statuses = parseStatuses(url);
+  const mine = url.searchParams.get("mine") === "1";
+
+  if (mine) {
+    const actor = await resolveSessionUser();
+    if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const sessions = await listStreamSessionsByHost(actor.id);
+    return NextResponse.json({ sessions });
+  }
+
   const sessions = await listStreamSessions(statuses);
   return NextResponse.json({ sessions });
 }

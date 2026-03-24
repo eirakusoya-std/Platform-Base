@@ -41,7 +41,7 @@ function MiniHudAccountCard({ user }: { user: SessionUser | null }) {
 }
 
 function AuthDropdown({ onClose }: { onClose: () => void }) {
-  const { user, isAuthenticated, logout } = useUserSession();
+  const { user, isAuthenticated, logout, isVtuber } = useUserSession();
   const [selectedRole, setSelectedRole] = useState<SessionUser["role"]>("listener");
   const router = useRouter();
 
@@ -106,6 +106,15 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
           <MiniHudAccountCard user={user} />
 
           <div className="grid gap-2">
+            {isVtuber && (
+              <Link
+                href="/studio/sessions"
+                onClick={onClose}
+                className="flex h-11 items-center justify-center rounded-lg bg-[var(--brand-primary)]/20 px-3 text-sm font-semibold text-[var(--brand-primary)] transition hover:brightness-110"
+              >
+                配信枠管理
+              </Link>
+            )}
             <Link
               href="/account/settings"
               onClick={onClose}

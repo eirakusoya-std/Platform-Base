@@ -98,6 +98,14 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                   EN
                 </button>
               </div>
+                {isStudioMode && isVtuber && (
+                <Link
+                  href="/studio/sessions"
+                  className="hidden items-center gap-2 rounded-xl bg-[var(--brand-surface)] px-4 py-2 text-sm font-semibold text-[var(--brand-text-muted)] transition-all hover:text-[var(--brand-text)] sm:inline-flex"
+                >
+                  {tx("枠管理", "My Sessions")}
+                </Link>
+              )}
               {!isStudioMode && isVtuber && (
                 <Link
                   href="/studio/pre-live"

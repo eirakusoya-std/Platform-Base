@@ -102,6 +102,21 @@ export async function createStreamSession(input: CreateStreamSessionInput): Prom
   return session;
 }
 
+export async function listMyStreamSessions(): Promise<StreamSession[]> {
+  const { sessions } = await requestJson<{ sessions: StreamSession[] }>(`${API_BASE}?mine=1`);
+  return sessions.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export async function deleteStreamSession(sessionId: string): Promise<boolean> {
+  try {
+    await requestJson<{ ok: boolean }>(sessionUrl(sessionId), { method: "DELETE" });
+    notifyUpdated();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function updateStreamSession(sessionId: string, patch: Partial<StreamSession>): Promise<StreamSession | null> {
   try {
     const { session } = await requestJson<{ session: StreamSession }>(sessionUrl(sessionId), {
