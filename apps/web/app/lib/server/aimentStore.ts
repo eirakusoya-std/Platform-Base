@@ -360,6 +360,15 @@ function findActiveReservation(store: StoreFile, sessionId: string, userId: stri
   );
 }
 
+export async function resetStore() {
+  const seed = await getSeedStore();
+  if (USE_KV) {
+    await kv.set(KV_KEY, seed);
+  } else {
+    await writeFile(STORE_FILE, JSON.stringify(seed, null, 2), "utf8");
+  }
+}
+
 export async function listUsers() {
   const store = await readStore();
   return store.users.map(sanitizeUser);
