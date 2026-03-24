@@ -352,7 +352,7 @@ export default function PreJoinPage() {
  )}
  </p>
  <button
- onClick={() => router.push(`/auth/login?redirect=${encodeURIComponent(`/join/${sessionId}`)}`)}
+ onClick={() => router.push(`/auth?redirect=${encodeURIComponent(`/join/${sessionId}`)}`)}
  className="w-full rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-white"
  >
  {tx("ログイン / アカウント作成", "Log in / Sign up")}
