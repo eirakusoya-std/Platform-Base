@@ -103,7 +103,7 @@ export function StartingSoonSection({
                         onToggleReserve(event, session.id);
                       }}
                     >
-                      {reserved ? tx("予約済み", "Reserved") : tx("参加する", "Join")}
+                      {reserved ? tx("予約済み", "Reserved") : session.reservationRequired ? tx("予約する", "Reserve") : tx("参加する", "Join")}
                     </button>
                     <button className="rounded-lg px-3 py-2.5 text-xs text-[var(--brand-text-muted)] transition-all">DETAIL</button>
                   </div>

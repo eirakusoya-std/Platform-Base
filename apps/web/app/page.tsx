@@ -63,6 +63,7 @@ export default function HomePage() {
           slotsTotal: session.slotsTotal,
           slotsLeft: session.slotsLeft,
           participationType: session.participationType,
+          reservationRequired: session.reservationRequired,
           isSubscribed: true,
           tags: [session.category, "参加型"],
           description: session.description,

@@ -103,6 +103,15 @@ export default function AuthPage() {
     [mode],
   );
 
+  const redirectTo = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const raw = new URLSearchParams(window.location.search).get("redirect");
+    if (!raw) return null;
+    const decoded = decodeURIComponent(raw);
+    // only allow same-origin redirects
+    return decoded.startsWith("/") ? decoded : null;
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const nextMode = params.get("mode") === "signup" ? "signup" : "login";
@@ -160,7 +169,7 @@ export default function AuthPage() {
         await postJson("/api/auth/signup", payload);
         await refreshSession();
         setMessage(provider === "google_demo" ? "Googleアカウントで登録しました。" : "アカウントを作成しました。");
-        router.push("/account");
+        router.push(redirectTo ?? "/account");
         return;
       }
 
@@ -171,7 +180,7 @@ export default function AuthPage() {
       };
       await postJson("/api/auth/login", payload);
       await refreshSession();
-      router.push("/account");
+      router.push(redirectTo ?? "/account");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "処理に失敗しました。");
     } finally {
