@@ -1,6 +1,18 @@
 {
   "users": [
     {
+      "id": "listener-mn4x8ao7-5ccca6",
+      "name": "テストユーザー",
+      "role": "listener",
+      "email": "test@aiment.dev",
+      "authProvider": "password",
+      "createdAt": "2026-03-24T18:01:22.947Z",
+      "lastLoginAt": "2026-03-24T18:01:22.947Z",
+      "termsAcceptedAt": "2026-03-24T18:01:22.947Z",
+      "privacyAcceptedAt": "2026-03-24T18:01:22.947Z",
+      "passwordHash": "7e6e0c3079a08c5cc6036789b57e951f65f82383913ba1a49ae992544f1b4b6e"
+    },
+    {
       "id": "listener-mmwy78ft-3adf8c",
       "name": "早雲楓人",
       "role": "listener",
@@ -90,7 +102,7 @@
       "sessionId": "session-mmn54q08-34afe1",
       "hostUserId": "vtuber-mmn4eq2p-0f8483",
       "title": "【英会話参加型】推しと距離を縮めるリアルトーク",
-      "status": "prelive",
+      "status": "ended",
       "createdAt": "2026-03-12T07:22:41.960Z",
       "startsAt": "2026-03-12T07:22:41.930Z",
       "description": "視聴者参加で英語フレーズを実際に使いながら会話する配信です。",
@@ -156,7 +168,7 @@
       "sessionId": "session-mmle6t7n-1ab7f1",
       "hostUserId": "vtuber-mmle4z7h-cc5874",
       "title": "【英会話参加型】推しと距離を縮めるリアルトーク",
-      "status": "prelive",
+      "status": "ended",
       "createdAt": "2026-03-11T02:00:43.619Z",
       "startsAt": "2026-03-11T02:00:43.585Z",
       "description": "視聴者参加で英語フレーズを実際に使いながら会話する配信です。",

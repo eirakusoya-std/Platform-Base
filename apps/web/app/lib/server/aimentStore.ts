@@ -360,6 +360,15 @@ function findActiveReservation(store: StoreFile, sessionId: string, userId: stri
   );
 }
 
+export async function resetStore() {
+  const seed = await getSeedStore();
+  if (USE_KV) {
+    await kv.set(KV_KEY, seed);
+  } else {
+    await writeFile(STORE_FILE, JSON.stringify(seed, null, 2), "utf8");
+  }
+}
+
 export async function listUsers() {
   const store = await readStore();
   return store.users.map(sanitizeUser);
@@ -681,6 +690,36 @@ export async function updateStreamSession(sessionId: string, actor: SessionUser,
     syncSessionSlots(store);
     return next;
   });
+}
+
+export async function deleteStreamSession(sessionId: string, actor: SessionUser) {
+  requireVerifiedVtuber(actor);
+
+  return mutateStore((store) => {
+    const index = store.streamSessions.findIndex((session) => session.sessionId === sessionId);
+    if (index === -1) return null;
+
+    const current = store.streamSessions[index];
+    if (current.hostUserId !== actor.id) throw new Error("Cannot delete another VTuber's session");
+    if (current.status === "live") throw new Error("Cannot delete a session that is currently live");
+
+    store.streamSessions.splice(index, 1);
+    // cancel all reservations for this session
+    for (const reservation of store.reservations) {
+      if (reservation.sessionId === sessionId && reservation.status === "reserved") {
+        reservation.status = "cancelled";
+        reservation.cancelledAt = new Date().toISOString();
+      }
+    }
+    return true;
+  });
+}
+
+export async function listStreamSessionsByHost(hostUserId: string): Promise<StreamSession[]> {
+  const store = await readStore();
+  return store.streamSessions
+    .filter((session) => session.hostUserId === hostUserId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
 export async function setStreamSessionStatus(sessionId: string, actor: SessionUser, status: StreamSessionStatus) {
