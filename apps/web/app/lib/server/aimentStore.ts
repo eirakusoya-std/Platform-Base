@@ -706,7 +706,7 @@ export async function deleteStreamSession(sessionId: string, actor: SessionUser)
     store.streamSessions.splice(index, 1);
     // cancel all reservations for this session
     for (const reservation of store.reservations) {
-      if (reservation.sessionId === sessionId && reservation.status === "active") {
+      if (reservation.sessionId === sessionId && reservation.status === "reserved") {
         reservation.status = "cancelled";
         reservation.cancelledAt = new Date().toISOString();
       }
