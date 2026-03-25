@@ -1,12 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createClient } from "@vercel/kv";
-
-const kv = createClient({
-  url: (process.env.KV_REST_API_URL ?? process.env.STORAGE_REST_API_URL) as string,
-  token: (process.env.KV_REST_API_TOKEN ?? process.env.STORAGE_REST_API_TOKEN) as string,
-});
 import type {
   ConsentRecord,
   CreateMonitoringEventInput,
@@ -23,8 +17,6 @@ type OpsStoreFile = {
   monitoringEvents: MonitoringEvent[];
 };
 
-const USE_KV = Boolean(process.env.KV_REST_API_URL ?? process.env.STORAGE_REST_API_URL);
-const KV_KEY = "ops:store";
 const DATA_DIR = process.env.VERCEL
   ? "/tmp"
   : path.join(process.cwd(), "data");
@@ -75,21 +67,6 @@ async function ensureStoreFile() {
 }
 
 async function readStore(): Promise<OpsStoreFile> {
-  if (USE_KV) {
-    const stored = await kv.get<OpsStoreFile>(KV_KEY);
-    if (stored) {
-      try { return parseStoreFile(JSON.stringify(stored)); } catch { return cloneStore(DEFAULT_STORE); }
-    }
-    const seedPath = path.join(process.cwd(), "data", "ops-store.json");
-    try {
-      const seed = parseStoreFile(await readFile(seedPath, "utf8"));
-      await kv.set(KV_KEY, seed);
-      return seed;
-    } catch {
-      return cloneStore(DEFAULT_STORE);
-    }
-  }
-
   await ensureStoreFile();
   const raw = await readFile(STORE_FILE, "utf8");
   try { return parseStoreFile(raw); } catch { return cloneStore(DEFAULT_STORE); }
@@ -100,11 +77,7 @@ async function mutateStore<T>(mutator: (store: OpsStoreFile) => Promise<T> | T):
     const store = await readStore();
     const nextStore = cloneStore(store);
     const result = await mutator(nextStore);
-    if (USE_KV) {
-      await kv.set(KV_KEY, nextStore);
-    } else {
-      await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
-    }
+    await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
     return result;
   };
 

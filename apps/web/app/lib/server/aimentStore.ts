@@ -1,12 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createClient } from "@vercel/kv";
-
-const kv = createClient({
-  url: (process.env.KV_REST_API_URL ?? process.env.STORAGE_REST_API_URL) as string,
-  token: (process.env.KV_REST_API_TOKEN ?? process.env.STORAGE_REST_API_TOKEN) as string,
-});
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type {
   AuthProvider,
   CreateReservationInput,
@@ -58,15 +53,19 @@ const LEGACY_USER_DEFAULTS: Record<string, Partial<StoredUser>> = {
   },
 };
 
-const USE_KV = Boolean(process.env.KV_REST_API_URL ?? process.env.STORAGE_REST_API_URL);
-const KV_KEY = "aiment:store";
-const DATA_DIR = process.env.VERCEL
-  ? "/tmp"
-  : path.join(process.cwd(), "data");
+// ---------------------------------------------------------------------------
+// Storage backend selection
+// ---------------------------------------------------------------------------
+
+const USE_NEON = Boolean(process.env.DATABASE_URL);
+
+// ---------------------------------------------------------------------------
+// File-based store (local dev fallback)
+// ---------------------------------------------------------------------------
+
+const DATA_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data");
 const STORE_FILE = path.join(DATA_DIR, "runtime-store.json");
-const SEED_FILE = process.env.VERCEL
-  ? path.join(process.cwd(), "data", "runtime-store.json")
-  : null;
+const SEED_FILE = process.env.VERCEL ? path.join(process.cwd(), "data", "runtime-store.json") : null;
 
 const DEFAULT_STORE: StoreFile = {
   users: [],
@@ -76,20 +75,22 @@ const DEFAULT_STORE: StoreFile = {
 
 let writeQueue: Promise<unknown> = Promise.resolve();
 
-function cloneStore(store: StoreFile): StoreFile {
-  return {
-    users: [...store.users],
-    streamSessions: [...store.streamSessions],
-    reservations: [...store.reservations],
-  };
-}
+// ---------------------------------------------------------------------------
+// Helper / normalizer functions (shared by both backends)
+// ---------------------------------------------------------------------------
 
 function hashSecret(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
 function sanitizeUser(user: StoredUser): SessionUser {
-  const { passwordHash: _passwordHash, pendingEmailCode: _pendingEmailCode, pendingPhoneCode: _pendingPhoneCode, verificationRequestedAt: _verificationRequestedAt, ...safeUser } = user;
+  const {
+    passwordHash: _passwordHash,
+    pendingEmailCode: _pendingEmailCode,
+    pendingPhoneCode: _pendingPhoneCode,
+    verificationRequestedAt: _verificationRequestedAt,
+    ...safeUser
+  } = user;
   return safeUser;
 }
 
@@ -137,10 +138,20 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
   const status: StreamSessionStatus =
     entry.status === "live" || entry.status === "ended" ? entry.status : "prelive";
   const participationType = entry.participationType === "Lottery" ? "Lottery" : "First-come";
-  const slotsTotal = typeof entry.slotsTotal === "number" && entry.slotsTotal > 0 ? entry.slotsTotal : 10;
-  const slotsLeft = typeof entry.slotsLeft === "number" && entry.slotsLeft >= 0 ? Math.min(entry.slotsLeft, slotsTotal) : slotsTotal;
-  const speakerSlotsTotal = typeof entry.speakerSlotsTotal === "number" && entry.speakerSlotsTotal > 0 ? entry.speakerSlotsTotal : 5;
-  const speakerSlotsLeft = typeof entry.speakerSlotsLeft === "number" && entry.speakerSlotsLeft >= 0 ? Math.min(entry.speakerSlotsLeft, speakerSlotsTotal) : speakerSlotsTotal;
+  const slotsTotal =
+    typeof entry.slotsTotal === "number" && entry.slotsTotal > 0 ? entry.slotsTotal : 10;
+  const slotsLeft =
+    typeof entry.slotsLeft === "number" && entry.slotsLeft >= 0
+      ? Math.min(entry.slotsLeft, slotsTotal)
+      : slotsTotal;
+  const speakerSlotsTotal =
+    typeof entry.speakerSlotsTotal === "number" && entry.speakerSlotsTotal > 0
+      ? entry.speakerSlotsTotal
+      : 5;
+  const speakerSlotsLeft =
+    typeof entry.speakerSlotsLeft === "number" && entry.speakerSlotsLeft >= 0
+      ? Math.min(entry.speakerSlotsLeft, speakerSlotsTotal)
+      : speakerSlotsTotal;
 
   return {
     sessionId: entry.sessionId,
@@ -154,48 +165,306 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
     thumbnail: entry.thumbnail,
     hostName: entry.hostName,
     participationType,
-    requiredPlan: entry.requiredPlan === "premium" ? "premium" : entry.requiredPlan === "supporter" ? "supporter" : "free",
+    requiredPlan:
+      entry.requiredPlan === "premium"
+        ? "premium"
+        : entry.requiredPlan === "supporter"
+          ? "supporter"
+          : "free",
     reservationRequired: entry.reservationRequired === true,
     slotsTotal,
     slotsLeft,
     speakerSlotsTotal,
     speakerSlotsLeft,
-    speakerRequiredPlan: entry.speakerRequiredPlan === "premium" ? "premium" : entry.speakerRequiredPlan === "supporter" ? "supporter" : "free",
-    preferredVideoDeviceId: typeof entry.preferredVideoDeviceId === "string" ? entry.preferredVideoDeviceId : undefined,
-    preferredVideoLabel: typeof entry.preferredVideoLabel === "string" ? entry.preferredVideoLabel : undefined,
+    speakerRequiredPlan:
+      entry.speakerRequiredPlan === "premium"
+        ? "premium"
+        : entry.speakerRequiredPlan === "supporter"
+          ? "supporter"
+          : "free",
+    preferredVideoDeviceId:
+      typeof entry.preferredVideoDeviceId === "string" ? entry.preferredVideoDeviceId : undefined,
+    preferredVideoLabel:
+      typeof entry.preferredVideoLabel === "string" ? entry.preferredVideoLabel : undefined,
   };
 }
 
 function normalizeStoredUser(entry: Partial<StoredUser>): StoredUser | null {
   if (typeof entry.id !== "string" || typeof entry.name !== "string") return null;
-  const role = entry.role === "vtuber" ? "vtuber" : entry.role === "listener" ? "listener" : null;
+  const role =
+    entry.role === "vtuber" ? "vtuber" : entry.role === "listener" ? "listener" : null;
   if (!role) return null;
 
   const legacyDefaults = LEGACY_USER_DEFAULTS[entry.id] ?? {};
-  const createdAt = typeof entry.createdAt === "string" ? entry.createdAt : (legacyDefaults.createdAt ?? new Date().toISOString());
-  const emailRaw = typeof entry.email === "string" && entry.email.trim() ? entry.email : legacyDefaults.email;
-  const email = typeof emailRaw === "string" ? emailRaw.trim().toLowerCase() : `${entry.id}@aiment.local`;
+  const createdAt =
+    typeof entry.createdAt === "string"
+      ? entry.createdAt
+      : (legacyDefaults.createdAt ?? new Date().toISOString());
+  const emailRaw =
+    typeof entry.email === "string" && entry.email.trim() ? entry.email : legacyDefaults.email;
+  const email =
+    typeof emailRaw === "string" ? emailRaw.trim().toLowerCase() : `${entry.id}@aiment.local`;
 
   return {
     id: entry.id,
     name: entry.name,
     role,
     email,
-    authProvider: (entry.authProvider === "google" || entry.authProvider === "google_demo" || entry.authProvider === "password" ? entry.authProvider : legacyDefaults.authProvider) ?? "password",
+    authProvider:
+      (entry.authProvider === "google" ||
+      entry.authProvider === "google_demo" ||
+      entry.authProvider === "password"
+        ? entry.authProvider
+        : legacyDefaults.authProvider) ?? "password",
     createdAt,
     lastLoginAt: typeof entry.lastLoginAt === "string" ? entry.lastLoginAt : undefined,
-    channelName: typeof entry.channelName === "string" ? entry.channelName : legacyDefaults.channelName,
+    channelName:
+      typeof entry.channelName === "string" ? entry.channelName : legacyDefaults.channelName,
     bio: typeof entry.bio === "string" ? entry.bio : undefined,
     avatarUrl: typeof entry.avatarUrl === "string" ? entry.avatarUrl : undefined,
-    phoneNumber: typeof entry.phoneNumber === "string" ? entry.phoneNumber : legacyDefaults.phoneNumber,
-    emailVerifiedAt: typeof entry.emailVerifiedAt === "string" ? entry.emailVerifiedAt : legacyDefaults.emailVerifiedAt,
-    phoneVerifiedAt: typeof entry.phoneVerifiedAt === "string" ? entry.phoneVerifiedAt : legacyDefaults.phoneVerifiedAt,
-    termsAcceptedAt: typeof entry.termsAcceptedAt === "string" ? entry.termsAcceptedAt : legacyDefaults.termsAcceptedAt,
-    privacyAcceptedAt: typeof entry.privacyAcceptedAt === "string" ? entry.privacyAcceptedAt : legacyDefaults.privacyAcceptedAt,
+    phoneNumber:
+      typeof entry.phoneNumber === "string" ? entry.phoneNumber : legacyDefaults.phoneNumber,
+    emailVerifiedAt:
+      typeof entry.emailVerifiedAt === "string"
+        ? entry.emailVerifiedAt
+        : legacyDefaults.emailVerifiedAt,
+    phoneVerifiedAt:
+      typeof entry.phoneVerifiedAt === "string"
+        ? entry.phoneVerifiedAt
+        : legacyDefaults.phoneVerifiedAt,
+    termsAcceptedAt:
+      typeof entry.termsAcceptedAt === "string"
+        ? entry.termsAcceptedAt
+        : legacyDefaults.termsAcceptedAt,
+    privacyAcceptedAt:
+      typeof entry.privacyAcceptedAt === "string"
+        ? entry.privacyAcceptedAt
+        : legacyDefaults.privacyAcceptedAt,
     passwordHash: typeof entry.passwordHash === "string" ? entry.passwordHash : undefined,
-    pendingEmailCode: typeof entry.pendingEmailCode === "string" ? entry.pendingEmailCode : undefined,
-    pendingPhoneCode: typeof entry.pendingPhoneCode === "string" ? entry.pendingPhoneCode : undefined,
-    verificationRequestedAt: typeof entry.verificationRequestedAt === "string" ? entry.verificationRequestedAt : undefined,
+    pendingEmailCode:
+      typeof entry.pendingEmailCode === "string" ? entry.pendingEmailCode : undefined,
+    pendingPhoneCode:
+      typeof entry.pendingPhoneCode === "string" ? entry.pendingPhoneCode : undefined,
+    verificationRequestedAt:
+      typeof entry.verificationRequestedAt === "string"
+        ? entry.verificationRequestedAt
+        : undefined,
+  };
+}
+
+function makeSessionId() {
+  return `session-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
+}
+
+function makeUserId(role: SessionUser["role"]) {
+  return `${role}-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
+}
+
+function makeReservationId() {
+  return `reservation-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
+}
+
+function normalizeStartsAt(startsAt?: string) {
+  if (!startsAt) return new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const parsed = new Date(startsAt);
+  if (Number.isNaN(parsed.getTime())) throw new Error("Invalid startsAt");
+  return parsed.toISOString();
+}
+
+function validateTransition(current: StreamSessionStatus, next: StreamSessionStatus) {
+  if (current === next) return;
+  if (current === "prelive" && (next === "live" || next === "ended")) return;
+  if (current === "live" && next === "ended") return;
+  throw new Error(`Invalid transition: ${current} -> ${next}`);
+}
+
+function requireVerifiedVtuber(actor: SessionUser) {
+  if (actor.role !== "vtuber") throw new Error("Only VTuber accounts can perform this action");
+  if (!actor.phoneVerifiedAt) throw new Error("VTuber registration requires verified phone");
+}
+
+
+function makeVerificationCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+// ---------------------------------------------------------------------------
+// Neon backend
+// ---------------------------------------------------------------------------
+
+let _sql: NeonQueryFunction<false, false> | null = null;
+
+function getDb(): NeonQueryFunction<false, false> {
+  if (!_sql) {
+    _sql = neon(process.env.DATABASE_URL!);
+  }
+  return _sql;
+}
+
+let _schemaReady: Promise<void> | null = null;
+
+function ensureSchema(): Promise<void> {
+  if (!_schemaReady) {
+    _schemaReady = initSchema();
+  }
+  return _schemaReady;
+}
+
+async function initSchema() {
+  const db = getDb();
+  await db`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      email TEXT NOT NULL,
+      auth_provider TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      last_login_at TEXT,
+      channel_name TEXT,
+      bio TEXT,
+      avatar_url TEXT,
+      phone_number TEXT,
+      email_verified_at TEXT,
+      phone_verified_at TEXT,
+      terms_accepted_at TEXT,
+      privacy_accepted_at TEXT,
+      password_hash TEXT,
+      pending_email_code TEXT,
+      pending_phone_code TEXT,
+      verification_requested_at TEXT
+    )
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS stream_sessions (
+      session_id TEXT PRIMARY KEY,
+      host_user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'prelive',
+      created_at TEXT NOT NULL,
+      starts_at TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      thumbnail TEXT NOT NULL,
+      host_name TEXT NOT NULL,
+      participation_type TEXT NOT NULL DEFAULT 'First-come',
+      required_plan TEXT NOT NULL DEFAULT 'free',
+      reservation_required BOOLEAN NOT NULL DEFAULT FALSE,
+      slots_total INTEGER NOT NULL DEFAULT 10,
+      slots_left INTEGER NOT NULL DEFAULT 10,
+      speaker_slots_total INTEGER NOT NULL DEFAULT 5,
+      speaker_slots_left INTEGER NOT NULL DEFAULT 5,
+      speaker_required_plan TEXT NOT NULL DEFAULT 'free',
+      preferred_video_device_id TEXT,
+      preferred_video_label TEXT
+    )
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS reservations (
+      reservation_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'reserved',
+      type TEXT NOT NULL DEFAULT 'listener',
+      cancelled_at TEXT
+    )
+  `;
+}
+
+// Row → TypeScript type converters
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToStoredUser(row: any): StoredUser {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    role: row.role as SessionUser["role"],
+    email: row.email as string,
+    authProvider: row.auth_provider as AuthProvider,
+    createdAt: row.created_at as string,
+    lastLoginAt: row.last_login_at ?? undefined,
+    channelName: row.channel_name ?? undefined,
+    bio: row.bio ?? undefined,
+    avatarUrl: row.avatar_url ?? undefined,
+    phoneNumber: row.phone_number ?? undefined,
+    emailVerifiedAt: row.email_verified_at ?? undefined,
+    phoneVerifiedAt: row.phone_verified_at ?? undefined,
+    termsAcceptedAt: row.terms_accepted_at ?? undefined,
+    privacyAcceptedAt: row.privacy_accepted_at ?? undefined,
+    passwordHash: row.password_hash ?? undefined,
+    pendingEmailCode: row.pending_email_code ?? undefined,
+    pendingPhoneCode: row.pending_phone_code ?? undefined,
+    verificationRequestedAt: row.verification_requested_at ?? undefined,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToStreamSession(row: any): StreamSession {
+  return {
+    sessionId: row.session_id as string,
+    hostUserId: row.host_user_id as string,
+    title: row.title as string,
+    status: row.status as StreamSessionStatus,
+    createdAt: row.created_at as string,
+    startsAt: row.starts_at as string,
+    description: row.description as string,
+    category: row.category as string,
+    thumbnail: row.thumbnail as string,
+    hostName: row.host_name as string,
+    participationType: row.participation_type as "First-come" | "Lottery",
+    requiredPlan: row.required_plan as "free" | "supporter" | "premium",
+    reservationRequired: Boolean(row.reservation_required),
+    slotsTotal: Number(row.slots_total),
+    slotsLeft: Number(row.slots_left),
+    speakerSlotsTotal: Number(row.speaker_slots_total),
+    speakerSlotsLeft: Number(row.speaker_slots_left),
+    speakerRequiredPlan: row.speaker_required_plan as "free" | "supporter" | "premium",
+    preferredVideoDeviceId: row.preferred_video_device_id ?? undefined,
+    preferredVideoLabel: row.preferred_video_label ?? undefined,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToReservation(row: any): Reservation {
+  return {
+    reservationId: row.reservation_id as string,
+    sessionId: row.session_id as string,
+    userId: row.user_id as string,
+    userName: row.user_name as string,
+    createdAt: row.created_at as string,
+    status: row.status as ReservationStatus,
+    type: row.type as ReservationType,
+    cancelledAt: row.cancelled_at ?? undefined,
+  };
+}
+
+async function neonSyncSessionSlots(sessionId: string) {
+  const db = getDb();
+  await db`
+    UPDATE stream_sessions SET
+      slots_left = GREATEST(0, slots_total - (
+        SELECT COUNT(*) FROM reservations
+        WHERE session_id = ${sessionId} AND status = 'reserved' AND type = 'listener'
+      )),
+      speaker_slots_left = GREATEST(0, speaker_slots_total - (
+        SELECT COUNT(*) FROM reservations
+        WHERE session_id = ${sessionId} AND status = 'reserved' AND type = 'speaker'
+      ))
+    WHERE session_id = ${sessionId}
+  `;
+}
+
+// ---------------------------------------------------------------------------
+// File-based store functions (local dev fallback)
+// ---------------------------------------------------------------------------
+
+function cloneStore(store: StoreFile): StoreFile {
+  return {
+    users: [...store.users],
+    streamSessions: [...store.streamSessions],
+    reservations: [...store.reservations],
   };
 }
 
@@ -217,15 +486,56 @@ function syncSessionSlots(store: StoreFile) {
   });
 }
 
+function findActiveReservation(
+  store: StoreFile,
+  sessionId: string,
+  userId: string,
+  type?: ReservationType,
+) {
+  return store.reservations.find(
+    (r) =>
+      r.sessionId === sessionId &&
+      r.userId === userId &&
+      r.status === "reserved" &&
+      (type == null || r.type === type),
+  );
+}
+
+function ensureEmailAvailable(store: StoreFile, email: string, ignoreUserId?: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const found = store.users.find(
+    (user) =>
+      typeof user.email === "string" &&
+      user.email.toLowerCase() === normalizedEmail &&
+      user.id !== ignoreUserId,
+  );
+  if (found) throw new Error("This email address is already in use");
+}
+
+function ensurePhoneAvailable(store: StoreFile, phoneNumber: string, ignoreUserId?: string) {
+  const found = store.users.find(
+    (user) => user.phoneNumber === phoneNumber && user.id !== ignoreUserId,
+  );
+  if (found) throw new Error("This phone number is already registered");
+}
+
 function parseStoreFile(raw: string): StoreFile {
   const parsed = JSON.parse(raw) as Partial<StoreFile>;
   const store = {
-    users: Array.isArray(parsed.users) ? parsed.users.map((entry) => normalizeStoredUser(entry as Partial<StoredUser>)).filter((entry): entry is StoredUser => entry != null) : [],
+    users: Array.isArray(parsed.users)
+      ? parsed.users
+          .map((entry) => normalizeStoredUser(entry as Partial<StoredUser>))
+          .filter((entry): entry is StoredUser => entry != null)
+      : [],
     streamSessions: Array.isArray(parsed.streamSessions)
-      ? parsed.streamSessions.map((entry) => normalizeStreamSession(entry as Partial<StreamSession>)).filter((entry): entry is StreamSession => entry != null)
+      ? parsed.streamSessions
+          .map((entry) => normalizeStreamSession(entry as Partial<StreamSession>))
+          .filter((entry): entry is StreamSession => entry != null)
       : [],
     reservations: Array.isArray(parsed.reservations)
-      ? parsed.reservations.map((entry) => normalizeReservation(entry as Partial<Reservation>)).filter((entry): entry is Reservation => entry != null)
+      ? parsed.reservations
+          .map((entry) => normalizeReservation(entry as Partial<Reservation>))
+          .filter((entry): entry is Reservation => entry != null)
       : [],
   };
   syncSessionSlots(store);
@@ -260,20 +570,6 @@ async function ensureStoreFile() {
 }
 
 async function readStore(): Promise<StoreFile> {
-  if (USE_KV) {
-    const stored = await kv.get<StoreFile>(KV_KEY);
-    if (stored) {
-      try {
-        return parseStoreFile(JSON.stringify(stored));
-      } catch {
-        return cloneStore(DEFAULT_STORE);
-      }
-    }
-    const seed = await getSeedStore();
-    await kv.set(KV_KEY, seed);
-    return seed;
-  }
-
   await ensureStoreFile();
   const raw = await readFile(STORE_FILE, "utf8");
   try {
@@ -288,11 +584,7 @@ async function mutateStore<T>(mutator: (store: StoreFile) => Promise<T> | T): Pr
     const store = await readStore();
     const nextStore = cloneStore(store);
     const result = await mutator(nextStore);
-    if (USE_KV) {
-      await kv.set(KV_KEY, nextStore);
-    } else {
-      await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
-    }
+    await writeFile(STORE_FILE, JSON.stringify(nextStore, null, 2), "utf8");
     return result;
   };
 
@@ -304,92 +596,70 @@ async function mutateStore<T>(mutator: (store: StoreFile) => Promise<T> | T): Pr
   return task;
 }
 
-function makeSessionId() {
-  return `session-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
-}
-
-function makeUserId(role: SessionUser["role"]) {
-  return `${role}-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
-}
-
-function makeReservationId() {
-  return `reservation-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
-}
-
-function normalizeStartsAt(startsAt?: string) {
-  if (!startsAt) return new Date(Date.now() + 5 * 60 * 1000).toISOString();
-  const parsed = new Date(startsAt);
-  if (Number.isNaN(parsed.getTime())) throw new Error("Invalid startsAt");
-  return parsed.toISOString();
-}
-
-function validateTransition(current: StreamSessionStatus, next: StreamSessionStatus) {
-  if (current === next) return;
-  if (current === "prelive" && (next === "live" || next === "ended")) return;
-  if (current === "live" && next === "ended") return;
-  throw new Error(`Invalid transition: ${current} -> ${next}`);
-}
-
-function requireVerifiedVtuber(actor: SessionUser) {
-  if (actor.role !== "vtuber") throw new Error("Only VTuber accounts can perform this action");
-  if (!actor.phoneVerifiedAt) throw new Error("VTuber registration requires verified phone");
-}
-
-function requireListener(actor: SessionUser) {
-  if (actor.role !== "listener") throw new Error("Only listener accounts can reserve sessions");
-}
-
-function makeVerificationCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function ensureEmailAvailable(store: StoreFile, email: string, ignoreUserId?: string) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const found = store.users.find((user) => typeof user.email === "string" && user.email.toLowerCase() === normalizedEmail && user.id !== ignoreUserId);
-  if (found) throw new Error("This email address is already in use");
-}
-
-function ensurePhoneAvailable(store: StoreFile, phoneNumber: string, ignoreUserId?: string) {
-  const found = store.users.find((user) => user.phoneNumber === phoneNumber && user.id !== ignoreUserId);
-  if (found) throw new Error("This phone number is already registered");
-}
-
-function findActiveReservation(store: StoreFile, sessionId: string, userId: string, type?: ReservationType) {
-  return store.reservations.find(
-    (r) => r.sessionId === sessionId && r.userId === userId && r.status === "reserved" && (type == null || r.type === type),
-  );
-}
+// ---------------------------------------------------------------------------
+// Exported functions
+// ---------------------------------------------------------------------------
 
 export async function resetStore() {
-  const seed = await getSeedStore();
-  if (USE_KV) {
-    await kv.set(KV_KEY, seed);
-  } else {
-    await writeFile(STORE_FILE, JSON.stringify(seed, null, 2), "utf8");
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    await db`DELETE FROM reservations`;
+    await db`DELETE FROM stream_sessions`;
+    await db`DELETE FROM users`;
+    return;
   }
+  const seed = await getSeedStore();
+  await writeFile(STORE_FILE, JSON.stringify(seed, null, 2), "utf8");
 }
 
 export async function listUsers() {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT * FROM users ORDER BY created_at DESC`;
+    return rows.map((r) => sanitizeUser(rowToStoredUser(r)));
+  }
   const store = await readStore();
   return store.users.map(sanitizeUser);
 }
 
 export async function getUserById(userId: string) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT * FROM users WHERE id = ${userId}`;
+    if (!rows[0]) return null;
+    return sanitizeUser(rowToStoredUser(rows[0]));
+  }
   const store = await readStore();
   const user = store.users.find((entry) => entry.id === userId);
   return user ? sanitizeUser(user) : null;
 }
 
 export async function getUserByEmail(email: string) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const normalizedEmail = email.trim().toLowerCase();
+    const rows = await db`SELECT * FROM users WHERE LOWER(email) = ${normalizedEmail}`;
+    if (!rows[0]) return null;
+    return sanitizeUser(rowToStoredUser(rows[0]));
+  }
   const store = await readStore();
   const normalizedEmail = email.trim().toLowerCase();
-  const user = store.users.find((entry) => typeof entry.email === "string" && entry.email.toLowerCase() === normalizedEmail);
+  const user = store.users.find(
+    (entry) =>
+      typeof entry.email === "string" && entry.email.toLowerCase() === normalizedEmail,
+  );
   return user ? sanitizeUser(user) : null;
 }
 
-async function getStoredUserById(userId: string) {
-  const store = await readStore();
-  return store.users.find((entry) => entry.id === userId) ?? null;
+async function neonGetStoredUserById(userId: string): Promise<StoredUser | null> {
+  const db = getDb();
+  const rows = await db`SELECT * FROM users WHERE id = ${userId}`;
+  if (!rows[0]) return null;
+  return rowToStoredUser(rows[0]);
 }
 
 export async function signupUser(input: SignupInput) {
@@ -399,9 +669,45 @@ export async function signupUser(input: SignupInput) {
   if (!input.name.trim()) throw new Error("Display name is required");
   if (!input.email.trim()) throw new Error("Email address is required");
   if (input.provider === "password" && !input.password) throw new Error("Password is required");
-  if (input.role === "vtuber" && !input.phoneNumber?.trim()) throw new Error("Phone number is required for VTuber registration");
+  if (input.role === "vtuber" && !input.phoneNumber?.trim())
+    throw new Error("Phone number is required for VTuber registration");
 
   const now = new Date().toISOString();
+
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const normalizedEmail = input.email.trim().toLowerCase();
+
+    // Check email uniqueness
+    const existing = await db`SELECT id FROM users WHERE LOWER(email) = ${normalizedEmail}`;
+    if (existing.length > 0) throw new Error("This email address is already in use");
+
+    if (input.phoneNumber?.trim()) {
+      const existingPhone =
+        await db`SELECT id FROM users WHERE phone_number = ${input.phoneNumber.trim()}`;
+      if (existingPhone.length > 0) throw new Error("This phone number is already registered");
+    }
+
+    const id = makeUserId(input.role);
+    const passwordHash = input.password ? hashSecret(input.password) : null;
+    const emailVerifiedAt = input.provider === "google_demo" ? now : null;
+
+    await db`
+      INSERT INTO users (
+        id, name, role, email, auth_provider, created_at, last_login_at,
+        channel_name, bio, phone_number, terms_accepted_at, privacy_accepted_at,
+        password_hash, email_verified_at
+      ) VALUES (
+        ${id}, ${input.name.trim()}, ${input.role}, ${normalizedEmail}, ${input.provider},
+        ${now}, ${now}, ${input.channelName?.trim() || null}, ${input.bio?.trim() || null},
+        ${input.phoneNumber?.trim() || null}, ${now}, ${now}, ${passwordHash}, ${emailVerifiedAt}
+      )
+    `;
+
+    const rows = await db`SELECT * FROM users WHERE id = ${id}`;
+    return sanitizeUser(rowToStoredUser(rows[0]));
+  }
 
   return mutateStore((store) => {
     ensureEmailAvailable(store, input.email);
@@ -434,12 +740,37 @@ export async function signupUser(input: SignupInput) {
 
 export async function loginUser(input: LoginInput) {
   if (!input.email?.trim()) throw new Error("Email address is required");
+
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const rows = await db`SELECT * FROM users WHERE LOWER(email) = ${normalizedEmail}`;
+    if (!rows[0]) throw new Error("Account not found");
+    const user = rowToStoredUser(rows[0]);
+    if (user.authProvider !== input.provider)
+      throw new Error("Use the original sign-in method for this account");
+    if (input.provider === "password" && user.passwordHash !== hashSecret(input.password ?? "")) {
+      throw new Error("Incorrect email or password");
+    }
+    const now = new Date().toISOString();
+    await db`UPDATE users SET last_login_at = ${now} WHERE id = ${user.id}`;
+    return sanitizeUser({ ...user, lastLoginAt: now });
+  }
+
   const store = await readStore();
   const normalizedEmail = input.email.trim().toLowerCase();
-  const user = store.users.find((entry) => typeof entry.email === "string" && entry.email.toLowerCase() === normalizedEmail);
+  const user = store.users.find(
+    (entry) =>
+      typeof entry.email === "string" && entry.email.toLowerCase() === normalizedEmail,
+  );
   if (!user) throw new Error("Account not found");
-  if (user.authProvider !== input.provider) throw new Error("Use the original sign-in method for this account");
-  if (input.provider === "password" && user.passwordHash !== hashSecret(input.password ?? "")) {
+  if (user.authProvider !== input.provider)
+    throw new Error("Use the original sign-in method for this account");
+  if (
+    input.provider === "password" &&
+    user.passwordHash !== hashSecret(input.password ?? "")
+  ) {
     throw new Error("Incorrect email or password");
   }
 
@@ -459,6 +790,41 @@ export async function googleAuthUser(input: {
   role: SessionUser["role"];
 }) {
   const now = new Date().toISOString();
+
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const rows = await db`SELECT * FROM users WHERE LOWER(email) = ${normalizedEmail}`;
+
+    if (rows.length > 0) {
+      const existing = rowToStoredUser(rows[0]);
+      if (existing.authProvider !== "google") {
+        throw new Error(
+          "このメールアドレスはすでに別の方法で登録されています。元のログイン方法をお使いください。",
+        );
+      }
+      await db`
+        UPDATE users SET last_login_at = ${now}, avatar_url = ${input.avatarUrl ?? existing.avatarUrl ?? null}
+        WHERE id = ${existing.id}
+      `;
+      return sanitizeUser({ ...existing, lastLoginAt: now, avatarUrl: input.avatarUrl ?? existing.avatarUrl });
+    }
+
+    const id = makeUserId(input.role);
+    await db`
+      INSERT INTO users (
+        id, name, role, email, auth_provider, created_at, last_login_at,
+        avatar_url, email_verified_at, terms_accepted_at, privacy_accepted_at
+      ) VALUES (
+        ${id}, ${input.name.trim()}, ${input.role}, ${normalizedEmail}, 'google',
+        ${now}, ${now}, ${input.avatarUrl ?? null}, ${now}, ${now}, ${now}
+      )
+    `;
+    const newRows = await db`SELECT * FROM users WHERE id = ${id}`;
+    return sanitizeUser(rowToStoredUser(newRows[0]));
+  }
+
   return mutateStore((store) => {
     const normalizedEmail = input.email.trim().toLowerCase();
     const existing = store.users.find(
@@ -467,7 +833,9 @@ export async function googleAuthUser(input: {
 
     if (existing) {
       if (existing.authProvider !== "google") {
-        throw new Error("このメールアドレスはすでに別の方法で登録されています。元のログイン方法をお使いください。");
+        throw new Error(
+          "このメールアドレスはすでに別の方法で登録されています。元のログイン方法をお使いください。",
+        );
       }
       existing.lastLoginAt = now;
       if (input.avatarUrl) existing.avatarUrl = input.avatarUrl;
@@ -493,7 +861,47 @@ export async function googleAuthUser(input: {
   });
 }
 
-export async function updateAccountProfile(userId: string, patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string }) {
+export async function updateAccountProfile(
+  userId: string,
+  patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string },
+) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const current = await neonGetStoredUserById(userId);
+    if (!current) return null;
+
+    const nextName = patch.name != null ? patch.name.trim() : current.name;
+    const nextChannelName = patch.channelName != null ? patch.channelName.trim() || null : current.channelName ?? null;
+    const nextBio = patch.bio != null ? patch.bio.trim() || null : current.bio ?? null;
+
+    let nextPhoneNumber = current.phoneNumber ?? null;
+    let nextPhoneVerifiedAt = current.phoneVerifiedAt ?? null;
+    if (patch.phoneNumber != null) {
+      const normalized = patch.phoneNumber.trim() || null;
+      if (normalized && normalized !== current.phoneNumber) {
+        const existing =
+          await db`SELECT id FROM users WHERE phone_number = ${normalized} AND id != ${userId}`;
+        if (existing.length > 0) throw new Error("This phone number is already registered");
+        nextPhoneVerifiedAt = null; // reset verification when phone changes
+      }
+      nextPhoneNumber = normalized;
+    }
+
+    await db`
+      UPDATE users SET
+        name = ${nextName},
+        channel_name = ${nextChannelName},
+        bio = ${nextBio},
+        phone_number = ${nextPhoneNumber},
+        phone_verified_at = ${nextPhoneVerifiedAt}
+      WHERE id = ${userId}
+    `;
+    const rows = await db`SELECT * FROM users WHERE id = ${userId}`;
+    if (!rows[0]) return null;
+    return sanitizeUser(rowToStoredUser(rows[0]));
+  }
+
   return mutateStore((store) => {
     const target = store.users.find((entry) => entry.id === userId);
     if (!target) return null;
@@ -517,6 +925,17 @@ export async function updateAccountProfile(userId: string, patch: { name?: strin
 
 export async function requestEmailVerification(userId: string) {
   const code = makeVerificationCode();
+
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT id FROM users WHERE id = ${userId}`;
+    if (!rows[0]) throw new Error("Account not found");
+    const now = new Date().toISOString();
+    await db`UPDATE users SET pending_email_code = ${code}, verification_requested_at = ${now} WHERE id = ${userId}`;
+    return { code };
+  }
+
   return mutateStore((store) => {
     const target = store.users.find((entry) => entry.id === userId);
     if (!target) throw new Error("Account not found");
@@ -527,10 +946,24 @@ export async function requestEmailVerification(userId: string) {
 }
 
 export async function confirmEmailVerification(userId: string, code: string) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT * FROM users WHERE id = ${userId}`;
+    if (!rows[0]) throw new Error("Account not found");
+    const user = rowToStoredUser(rows[0]);
+    if (!user.pendingEmailCode || user.pendingEmailCode !== code.trim())
+      throw new Error("Invalid verification code");
+    const now = new Date().toISOString();
+    await db`UPDATE users SET email_verified_at = ${now}, pending_email_code = NULL WHERE id = ${userId}`;
+    return sanitizeUser({ ...user, emailVerifiedAt: now, pendingEmailCode: undefined });
+  }
+
   return mutateStore((store) => {
     const target = store.users.find((entry) => entry.id === userId);
     if (!target) throw new Error("Account not found");
-    if (!target.pendingEmailCode || target.pendingEmailCode !== code.trim()) throw new Error("Invalid verification code");
+    if (!target.pendingEmailCode || target.pendingEmailCode !== code.trim())
+      throw new Error("Invalid verification code");
     target.emailVerifiedAt = new Date().toISOString();
     delete target.pendingEmailCode;
     return sanitizeUser(target);
@@ -539,6 +972,23 @@ export async function confirmEmailVerification(userId: string, code: string) {
 
 export async function requestPhoneVerification(userId: string) {
   const code = makeVerificationCode();
+
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT * FROM users WHERE id = ${userId}`;
+    if (!rows[0]) throw new Error("Account not found");
+    const user = rowToStoredUser(rows[0]);
+    if (!user.phoneNumber) throw new Error("Phone number is not registered");
+    // Check phone uniqueness
+    const existing =
+      await db`SELECT id FROM users WHERE phone_number = ${user.phoneNumber} AND id != ${userId}`;
+    if (existing.length > 0) throw new Error("This phone number is already registered");
+    const now = new Date().toISOString();
+    await db`UPDATE users SET pending_phone_code = ${code}, verification_requested_at = ${now} WHERE id = ${userId}`;
+    return { code };
+  }
+
   return mutateStore((store) => {
     const target = store.users.find((entry) => entry.id === userId);
     if (!target) throw new Error("Account not found");
@@ -551,10 +1001,24 @@ export async function requestPhoneVerification(userId: string) {
 }
 
 export async function confirmPhoneVerification(userId: string, code: string) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT * FROM users WHERE id = ${userId}`;
+    if (!rows[0]) throw new Error("Account not found");
+    const user = rowToStoredUser(rows[0]);
+    if (!user.pendingPhoneCode || user.pendingPhoneCode !== code.trim())
+      throw new Error("Invalid verification code");
+    const now = new Date().toISOString();
+    await db`UPDATE users SET phone_verified_at = ${now}, pending_phone_code = NULL WHERE id = ${userId}`;
+    return sanitizeUser({ ...user, phoneVerifiedAt: now, pendingPhoneCode: undefined });
+  }
+
   return mutateStore((store) => {
     const target = store.users.find((entry) => entry.id === userId);
     if (!target) throw new Error("Account not found");
-    if (!target.pendingPhoneCode || target.pendingPhoneCode !== code.trim()) throw new Error("Invalid verification code");
+    if (!target.pendingPhoneCode || target.pendingPhoneCode !== code.trim())
+      throw new Error("Invalid verification code");
     target.phoneVerifiedAt = new Date().toISOString();
     delete target.pendingPhoneCode;
     return sanitizeUser(target);
@@ -562,6 +1026,16 @@ export async function confirmPhoneVerification(userId: string, code: string) {
 }
 
 export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows =
+      statuses?.length
+        ? await db`SELECT * FROM stream_sessions WHERE status = ANY(${statuses}) ORDER BY created_at DESC`
+        : await db`SELECT * FROM stream_sessions ORDER BY created_at DESC`;
+    return rows.map(rowToStreamSession);
+  }
+
   const store = await readStore();
   const filtered = statuses?.length
     ? store.streamSessions.filter((session) => statuses.includes(session.status))
@@ -570,11 +1044,27 @@ export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
 }
 
 export async function getStreamSessionById(sessionId: string) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    if (!rows[0]) return null;
+    return rowToStreamSession(rows[0]);
+  }
+
   const store = await readStore();
   return store.streamSessions.find((session) => session.sessionId === sessionId) ?? null;
 }
 
 export async function listReservationsForUser(userId: string) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows =
+      await db`SELECT * FROM reservations WHERE user_id = ${userId} ORDER BY created_at DESC`;
+    return rows.map(rowToReservation);
+  }
+
   const store = await readStore();
   return store.reservations
     .filter((reservation) => reservation.userId === userId)
@@ -582,20 +1072,67 @@ export async function listReservationsForUser(userId: string) {
 }
 
 export async function listReservationsForSession(sessionId: string, actor: SessionUser) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const sessionRows =
+      await db`SELECT host_user_id FROM stream_sessions WHERE session_id = ${sessionId}`;
+    if (!sessionRows[0]) throw new Error("Session not found");
+    if (sessionRows[0].host_user_id !== actor.id)
+      throw new Error("Cannot view reservations for another VTuber's session");
+    const rows =
+      await db`SELECT * FROM reservations WHERE session_id = ${sessionId} ORDER BY created_at DESC`;
+    return rows.map(rowToReservation);
+  }
+
   const store = await readStore();
   const session = store.streamSessions.find((entry) => entry.sessionId === sessionId);
   if (!session) throw new Error("Session not found");
-  if (session.hostUserId !== actor.id) throw new Error("Cannot view reservations for another VTuber's session");
+  if (session.hostUserId !== actor.id)
+    throw new Error("Cannot view reservations for another VTuber's session");
 
   return store.reservations
     .filter((reservation) => reservation.sessionId === sessionId)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-export async function createStreamSession(hostUser: SessionUser, input: CreateStreamSessionInput) {
+export async function createStreamSession(
+  hostUser: SessionUser,
+  input: CreateStreamSessionInput,
+) {
   requireVerifiedVtuber(hostUser);
   if (input.reservationRequired && (input.participationType ?? "First-come") !== "First-come") {
     throw new Error("Reservation-required sessions must use first-come participation");
+  }
+
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const now = new Date().toISOString();
+    const slotsTotal = input.slotsTotal ?? 10;
+    const speakerSlotsTotal = input.speakerSlotsTotal ?? 5;
+    const sessionId = makeSessionId();
+
+    await db`
+      INSERT INTO stream_sessions (
+        session_id, host_user_id, title, status, created_at, starts_at, description,
+        category, thumbnail, host_name, participation_type, required_plan,
+        reservation_required, slots_total, slots_left, speaker_slots_total, speaker_slots_left,
+        speaker_required_plan, preferred_video_device_id, preferred_video_label
+      ) VALUES (
+        ${sessionId}, ${hostUser.id}, ${input.title.trim()}, 'prelive', ${now},
+        ${normalizeStartsAt(input.startsAt)}, ${input.description.trim()}, ${input.category.trim()},
+        ${input.thumbnail ?? "/image/thumbnail/thumbnail_5.png"},
+        ${input.hostName?.trim() || hostUser.name},
+        ${input.participationType ?? "First-come"}, ${input.requiredPlan ?? "free"},
+        ${input.reservationRequired === true}, ${slotsTotal}, ${slotsTotal},
+        ${speakerSlotsTotal}, ${speakerSlotsTotal}, ${input.speakerRequiredPlan ?? "free"},
+        ${input.preferredVideoDeviceId ?? null}, ${input.preferredVideoLabel ?? null}
+      )
+    `;
+
+    const rows = await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    return rowToStreamSession(rows[0]);
   }
 
   const created = await mutateStore((store) => {
@@ -634,11 +1171,78 @@ export async function createStreamSession(hostUser: SessionUser, input: CreateSt
   return created;
 }
 
-export async function updateStreamSession(sessionId: string, actor: SessionUser, patch: UpdateStreamSessionInput) {
+export async function updateStreamSession(
+  sessionId: string,
+  actor: SessionUser,
+  patch: UpdateStreamSessionInput,
+) {
   requireVerifiedVtuber(actor);
 
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const sessionRows =
+      await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    if (!sessionRows[0]) return null;
+    const current = rowToStreamSession(sessionRows[0]);
+    if (current.hostUserId !== actor.id)
+      throw new Error("Cannot update another VTuber's session");
+
+    // Count active reservations
+    const listenerCountRows =
+      await db`SELECT COUNT(*) as cnt FROM reservations WHERE session_id = ${sessionId} AND status = 'reserved' AND type = 'listener'`;
+    const speakerCountRows =
+      await db`SELECT COUNT(*) as cnt FROM reservations WHERE session_id = ${sessionId} AND status = 'reserved' AND type = 'speaker'`;
+    const listenerReservedCount = Number(listenerCountRows[0].cnt);
+    const speakerReservedCount = Number(speakerCountRows[0].cnt);
+
+    const nextSlotsTotal = patch.slotsTotal ?? current.slotsTotal;
+    const nextSpeakerSlotsTotal = patch.speakerSlotsTotal ?? current.speakerSlotsTotal;
+    const nextParticipationType = patch.participationType ?? current.participationType;
+    const nextReservationRequired = patch.reservationRequired ?? current.reservationRequired;
+    const nextRequiredPlan = patch.requiredPlan ?? current.requiredPlan;
+    const nextSpeakerRequiredPlan = patch.speakerRequiredPlan ?? current.speakerRequiredPlan;
+
+    if (nextSlotsTotal < listenerReservedCount)
+      throw new Error("slotsTotal cannot be lower than active listener reservations");
+    if (nextSpeakerSlotsTotal < speakerReservedCount)
+      throw new Error("speakerSlotsTotal cannot be lower than active speaker reservations");
+    if (nextReservationRequired && nextParticipationType !== "First-come")
+      throw new Error("Reservation-required sessions must use first-come participation");
+    if (nextSlotsTotal < 1) throw new Error("slotsTotal must be at least 1");
+    if (nextSpeakerSlotsTotal < 1) throw new Error("speakerSlotsTotal must be at least 1");
+
+    const nextStartsAt = patch.startsAt ? normalizeStartsAt(patch.startsAt) : current.startsAt;
+    const nextSlotsLeft = Math.max(0, nextSlotsTotal - listenerReservedCount);
+    const nextSpeakerSlotsLeft = Math.max(0, nextSpeakerSlotsTotal - speakerReservedCount);
+
+    await db`
+      UPDATE stream_sessions SET
+        title = ${patch.title?.trim() ?? current.title},
+        description = ${patch.description?.trim() ?? current.description},
+        category = ${patch.category?.trim() ?? current.category},
+        host_name = ${patch.hostName?.trim() ?? current.hostName},
+        starts_at = ${nextStartsAt},
+        participation_type = ${nextParticipationType},
+        required_plan = ${nextRequiredPlan},
+        reservation_required = ${nextReservationRequired},
+        slots_total = ${nextSlotsTotal},
+        slots_left = ${nextSlotsLeft},
+        speaker_slots_total = ${nextSpeakerSlotsTotal},
+        speaker_slots_left = ${nextSpeakerSlotsLeft},
+        speaker_required_plan = ${nextSpeakerRequiredPlan},
+        thumbnail = ${patch.thumbnail ?? current.thumbnail}
+      WHERE session_id = ${sessionId}
+    `;
+
+    const updated = await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    return rowToStreamSession(updated[0]);
+  }
+
   return mutateStore((store) => {
-    const index = store.streamSessions.findIndex((session) => session.sessionId === sessionId);
+    const index = store.streamSessions.findIndex(
+      (session) => session.sessionId === sessionId,
+    );
     if (index === -1) return null;
 
     const current = store.streamSessions[index];
@@ -652,15 +1256,13 @@ export async function updateStreamSession(sessionId: string, actor: SessionUser,
     const nextReservationRequired = patch.reservationRequired ?? current.reservationRequired;
     const nextRequiredPlan = patch.requiredPlan ?? current.requiredPlan;
     const nextSpeakerRequiredPlan = patch.speakerRequiredPlan ?? current.speakerRequiredPlan;
-    if (nextSlotsTotal < listenerReservedCount) {
+
+    if (nextSlotsTotal < listenerReservedCount)
       throw new Error("slotsTotal cannot be lower than active listener reservations");
-    }
-    if (nextSpeakerSlotsTotal < speakerReservedCount) {
+    if (nextSpeakerSlotsTotal < speakerReservedCount)
       throw new Error("speakerSlotsTotal cannot be lower than active speaker reservations");
-    }
-    if (nextReservationRequired && nextParticipationType !== "First-come") {
+    if (nextReservationRequired && nextParticipationType !== "First-come")
       throw new Error("Reservation-required sessions must use first-come participation");
-    }
 
     const next: StreamSession = {
       ...current,
@@ -695,8 +1297,30 @@ export async function updateStreamSession(sessionId: string, actor: SessionUser,
 export async function deleteStreamSession(sessionId: string, actor: SessionUser) {
   requireVerifiedVtuber(actor);
 
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    if (!rows[0]) return null;
+    const current = rowToStreamSession(rows[0]);
+    if (current.hostUserId !== actor.id)
+      throw new Error("Cannot delete another VTuber's session");
+    if (current.status === "live")
+      throw new Error("Cannot delete a session that is currently live");
+
+    const now = new Date().toISOString();
+    await db`
+      UPDATE reservations SET status = 'cancelled', cancelled_at = ${now}
+      WHERE session_id = ${sessionId} AND status = 'reserved'
+    `;
+    await db`DELETE FROM stream_sessions WHERE session_id = ${sessionId}`;
+    return true;
+  }
+
   return mutateStore((store) => {
-    const index = store.streamSessions.findIndex((session) => session.sessionId === sessionId);
+    const index = store.streamSessions.findIndex(
+      (session) => session.sessionId === sessionId,
+    );
     if (index === -1) return null;
 
     const current = store.streamSessions[index];
@@ -704,7 +1328,6 @@ export async function deleteStreamSession(sessionId: string, actor: SessionUser)
     if (current.status === "live") throw new Error("Cannot delete a session that is currently live");
 
     store.streamSessions.splice(index, 1);
-    // cancel all reservations for this session
     for (const reservation of store.reservations) {
       if (reservation.sessionId === sessionId && reservation.status === "reserved") {
         reservation.status = "cancelled";
@@ -716,17 +1339,48 @@ export async function deleteStreamSession(sessionId: string, actor: SessionUser)
 }
 
 export async function listStreamSessionsByHost(hostUserId: string): Promise<StreamSession[]> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows =
+      await db`SELECT * FROM stream_sessions WHERE host_user_id = ${hostUserId} ORDER BY created_at DESC`;
+    return rows.map(rowToStreamSession);
+  }
+
   const store = await readStore();
   return store.streamSessions
     .filter((session) => session.hostUserId === hostUserId)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-export async function setStreamSessionStatus(sessionId: string, actor: SessionUser, status: StreamSessionStatus) {
+export async function setStreamSessionStatus(
+  sessionId: string,
+  actor: SessionUser,
+  status: StreamSessionStatus,
+) {
   requireVerifiedVtuber(actor);
 
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    if (!rows[0]) return null;
+    const current = rowToStreamSession(rows[0]);
+    if (current.hostUserId !== actor.id)
+      throw new Error("Cannot change another VTuber's session");
+    validateTransition(current.status, status);
+
+    await db`UPDATE stream_sessions SET status = ${status} WHERE session_id = ${sessionId}`;
+    await neonSyncSessionSlots(sessionId);
+
+    const updated = await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    return rowToStreamSession(updated[0]);
+  }
+
   return mutateStore((store) => {
-    const index = store.streamSessions.findIndex((session) => session.sessionId === sessionId);
+    const index = store.streamSessions.findIndex(
+      (session) => session.sessionId === sessionId,
+    );
     if (index === -1) return null;
 
     const current = store.streamSessions[index];
@@ -746,29 +1400,86 @@ export async function createReservation(actor: SessionUser, input: CreateReserva
   const reservationType: ReservationType = input.type === "speaker" ? "speaker" : "listener";
   const actorPlan = await getEffectivePlanForUser(actor.id);
 
-  return mutateStore((store) => {
-    const session = store.streamSessions.find((entry) => entry.sessionId === input.sessionId);
-    if (!session) throw new Error("Session not found");
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+
+    const sessionRows =
+      await db`SELECT * FROM stream_sessions WHERE session_id = ${input.sessionId}`;
+    if (!sessionRows[0]) throw new Error("Session not found");
+    const session = rowToStreamSession(sessionRows[0]);
+
     if (session.status === "ended") throw new Error("This stream has ended");
-    if (session.status === "live" && session.reservationRequired) throw new Error("Reservations for this session must be made before the stream starts");
+    if (session.status === "live" && session.reservationRequired)
+      throw new Error(
+        "Reservations for this session must be made before the stream starts",
+      );
 
     if (reservationType === "speaker") {
-      if (!canAccessPlan(actorPlan, session.speakerRequiredPlan)) {
+      if (!canAccessPlan(actorPlan, session.speakerRequiredPlan))
         throw new Error(`Speaker slots require the ${session.speakerRequiredPlan} plan`);
-      }
-      if (findActiveReservation(store, session.sessionId, actor.id, "speaker")) {
+
+      const existingRows =
+        await db`SELECT reservation_id FROM reservations WHERE session_id = ${session.sessionId} AND user_id = ${actor.id} AND status = 'reserved' AND type = 'speaker'`;
+      if (existingRows.length > 0)
         throw new Error("You already have a speaker reservation for this session");
-      }
+
+      const countRows =
+        await db`SELECT COUNT(*) as cnt FROM reservations WHERE session_id = ${session.sessionId} AND status = 'reserved' AND type = 'speaker'`;
+      if (Number(countRows[0].cnt) >= session.speakerSlotsTotal)
+        throw new Error("No speaker slots left");
+    } else {
+      if (session.participationType !== "First-come")
+        throw new Error("Reservation API currently supports first-come sessions only");
+      if (!canAccessPlan(actorPlan, session.requiredPlan))
+        throw new Error(`This session requires the ${session.requiredPlan} plan`);
+
+      const existingRows =
+        await db`SELECT reservation_id FROM reservations WHERE session_id = ${session.sessionId} AND user_id = ${actor.id} AND status = 'reserved' AND type = 'listener'`;
+      if (existingRows.length > 0) throw new Error("You already reserved this session");
+
+      const countRows =
+        await db`SELECT COUNT(*) as cnt FROM reservations WHERE session_id = ${session.sessionId} AND status = 'reserved' AND type = 'listener'`;
+      if (Number(countRows[0].cnt) >= session.slotsTotal)
+        throw new Error("No reservation slots left");
+    }
+
+    const reservationId = makeReservationId();
+    const now = new Date().toISOString();
+    await db`
+      INSERT INTO reservations (reservation_id, session_id, user_id, user_name, created_at, status, type)
+      VALUES (${reservationId}, ${session.sessionId}, ${actor.id}, ${actor.name}, ${now}, 'reserved', ${reservationType})
+    `;
+    await neonSyncSessionSlots(session.sessionId);
+
+    const resRows =
+      await db`SELECT * FROM reservations WHERE reservation_id = ${reservationId}`;
+    return rowToReservation(resRows[0]);
+  }
+
+  return mutateStore((store) => {
+    const session = store.streamSessions.find(
+      (entry) => entry.sessionId === input.sessionId,
+    );
+    if (!session) throw new Error("Session not found");
+    if (session.status === "ended") throw new Error("This stream has ended");
+    if (session.status === "live" && session.reservationRequired)
+      throw new Error("Reservations for this session must be made before the stream starts");
+
+    if (reservationType === "speaker") {
+      if (!canAccessPlan(actorPlan, session.speakerRequiredPlan))
+        throw new Error(`Speaker slots require the ${session.speakerRequiredPlan} plan`);
+      if (findActiveReservation(store, session.sessionId, actor.id, "speaker"))
+        throw new Error("You already have a speaker reservation for this session");
       const speakerCount = countActiveReservations(store, session.sessionId, "speaker");
       if (speakerCount >= session.speakerSlotsTotal) throw new Error("No speaker slots left");
     } else {
-      if (session.participationType !== "First-come") throw new Error("Reservation API currently supports first-come sessions only");
-      if (!canAccessPlan(actorPlan, session.requiredPlan)) {
+      if (session.participationType !== "First-come")
+        throw new Error("Reservation API currently supports first-come sessions only");
+      if (!canAccessPlan(actorPlan, session.requiredPlan))
         throw new Error(`This session requires the ${session.requiredPlan} plan`);
-      }
-      if (findActiveReservation(store, session.sessionId, actor.id, "listener")) {
+      if (findActiveReservation(store, session.sessionId, actor.id, "listener"))
         throw new Error("You already reserved this session");
-      }
       const listenerCount = countActiveReservations(store, session.sessionId, "listener");
       if (listenerCount >= session.slotsTotal) throw new Error("No reservation slots left");
     }
@@ -789,17 +1500,50 @@ export async function createReservation(actor: SessionUser, input: CreateReserva
   });
 }
 
-export async function hasActiveSpeakerReservation(userId: string, sessionId: string): Promise<boolean> {
+export async function hasActiveSpeakerReservation(
+  userId: string,
+  sessionId: string,
+): Promise<boolean> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows =
+      await db`SELECT reservation_id FROM reservations WHERE session_id = ${sessionId} AND user_id = ${userId} AND status = 'reserved' AND type = 'speaker'`;
+    return rows.length > 0;
+  }
+
   const store = await readStore();
   return !!findActiveReservation(store, sessionId, userId, "speaker");
 }
 
 export async function cancelReservation(actor: SessionUser, reservationId: string) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows =
+      await db`SELECT * FROM reservations WHERE reservation_id = ${reservationId}`;
+    if (!rows[0]) return null;
+    const reservation = rowToReservation(rows[0]);
+    if (reservation.userId !== actor.id)
+      throw new Error("Cannot cancel another user's reservation");
+    if (reservation.status !== "reserved") return reservation;
+
+    const now = new Date().toISOString();
+    await db`
+      UPDATE reservations SET status = 'cancelled', cancelled_at = ${now}
+      WHERE reservation_id = ${reservationId}
+    `;
+    await neonSyncSessionSlots(reservation.sessionId);
+    return { ...reservation, status: "cancelled" as ReservationStatus, cancelledAt: now };
+  }
 
   return mutateStore((store) => {
-    const reservation = store.reservations.find((entry) => entry.reservationId === reservationId);
+    const reservation = store.reservations.find(
+      (entry) => entry.reservationId === reservationId,
+    );
     if (!reservation) return null;
-    if (reservation.userId !== actor.id) throw new Error("Cannot cancel another user's reservation");
+    if (reservation.userId !== actor.id)
+      throw new Error("Cannot cancel another user's reservation");
     if (reservation.status !== "reserved") return reservation;
 
     reservation.status = "cancelled";
