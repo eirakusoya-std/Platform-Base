@@ -38,6 +38,7 @@ export default function RoomPage() {
   const requestedRole = useMemo<RequestedRole>(() => parseRequestedRole(searchParams.get("role")), [searchParams]);
 
   const [status, setStatus] = useState<Status>("idle");
+  const [failureReason, setFailureReason] = useState<string | null>(null);
   const [assignedRole, setAssignedRole] = useState<Role>("unknown");
   const [copied, setCopied] = useState(false);
   const [remoteConnected, setRemoteConnected] = useState(false);
@@ -135,6 +136,12 @@ export default function RoomPage() {
 
       if (!res.ok) {
         if (!mounted) return;
+        try {
+          const errData = (await res.json()) as { error?: string };
+          setFailureReason(errData.error ?? `HTTP ${res.status}`);
+        } catch {
+          setFailureReason(`HTTP ${res.status}`);
+        }
         setStatus("failed");
         return;
       }
@@ -209,16 +216,18 @@ export default function RoomPage() {
 
       try {
         await room.connect(livekitUrl, token);
-      } catch {
+      } catch (err) {
         if (!mounted) return;
+        setFailureReason(err instanceof Error ? err.message : "LiveKit connection failed");
         setStatus("failed");
         room.disconnect();
         roomRef.current = null;
       }
     };
 
-    start().catch(() => {
+    start().catch((err: unknown) => {
       if (!mounted) return;
+      setFailureReason(err instanceof Error ? err.message : "Unknown error");
       setStatus("failed");
     });
 
@@ -293,7 +302,21 @@ export default function RoomPage() {
                 ) : (
                   <>
                     <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
-                    {!remoteConnected && (
+                    {status === "failed" && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--brand-surface)] px-6 text-center">
+                        <p className="text-sm font-semibold text-[var(--brand-accent)]">{tx("接続に失敗しました", "Connection failed")}</p>
+                        {failureReason && (
+                          <p className="rounded-xl bg-[var(--brand-accent)]/15 px-4 py-2 text-xs text-[var(--brand-accent)]">{failureReason}</p>
+                        )}
+                        <button
+                          onClick={() => router.back()}
+                          className="mt-1 rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white"
+                        >
+                          {tx("戻る", "Back")}
+                        </button>
+                      </div>
+                    )}
+                    {status !== "failed" && !remoteConnected && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
                         <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信者の映像を待機中", "Waiting for host stream")}</p>
                         <p className="text-xs text-[var(--brand-text-muted)]">

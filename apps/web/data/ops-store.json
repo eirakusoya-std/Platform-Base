@@ -1,6 +1,14 @@
 {
   "consents": [
     {
+      "consentId": "consent_mn4x8aoa_3a20c568",
+      "userId": "listener-mn4x8ao7-5ccca6",
+      "version": "2026-03-12",
+      "source": "signup",
+      "termsAcceptedAt": "2026-03-24T18:01:22.947Z",
+      "privacyAcceptedAt": "2026-03-24T18:01:22.947Z"
+    },
+    {
       "consentId": "consent_mmo8zman_6c1ad22e",
       "userId": "listener-mmo8zmah-27bf91",
       "version": "2026-03-12",
@@ -39,6 +47,14 @@
     }
   ],
   "monitoringEvents": [
+    {
+      "eventId": "metric_mn4x6bnm_3037b29d",
+      "source": "api",
+      "level": "error",
+      "code": "auth.signup.failed",
+      "message": "You must agree to the terms and privacy policy",
+      "createdAt": "2026-03-24T17:59:50.914Z"
+    },
     {
       "eventId": "metric_mmn54q4m_bc368fa8",
       "source": "webrtc",

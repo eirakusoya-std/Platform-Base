@@ -10,10 +10,10 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@neondatabase/serverless": "^1.0.2",
     "@repo/livekit": "workspace:*",
     "@repo/shared": "workspace:*",
-    "@vercel/kv": "^3.0.0",
-    "livekit-client": "^2.0.0",
+"livekit-client": "^2.0.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
