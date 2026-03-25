@@ -6,7 +6,7 @@ import { Footer } from "./components/home/Footer";
 import { SearchFilterBar } from "./components/home/SearchFilterBar";
 import { SessionDetailModal } from "./components/home/SessionDetailModal";
 import { TopNav } from "./components/home/TopNav";
-import { LIVE_NOW_SESSIONS, STARTING_SOON_SESSIONS, TAGS } from "./components/home/data";
+import { TAGS } from "./components/home/data";
 import { NowLiveSection } from "./components/home/sections/NowLiveSection";
 import { StartingSoonSection } from "./components/home/sections/StartingSoonSection";
 import { UpcomingTicker } from "./components/home/UpcomingTicker";
@@ -28,9 +28,7 @@ export default function HomePage() {
   const [notifySet, setNotifySet] = useState<Set<string>>(new Set());
   const [reservedSet, setReservedSet] = useState<Set<string>>(new Set());
   const [dynamicSessions, setDynamicSessions] = useState<StreamSession[]>([]);
-  const [countdown, setCountdown] = useState<Record<string, number>>(() =>
-    Object.fromEntries(STARTING_SOON_SESSIONS.map((session) => [session.id, session.startsInSeconds])),
-  );
+  const [countdown, setCountdown] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -94,8 +92,8 @@ export default function HomePage() {
     [dynamicSessions],
   );
 
-  const allStartingSoon = useMemo(() => [...dynamicStartingSoon, ...STARTING_SOON_SESSIONS], [dynamicStartingSoon]);
-  const allLive = useMemo(() => [...dynamicLive, ...LIVE_NOW_SESSIONS], [dynamicLive]);
+  const allStartingSoon = useMemo(() => dynamicStartingSoon, [dynamicStartingSoon]);
+  const allLive = useMemo(() => dynamicLive, [dynamicLive]);
 
   useEffect(() => {
     const timer = setInterval(() => {

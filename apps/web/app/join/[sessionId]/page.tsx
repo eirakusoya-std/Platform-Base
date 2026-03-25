@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useI18n } from "../../lib/i18n";
 import { getStreamSession } from "../../lib/streamSessions";
+import { useUserSession } from "../../lib/userSession";
 
 type AuthStatus = "loading" | "guest" | "logged-in";
 type ReservationStatus = "loading" | "none" | "reserved" | "error";
@@ -73,8 +74,11 @@ export default function PreJoinPage() {
  const sessionId = params?.sessionId ?? "";
  const [dynamicSession, setDynamicSession] = useState<Awaited<ReturnType<typeof getStreamSession>>>(null);
 
- // Auth + reservation state
- const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
+ // Auth via shared session hook (more reliable than a fresh fetch)
+ const { isAuthenticated, hydrated } = useUserSession();
+ const authStatus: AuthStatus = !hydrated ? "loading" : isAuthenticated ? "logged-in" : "guest";
+
+ // Reservation state
  const [reservationStatus, setReservationStatus] = useState<ReservationStatus>("loading");
  const [reserving, setReserving] = useState(false);
  const [reserveError, setReserveError] = useState<string | null>(null);
@@ -90,28 +94,6 @@ export default function PreJoinPage() {
  cancelled = true;
  };
  }, [sessionId]);
-
- // Check auth status
- useEffect(() => {
- let cancelled = false;
- const check = async () => {
- try {
- const res = await fetch("/api/auth/session", { cache: "no-store" });
- if (!cancelled) {
- if (res.ok) {
- const data = (await res.json()) as { isAuthenticated?: boolean };
- setAuthStatus(data.isAuthenticated ? "logged-in" : "guest");
- } else {
- setAuthStatus("guest");
- }
- }
- } catch {
- if (!cancelled) setAuthStatus("guest");
- }
- };
- void check();
- return () => { cancelled = true; };
- }, []);
 
  // Check reservation status (only when logged in)
  const checkReservation = useCallback(async () => {
