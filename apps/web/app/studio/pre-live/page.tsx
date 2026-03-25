@@ -42,9 +42,9 @@ export default function StudioPreLivePage() {
   const { tx } = useI18n();
   const { isVtuber, hydrated } = useUserSession();
 
-  const [title, setTitle] = useState("【英会話参加型】推しと距離を縮めるリアルトーク");
+  const [title, setTitle] = useState("");
   const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]>("英語");
-  const [description, setDescription] = useState("視聴者参加で英語フレーズを実際に使いながら会話する配信です。");
+  const [description, setDescription] = useState("");
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [chatOn, setChatOn] = useState(true);
@@ -149,7 +149,7 @@ export default function StudioPreLivePage() {
   const startBroadcastFlow = async () => {
     setShowPublishMenu(false);
     const warnings: string[] = [];
-    if (title.trim().length < 8) warnings.push(tx("タイトルは8文字以上で入力してください。", "Title must be at least 8 characters."));
+    if (title.trim().length < 2) warnings.push(tx("タイトルを入力してください。", "Please enter a title."));
     if (!category) warnings.push(tx("カテゴリを選択してください。", "Choose a category."));
     if (!micOn) warnings.push(tx("マイクをONにしてください。", "Turn MIC ON before continue."));
     if (!camOn) warnings.push(tx("カメラをONにしてください。", "Turn CAM ON before continue."));
