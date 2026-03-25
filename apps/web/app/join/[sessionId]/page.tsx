@@ -73,6 +73,7 @@ export default function PreJoinPage() {
  const params = useParams<{ sessionId: string }>();
  const sessionId = params?.sessionId ?? "";
  const [dynamicSession, setDynamicSession] = useState<Awaited<ReturnType<typeof getStreamSession>>>(null);
+ const [sessionLoading, setSessionLoading] = useState(true);
 
  // Auth via shared session hook (more reliable than a fresh fetch)
  const { isAuthenticated, hydrated } = useUserSession();
@@ -86,8 +87,12 @@ export default function PreJoinPage() {
  useEffect(() => {
  let cancelled = false;
  const load = async () => {
+ setSessionLoading(true);
  const found = await getStreamSession(sessionId);
- if (!cancelled) setDynamicSession(found);
+ if (!cancelled) {
+ setDynamicSession(found);
+ setSessionLoading(false);
+ }
  };
  void load();
  return () => {
@@ -103,9 +108,8 @@ export default function PreJoinPage() {
  if (res.ok) {
  const data = (await res.json()) as { hasSpeakerReservation?: boolean };
  setReservationStatus(data.hasSpeakerReservation ? "reserved" : "none");
- } else if (res.status === 401) {
- setReservationStatus("none");
  } else {
+ // 401/404/5xx → treat as no reservation; session-not-found is handled separately
  setReservationStatus("none");
  }
  } catch {
@@ -268,6 +272,19 @@ export default function PreJoinPage() {
  const query = new URLSearchParams({ role: "speaker", mic: micOn ? "1" : "0", cam: camOn ? "1" : "0", speaker: speakerOn ? "1" : "0" }).toString();
  router.push(`/room/${roomId}?${query}`);
  };
+
+ // Session not found after loading
+ if (!sessionLoading && !dynamicSession) {
+ return (
+ <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
+ <p className="text-lg font-semibold">{tx("配信枠が見つかりません", "Session not found")}</p>
+ <p className="text-sm text-[var(--brand-text-muted)]">{tx("この枠はすでに終了しているか、存在しません。", "This session has ended or does not exist.")}</p>
+ <button onClick={() => router.push("/")} className="rounded-xl bg-[var(--brand-primary)] px-6 py-2.5 text-sm font-bold text-white">
+ {tx("ホームに戻る", "Back to Home")}
+ </button>
+ </div>
+ );
+ }
 
  return (
  <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">

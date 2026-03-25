@@ -28,13 +28,17 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
     try {
       const res = await fetch("/api/auth/session", { cache: "no-store" });
       if (!res.ok) {
-        setUser(null);
+        // 4xx = genuine auth failure (no cookie / invalid) → log out
+        // 5xx = server error (KV down, cold start, etc.) → keep existing state
+        if (res.status >= 400 && res.status < 500) {
+          setUser(null);
+        }
         return;
       }
       const data = (await res.json()) as { user: SessionUser | null; isAuthenticated: boolean };
       setUser(data.user ?? null);
     } catch {
-      setUser(null);
+      // Network error → keep existing state, don't log out
     } finally {
       setHydrated(true);
     }
