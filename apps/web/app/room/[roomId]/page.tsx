@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { ArrowDownCircleIcon } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
 import { useI18n } from "../../lib/i18n";
 
@@ -46,6 +47,7 @@ export default function RoomPage() {
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT);
   const [chatInput, setChatInput] = useState("");
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const [micOn, setMicOn] = useState(requestedRole !== "listener" && searchParams.get("mic") !== "0");
   const [camOn, setCamOn] = useState(requestedRole === "host" && searchParams.get("cam") !== "0");
@@ -290,18 +292,37 @@ export default function RoomPage() {
   }, [speakerOn]);
 
   useEffect(() => {
-    if (!shouldAutoScrollRef.current || !chatListRef.current) return;
-    chatListRef.current.scrollTo({
-      top: chatListRef.current.scrollHeight,
-      behavior: "smooth",
+    const el = chatListRef.current;
+    if (!el) return;
+    if (!shouldAutoScrollRef.current) {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollToBottom(distanceFromBottom >= 24);
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      const target = chatListRef.current;
+      if (!target) return;
+      target.scrollTo({ top: target.scrollHeight, behavior: "auto" });
+      setShowScrollToBottom(false);
     });
+    return () => window.cancelAnimationFrame(raf);
   }, [chatMessages]);
+
+  const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = chatListRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    shouldAutoScrollRef.current = true;
+    setShowScrollToBottom(false);
+  }, []);
 
   const handleChatScroll = useCallback(() => {
     const el = chatListRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    shouldAutoScrollRef.current = distanceFromBottom < 24;
+    const atBottom = distanceFromBottom < 24;
+    shouldAutoScrollRef.current = atBottom;
+    setShowScrollToBottom(!atBottom);
   }, []);
 
   const statusLabel =
@@ -456,16 +477,28 @@ export default function RoomPage() {
               </div>
             </div>
 
-            <div ref={chatListRef} onScroll={handleChatScroll} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
-              {chatMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`rounded-lg px-3 py-2 ${message.mine ? "ml-6 bg-[var(--brand-surface-soft)]" : "mr-6 bg-[var(--brand-surface)]"}`}
+            <div className="relative min-h-0 flex-1">
+              <div ref={chatListRef} onScroll={handleChatScroll} className="h-full space-y-3 overflow-y-auto px-3 py-3">
+                {chatMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`rounded-lg px-3 py-2 ${message.mine ? "ml-6 bg-[var(--brand-primary)]/20" : "mr-6 bg-[var(--brand-surface)]"}`}
+                  >
+                    <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{message.user}</p>
+                    <p className="text-sm leading-relaxed text-[var(--brand-text)]">{message.text}</p>
+                  </div>
+                ))}
+              </div>
+              {showScrollToBottom && (
+                <button
+                  type="button"
+                  onClick={() => scrollChatToBottom("smooth")}
+                  aria-label={tx("最新コメントへ移動", "Jump to latest comments")}
+                  className="absolute bottom-3 right-3 z-10 rounded-full bg-[var(--brand-primary)] px-3 py-2 text-sm font-bold text-white shadow-lg shadow-black/25"
                 >
-                  <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{message.user}</p>
-                  <p className="text-sm leading-relaxed text-[var(--brand-text)]">{message.text}</p>
-                </div>
-              ))}
+                  <ArrowDownCircleIcon className="h-5 w-5" aria-hidden />
+                </button>
+              )}
             </div>
 
             <div className="p-3">
@@ -474,10 +507,9 @@ export default function RoomPage() {
                   value={chatInput}
                   onChange={(event) => setChatInput(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      sendChat();
-                    }
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing || event.keyCode === 229) return;
+                    event.preventDefault();
+                    sendChat();
                   }}
                   placeholder={tx("チャットを入力", "Type a message")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"

@@ -1,6 +1,14 @@
 {
   "consents": [
     {
+      "consentId": "consent_mn7b1fp9_7cf488c0",
+      "userId": "vtuber-mn7b1fp7-8bf720",
+      "version": "2026-03-12",
+      "source": "signup",
+      "termsAcceptedAt": "2026-03-26T10:03:29.849Z",
+      "privacyAcceptedAt": "2026-03-26T10:03:29.849Z"
+    },
+    {
       "consentId": "consent_mn6smt8s_784908a2",
       "userId": "vtuber-mn6smt8q-842c66",
       "version": "2026-03-12",
@@ -55,6 +63,14 @@
     }
   ],
   "monitoringEvents": [
+    {
+      "eventId": "metric_mn7b1a71_4dae1559",
+      "source": "api",
+      "level": "error",
+      "code": "auth.signup.failed",
+      "message": "This email address is already in use",
+      "createdAt": "2026-03-26T10:03:22.717Z"
+    },
     {
       "eventId": "metric_mn4x6bnm_3037b29d",
       "source": "api",

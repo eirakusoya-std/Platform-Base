@@ -1,6 +1,22 @@
 {
   "users": [
     {
+      "id": "vtuber-mn7b1fp7-8bf720",
+      "name": "バナージ2",
+      "role": "vtuber",
+      "email": "soredemosoredemo@banaji",
+      "authProvider": "password",
+      "createdAt": "2026-03-26T10:03:29.849Z",
+      "lastLoginAt": "2026-03-26T10:03:29.849Z",
+      "channelName": "バナージ2",
+      "phoneNumber": "08012345678",
+      "phoneVerifiedAt": "2026-03-26T10:03:42.684Z",
+      "termsAcceptedAt": "2026-03-26T10:03:29.849Z",
+      "privacyAcceptedAt": "2026-03-26T10:03:29.849Z",
+      "passwordHash": "db708e00829445940936c44bae37ad6be0904e5952433805d3a840932d080efc",
+      "verificationRequestedAt": "2026-03-26T10:03:36.390Z"
+    },
+    {
       "id": "vtuber-mn6smt8q-842c66",
       "name": "バナージ",
       "role": "vtuber",
@@ -112,6 +128,28 @@
     }
   ],
   "streamSessions": [
+    {
+      "sessionId": "session-mn7b1v93-bb397b",
+      "hostUserId": "vtuber-mn7b1fp7-8bf720",
+      "title": "ああ",
+      "status": "prelive",
+      "createdAt": "2026-03-26T10:03:50.007Z",
+      "startsAt": "2026-03-26T10:03:49.974Z",
+      "description": "",
+      "category": "英語",
+      "thumbnail": "/image/thumbnail/thumbnail_5.png",
+      "hostName": "バナージ2",
+      "participationType": "First-come",
+      "requiredPlan": "free",
+      "reservationRequired": false,
+      "slotsTotal": 50,
+      "slotsLeft": 50,
+      "speakerSlotsTotal": 5,
+      "speakerSlotsLeft": 5,
+      "speakerRequiredPlan": "free",
+      "preferredVideoDeviceId": "24cc7b66aacbdddcbdd3ecff83b4658327f21f6de0a2424860cde935a16db8bf",
+      "preferredVideoLabel": "OBS Virtual Camera"
+    },
     {
       "sessionId": "session-mmn54q08-34afe1",
       "hostUserId": "vtuber-mmn4eq2p-0f8483",
