@@ -1,8 +1,8 @@
 "use client";
 
-import { ComponentType, SVGProps, useEffect, useMemo, useRef, useState } from "react";
+import { ComponentType, SVGProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChatBubbleLeftRightIcon, MicrophoneIcon, RadioIcon, VideoCameraIcon } from "@heroicons/react/24/solid";
+import { ArrowDownCircleIcon, ChatBubbleLeftRightIcon, MicrophoneIcon, RadioIcon, VideoCameraIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../components/home/TopNav";
 import { StudioProgress } from "../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../lib/cameraDevices";
@@ -17,6 +17,13 @@ type CircleControlProps = {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   on: boolean;
   onToggle: () => void;
+};
+
+type ChatItem = {
+  id: string;
+  user: string;
+  text: string;
+  mine?: boolean;
 };
 
 function CircleControl({ label, icon: Icon, on, onToggle }: CircleControlProps) {
@@ -64,15 +71,18 @@ export default function StudioPreLivePage() {
   const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<"free" | "supporter" | "premium">("free");
 
   const [chatInput, setChatInput] = useState("");
-  const [chat, setChat] = useState([
+  const [chat, setChat] = useState<ChatItem[]>([
     { id: "m1", user: "mod_nana", text: "配信前チェック中です。音量テスト歓迎です。" },
     { id: "m2", user: "viewer_21", text: "待機しています！" },
   ]);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
+  const chatListRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
@@ -203,9 +213,43 @@ export default function StudioPreLivePage() {
   const sendChat = () => {
     const value = chatInput.trim();
     if (!value) return;
-    setChat((prev) => [...prev, { id: `${Date.now()}`, user: "host", text: value }]);
+    setChat((prev) => [...prev, { id: `${Date.now()}`, user: "host", text: value, mine: true }]);
     setChatInput("");
   };
+
+  useEffect(() => {
+    const el = chatListRef.current;
+    if (!el) return;
+    if (!shouldAutoScrollRef.current) {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollToBottom(distanceFromBottom >= 24);
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      const target = chatListRef.current;
+      if (!target) return;
+      target.scrollTo({ top: target.scrollHeight, behavior: "auto" });
+      setShowScrollToBottom(false);
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [chat]);
+
+  const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = chatListRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    shouldAutoScrollRef.current = true;
+    setShowScrollToBottom(false);
+  }, []);
+
+  const handleChatScroll = useCallback(() => {
+    const el = chatListRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom < 24;
+    shouldAutoScrollRef.current = atBottom;
+    setShowScrollToBottom(!atBottom);
+  }, []);
 
   if (!hydrated || !isVtuber) return null;
 
@@ -415,13 +459,28 @@ export default function StudioPreLivePage() {
             <div className="border-b border-black/20 px-3 py-2">
               <p className="text-sm font-semibold">{tx("配信者チャット", "Host Chat")}</p>
             </div>
-            <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
-              {chat.map((m) => (
-                <div key={m.id} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
-                  <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{m.user}</p>
-                  <p className="text-sm text-[var(--brand-text)]">{m.text}</p>
-                </div>
-              ))}
+            <div className="relative min-h-0 flex-1">
+              <div ref={chatListRef} onScroll={handleChatScroll} className="h-full space-y-2 overflow-y-auto px-3 py-3">
+                {chat.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`rounded-lg px-3 py-2 ${m.mine ? "ml-6 bg-[var(--brand-primary)]/20" : "mr-6 bg-[var(--brand-bg-900)]"}`}
+                  >
+                    <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{m.user}</p>
+                    <p className="text-sm text-[var(--brand-text)]">{m.text}</p>
+                  </div>
+                ))}
+              </div>
+              {showScrollToBottom && (
+                <button
+                  type="button"
+                  onClick={() => scrollChatToBottom("smooth")}
+                  aria-label={tx("最新コメントへ移動", "Jump to latest comments")}
+                  className="absolute bottom-3 right-3 z-10 rounded-full bg-[var(--brand-primary)] px-3 py-2 text-sm font-bold text-white shadow-lg shadow-black/25"
+                >
+                  <ArrowDownCircleIcon className="h-5 w-5" aria-hidden />
+                </button>
+              )}
             </div>
             <div className="border-t border-black/20 p-3">
               <div className="flex gap-2">
@@ -429,10 +488,9 @@ export default function StudioPreLivePage() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      sendChat();
-                    }
+                    if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return;
+                    e.preventDefault();
+                    sendChat();
                   }}
                   placeholder={tx("告知・案内を入力", "Type announcement")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"

@@ -4,6 +4,7 @@ import { ComponentType, SVGProps, useCallback, useEffect, useMemo, useRef, useSt
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
+  ArrowDownCircleIcon,
   ChatBubbleLeftRightIcon,
   LinkIcon,
   MicrophoneIcon,
@@ -36,11 +37,20 @@ type ParticipantItem = {
 
 type ConnectionStatus = "idle" | "starting" | "live" | "failed";
 
-const INITIAL_CHAT = [
+type ChatItem = {
+  id: string;
+  user: string;
+  text: string;
+  mine?: boolean;
+};
+
+const INITIAL_CHAT: ChatItem[] = [
   { id: "m1", user: "mod_nana", text: "参加希望は #join をつけて送ってください" },
   { id: "m2", user: "viewer_21", text: "#join 自己紹介いけます" },
   { id: "m3", user: "viewer_88", text: "音量ちょうどいいです！" },
 ];
+
+const MAX_CHAT_MESSAGES = 200;
 
 type CircleControlProps = {
   label: string;
@@ -82,7 +92,8 @@ export default function StudioLiveSessionPage() {
   const [camOn, setCamOn] = useState(true);
   const [participants, setParticipants] = useState<ParticipantItem[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [chat, setChat] = useState(INITIAL_CHAT);
+  const [chat, setChat] = useState<ChatItem[]>(INITIAL_CHAT);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [startWarnings, setStartWarnings] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
@@ -93,9 +104,12 @@ export default function StudioLiveSessionPage() {
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
+  const chatListRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
   const streamRef = useRef<MediaStream | null>(null);
   const roomRef = useRef<Room | null>(null);
   const autoStartDoneRef = useRef(false);
+  const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -244,8 +258,9 @@ export default function StudioLiveSessionPage() {
   const sendChat = () => {
     const text = chatInput.trim();
     if (!text) return;
-    const msg = { type: "chat", id: `${Date.now()}`, user: "host", text };
-    setChat((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text }]);
+    const msg = { type: "chat", id: crypto.randomUUID(), user: "host", text };
+    seenChatIdsRef.current.add(msg.id);
+    setChat((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text, mine: true }].slice(-MAX_CHAT_MESSAGES));
     setChatInput("");
     if (roomRef.current && connectionStatus === "live") {
       void roomRef.current.localParticipant.publishData(
@@ -254,6 +269,40 @@ export default function StudioLiveSessionPage() {
       );
     }
   };
+
+  useEffect(() => {
+    const el = chatListRef.current;
+    if (!el) return;
+    if (!shouldAutoScrollRef.current) {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollToBottom(distanceFromBottom >= 24);
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      const target = chatListRef.current;
+      if (!target) return;
+      target.scrollTo({ top: target.scrollHeight, behavior: "auto" });
+      setShowScrollToBottom(false);
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [chat]);
+
+  const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = chatListRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    shouldAutoScrollRef.current = true;
+    setShowScrollToBottom(false);
+  }, []);
+
+  const handleChatScroll = useCallback(() => {
+    const el = chatListRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom < 24;
+    shouldAutoScrollRef.current = atBottom;
+    setShowScrollToBottom(!atBottom);
+  }, []);
 
   const toggleParticipantMute = (id: string) => {
     setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, muted: !p.muted } : p)));
@@ -396,19 +445,26 @@ export default function StudioLiveSessionPage() {
       setMediaError(tx("カメラまたはマイクにアクセスできません。", "Camera/mic access denied."));
     });
 
-    room.on(RoomEvent.DataReceived, (payload) => {
+    room.on(RoomEvent.DataReceived, (payload, participant) => {
       try {
+        if (participant?.identity && participant.identity === room.localParticipant.identity) {
+          return;
+        }
         const msg = JSON.parse(new TextDecoder().decode(payload)) as {
           type?: string;
           id?: string;
           user?: string;
           text?: string;
         };
-        if (msg.type === "chat" && msg.user && msg.text) {
+        const id = msg.id;
+        const user = msg.user;
+        const text = msg.text;
+        if (msg.type === "chat" && id && user && text && !seenChatIdsRef.current.has(id)) {
+          seenChatIdsRef.current.add(id);
           setChat((prev) => [
             ...prev,
-            { id: msg.id ?? `${Date.now()}`, user: msg.user!, text: msg.text! },
-          ]);
+            { id, user, text },
+          ].slice(-MAX_CHAT_MESSAGES));
         }
       } catch {
         // no-op
@@ -648,13 +704,28 @@ export default function StudioLiveSessionPage() {
                 {tx("配信者チャット", "Host Chat")}
               </p>
             </div>
-            <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
-              {chat.map((m) => (
-                <div key={m.id} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
-                  <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{m.user}</p>
-                  <p className="text-sm text-[var(--brand-text)]">{m.text}</p>
-                </div>
-              ))}
+            <div className="relative min-h-0 flex-1">
+              <div ref={chatListRef} onScroll={handleChatScroll} className="h-full space-y-2 overflow-y-auto px-3 py-3">
+                {chat.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`rounded-lg px-3 py-2 ${m.mine ? "ml-6 bg-[var(--brand-primary)]/20" : "mr-6 bg-[var(--brand-bg-900)]"}`}
+                  >
+                    <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{m.user}</p>
+                    <p className="text-sm text-[var(--brand-text)]">{m.text}</p>
+                  </div>
+                ))}
+              </div>
+              {showScrollToBottom && (
+                <button
+                  type="button"
+                  onClick={() => scrollChatToBottom("smooth")}
+                  aria-label={tx("最新コメントへ移動", "Jump to latest comments")}
+                  className="absolute bottom-3 right-3 z-10 rounded-full bg-[var(--brand-primary)] px-3 py-2 text-sm font-bold text-white shadow-lg shadow-black/25"
+                >
+                  <ArrowDownCircleIcon className="h-5 w-5" aria-hidden />
+                </button>
+              )}
             </div>
             <div className="border-t border-black/20 p-3">
               <div className="flex gap-2">
@@ -662,10 +733,9 @@ export default function StudioLiveSessionPage() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      sendChat();
-                    }
+                    if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return;
+                    e.preventDefault();
+                    sendChat();
                   }}
                   placeholder={tx("告知・案内を入力", "Type announcement")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"

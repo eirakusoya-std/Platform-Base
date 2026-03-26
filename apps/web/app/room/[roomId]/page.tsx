@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { ArrowDownCircleIcon } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
 import { useI18n } from "../../lib/i18n";
 
@@ -15,6 +16,8 @@ type ChatMessage = {
   text: string;
   mine?: boolean;
 };
+
+const MAX_CHAT_MESSAGES = 200;
 
 const INITIAL_CHAT: ChatMessage[] = [
   { id: "c1", user: "mod_akira", text: "配信開始まであと少しです！音量チェックお願いします。" },
@@ -44,6 +47,7 @@ export default function RoomPage() {
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT);
   const [chatInput, setChatInput] = useState("");
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const [micOn, setMicOn] = useState(requestedRole !== "listener" && searchParams.get("mic") !== "0");
   const [camOn, setCamOn] = useState(requestedRole === "host" && searchParams.get("cam") !== "0");
@@ -51,8 +55,10 @@ export default function RoomPage() {
 
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatListRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
   const roomRef = useRef<Room | null>(null);
+  const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
 
   const canSendMic = assignedRole === "host" || assignedRole === "speaker";
   const canSendCam = assignedRole === "host";
@@ -115,8 +121,9 @@ export default function RoomPage() {
     const value = chatInput.trim();
     if (!value) return;
     const displayName = roomRef.current?.localParticipant.name ?? "you";
-    const msg = { type: "chat", id: `${Date.now()}`, user: displayName, text: value };
-    setChatMessages((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text, mine: true }]);
+    const msg = { type: "chat", id: crypto.randomUUID(), user: displayName, text: value };
+    seenChatIdsRef.current.add(msg.id);
+    setChatMessages((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text, mine: true }].slice(-MAX_CHAT_MESSAGES));
     setChatInput("");
     if (roomRef.current && status === "connected") {
       void roomRef.current.localParticipant.publishData(
@@ -223,19 +230,26 @@ export default function RoomPage() {
         }
       });
 
-      room.on(RoomEvent.DataReceived, (payload) => {
+      room.on(RoomEvent.DataReceived, (payload, participant) => {
         try {
+          if (participant?.identity && participant.identity === room.localParticipant.identity) {
+            return;
+          }
           const msg = JSON.parse(new TextDecoder().decode(payload)) as {
             type?: string;
             id?: string;
             user?: string;
             text?: string;
           };
-          if (msg.type === "chat" && msg.user && msg.text) {
+          const id = msg.id;
+          const user = msg.user;
+          const text = msg.text;
+          if (msg.type === "chat" && id && user && text && !seenChatIdsRef.current.has(id)) {
+            seenChatIdsRef.current.add(id);
             setChatMessages((prev) => [
               ...prev,
-              { id: msg.id ?? `${Date.now()}`, user: msg.user!, text: msg.text! },
-            ]);
+              { id, user, text },
+            ].slice(-MAX_CHAT_MESSAGES));
           }
         } catch {
           // no-op
@@ -278,8 +292,38 @@ export default function RoomPage() {
   }, [speakerOn]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = chatListRef.current;
+    if (!el) return;
+    if (!shouldAutoScrollRef.current) {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollToBottom(distanceFromBottom >= 24);
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      const target = chatListRef.current;
+      if (!target) return;
+      target.scrollTo({ top: target.scrollHeight, behavior: "auto" });
+      setShowScrollToBottom(false);
+    });
+    return () => window.cancelAnimationFrame(raf);
   }, [chatMessages]);
+
+  const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = chatListRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    shouldAutoScrollRef.current = true;
+    setShowScrollToBottom(false);
+  }, []);
+
+  const handleChatScroll = useCallback(() => {
+    const el = chatListRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom < 24;
+    shouldAutoScrollRef.current = atBottom;
+    setShowScrollToBottom(!atBottom);
+  }, []);
 
   const statusLabel =
     status === "connected"
@@ -295,7 +339,7 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
+    <div className="h-screen overflow-hidden bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <header className="bg-[var(--brand-bg-900)]">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-5 lg:px-12">
           <button onClick={() => router.push("/")} className="flex items-center gap-2">
@@ -318,9 +362,9 @@ export default function RoomPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1600px] px-4 py-4 lg:px-8">
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
-          <section className="min-w-0 space-y-4">
+      <main className="mx-auto h-[calc(100vh-76px)] w-full max-w-[1600px] overflow-hidden px-4 py-4 lg:px-8">
+        <div className="grid h-full grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
+          <section className="min-h-0 min-w-0 space-y-4 overflow-y-auto pr-1">
             <div className="overflow-hidden rounded-2xl bg-[var(--brand-bg-900)] shadow-xl">
               <div className="relative" style={{ aspectRatio: "16/9" }}>
                 {requestedRole === "listener" ? (
@@ -425,7 +469,7 @@ export default function RoomPage() {
             </section>
           </section>
 
-          <aside className="flex min-h-[560px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
+          <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
             <div className="px-4 py-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">{tx("ライブチャット", "Live Chat")}</p>
@@ -433,17 +477,28 @@ export default function RoomPage() {
               </div>
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
-              {chatMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`rounded-lg px-3 py-2 ${message.mine ? "ml-6 bg-[var(--brand-surface-soft)]" : "mr-6 bg-[var(--brand-surface)]"}`}
+            <div className="relative min-h-0 flex-1">
+              <div ref={chatListRef} onScroll={handleChatScroll} className="h-full space-y-3 overflow-y-auto px-3 py-3">
+                {chatMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`rounded-lg px-3 py-2 ${message.mine ? "ml-6 bg-[var(--brand-primary)]/20" : "mr-6 bg-[var(--brand-surface)]"}`}
+                  >
+                    <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{message.user}</p>
+                    <p className="text-sm leading-relaxed text-[var(--brand-text)]">{message.text}</p>
+                  </div>
+                ))}
+              </div>
+              {showScrollToBottom && (
+                <button
+                  type="button"
+                  onClick={() => scrollChatToBottom("smooth")}
+                  aria-label={tx("最新コメントへ移動", "Jump to latest comments")}
+                  className="absolute bottom-3 right-3 z-10 rounded-full bg-[var(--brand-primary)] px-3 py-2 text-sm font-bold text-white shadow-lg shadow-black/25"
                 >
-                  <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{message.user}</p>
-                  <p className="text-sm leading-relaxed text-[var(--brand-text)]">{message.text}</p>
-                </div>
-              ))}
-              <div ref={chatEndRef} />
+                  <ArrowDownCircleIcon className="h-5 w-5" aria-hidden />
+                </button>
+              )}
             </div>
 
             <div className="p-3">
@@ -452,10 +507,9 @@ export default function RoomPage() {
                   value={chatInput}
                   onChange={(event) => setChatInput(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      sendChat();
-                    }
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing || event.keyCode === 229) return;
+                    event.preventDefault();
+                    sendChat();
                   }}
                   placeholder={tx("チャットを入力", "Type a message")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
