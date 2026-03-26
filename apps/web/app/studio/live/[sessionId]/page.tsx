@@ -92,6 +92,7 @@ export default function StudioLiveSessionPage() {
   const [linkCopied, setLinkCopied] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
+  const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const roomRef = useRef<Room | null>(null);
   const autoStartDoneRef = useRef(false);
@@ -265,6 +266,9 @@ export default function StudioLiveSessionPage() {
   const cleanupConnection = useCallback(() => {
     roomRef.current?.disconnect();
     roomRef.current = null;
+    if (remoteAudioContainerRef.current) {
+      remoteAudioContainerRef.current.innerHTML = "";
+    }
     setConnectedViewers(0);
     setConnectionStatus("idle");
     setParticipants([]);
@@ -362,6 +366,31 @@ export default function StudioLiveSessionPage() {
     room.on(RoomEvent.ParticipantDisconnected, (participant) => {
       setParticipants((prev) => prev.filter((p) => p.id !== participant.identity));
       setConnectedViewers((n) => Math.max(0, n - 1));
+    });
+
+    room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+      if (track.kind !== Track.Kind.Audio || !remoteAudioContainerRef.current) return;
+      if (participant.identity === room.localParticipant.identity) return;
+
+      const audioEl = track.attach() as HTMLAudioElement;
+      audioEl.autoplay = true;
+      audioEl.playsInline = true;
+      audioEl.muted = false;
+      audioEl.dataset.lkTrackSid = track.sid;
+      remoteAudioContainerRef.current.appendChild(audioEl);
+
+      void audioEl.play().catch(() => {
+        setMediaError(tx("ブラウザの自動再生制限で音声が再生できません。", "Autoplay policy blocked remote audio."));
+      });
+    });
+
+    room.on(RoomEvent.TrackUnsubscribed, (track) => {
+      if (track.kind !== Track.Kind.Audio || !remoteAudioContainerRef.current) return;
+      const audioEl = remoteAudioContainerRef.current.querySelector(
+        `audio[data-lk-track-sid="${track.sid}"]`,
+      );
+      audioEl?.remove();
+      track.detach();
     });
 
     room.on(RoomEvent.MediaDevicesError, () => {
@@ -511,6 +540,7 @@ export default function StudioLiveSessionPage() {
           <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
             <div className="mx-auto max-w-[640px] overflow-hidden rounded-xl bg-[var(--brand-bg-900)]" style={{ aspectRatio: "16/9" }}>
               <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+              <div ref={remoteAudioContainerRef} className="hidden" aria-hidden />
             </div>
             {!camOn && <p className="mt-2 text-xs text-[var(--brand-text-muted)]">{tx("カメラOFF", "Camera OFF")}</p>}
             {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
