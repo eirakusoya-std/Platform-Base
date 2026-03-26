@@ -199,7 +199,6 @@ export default function RoomPage() {
         if (track.kind === Track.Kind.Audio && remoteAudioContainerRef.current) {
           const audioEl = track.attach() as HTMLAudioElement;
           audioEl.autoplay = true;
-          audioEl.playsInline = true;
           audioEl.muted = !speakerOn;
           audioEl.dataset.lkTrackSid = track.sid;
           remoteAudioContainerRef.current.appendChild(audioEl);
