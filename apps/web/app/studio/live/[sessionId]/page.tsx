@@ -42,6 +42,8 @@ const INITIAL_CHAT = [
   { id: "m3", user: "viewer_88", text: "音量ちょうどいいです！" },
 ];
 
+const MAX_CHAT_MESSAGES = 200;
+
 type CircleControlProps = {
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
@@ -96,6 +98,7 @@ export default function StudioLiveSessionPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const roomRef = useRef<Room | null>(null);
   const autoStartDoneRef = useRef(false);
+  const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -244,8 +247,9 @@ export default function StudioLiveSessionPage() {
   const sendChat = () => {
     const text = chatInput.trim();
     if (!text) return;
-    const msg = { type: "chat", id: `${Date.now()}`, user: "host", text };
-    setChat((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text }]);
+    const msg = { type: "chat", id: crypto.randomUUID(), user: "host", text };
+    seenChatIdsRef.current.add(msg.id);
+    setChat((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text }].slice(-MAX_CHAT_MESSAGES));
     setChatInput("");
     if (roomRef.current && connectionStatus === "live") {
       void roomRef.current.localParticipant.publishData(
@@ -396,19 +400,26 @@ export default function StudioLiveSessionPage() {
       setMediaError(tx("カメラまたはマイクにアクセスできません。", "Camera/mic access denied."));
     });
 
-    room.on(RoomEvent.DataReceived, (payload) => {
+    room.on(RoomEvent.DataReceived, (payload, participant) => {
       try {
+        if (participant?.identity && participant.identity === room.localParticipant.identity) {
+          return;
+        }
         const msg = JSON.parse(new TextDecoder().decode(payload)) as {
           type?: string;
           id?: string;
           user?: string;
           text?: string;
         };
-        if (msg.type === "chat" && msg.user && msg.text) {
+        const id = msg.id;
+        const user = msg.user;
+        const text = msg.text;
+        if (msg.type === "chat" && id && user && text && !seenChatIdsRef.current.has(id)) {
+          seenChatIdsRef.current.add(id);
           setChat((prev) => [
             ...prev,
-            { id: msg.id ?? `${Date.now()}`, user: msg.user!, text: msg.text! },
-          ]);
+            { id, user, text },
+          ].slice(-MAX_CHAT_MESSAGES));
         }
       } catch {
         // no-op
