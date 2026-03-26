@@ -1,6 +1,20 @@
 {
   "users": [
     {
+      "id": "vtuber-mn6smt8q-842c66",
+      "name": "バナージ",
+      "role": "vtuber",
+      "email": "soredemo@banaji",
+      "authProvider": "password",
+      "createdAt": "2026-03-26T01:28:14.473Z",
+      "lastLoginAt": "2026-03-26T01:28:14.473Z",
+      "channelName": "バナージ",
+      "phoneNumber": "000",
+      "termsAcceptedAt": "2026-03-26T01:28:14.473Z",
+      "privacyAcceptedAt": "2026-03-26T01:28:14.473Z",
+      "passwordHash": "db708e00829445940936c44bae37ad6be0904e5952433805d3a840932d080efc"
+    },
+    {
       "id": "listener-mn4x8ao7-5ccca6",
       "name": "テストユーザー",
       "role": "listener",

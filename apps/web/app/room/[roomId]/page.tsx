@@ -50,6 +50,7 @@ export default function RoomPage() {
   const [speakerOn, setSpeakerOn] = useState(searchParams.get("speaker") !== "0");
 
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const roomRef = useRef<Room | null>(null);
 
@@ -59,6 +60,9 @@ export default function RoomPage() {
   const cleanup = useCallback(() => {
     roomRef.current?.disconnect();
     roomRef.current = null;
+    if (remoteAudioContainerRef.current) {
+      remoteAudioContainerRef.current.innerHTML = "";
+    }
     setAssignedRole("unknown");
     setRemoteConnected(false);
     setStatus("idle");
@@ -89,6 +93,12 @@ export default function RoomPage() {
   const applySpeaker = useCallback((enabled: boolean) => {
     if (remoteVideoRef.current) {
       remoteVideoRef.current.muted = !enabled;
+    }
+    if (remoteAudioContainerRef.current) {
+      const audioEls = remoteAudioContainerRef.current.querySelectorAll("audio");
+      audioEls.forEach((el) => {
+        el.muted = !enabled;
+      });
     }
     setSpeakerOn(enabled);
   }, []);
@@ -186,12 +196,31 @@ export default function RoomPage() {
           });
           setRemoteConnected(true);
         }
+        if (track.kind === Track.Kind.Audio && remoteAudioContainerRef.current) {
+          const audioEl = track.attach() as HTMLAudioElement;
+          audioEl.autoplay = true;
+          audioEl.playsInline = true;
+          audioEl.muted = !speakerOn;
+          audioEl.dataset.lkTrackSid = track.sid;
+          remoteAudioContainerRef.current.appendChild(audioEl);
+          void audioEl.play().catch(() => {
+            if (!audioEl) return;
+            audioEl.muted = true;
+            setSpeakerOn(false);
+          });
+        }
       });
 
       room.on(RoomEvent.TrackUnsubscribed, (track) => {
         track.detach();
         if (track.kind === Track.Kind.Video) {
           setRemoteConnected(false);
+        }
+        if (track.kind === Track.Kind.Audio && remoteAudioContainerRef.current) {
+          const audioEl = remoteAudioContainerRef.current.querySelector(
+            `audio[data-lk-track-sid="${track.sid}"]`,
+          );
+          audioEl?.remove();
         }
       });
 
@@ -240,6 +269,12 @@ export default function RoomPage() {
   useEffect(() => {
     if (remoteVideoRef.current) {
       remoteVideoRef.current.muted = !speakerOn;
+    }
+    if (remoteAudioContainerRef.current) {
+      const audioEls = remoteAudioContainerRef.current.querySelectorAll("audio");
+      audioEls.forEach((el) => {
+        el.muted = !speakerOn;
+      });
     }
   }, [speakerOn]);
 
@@ -302,6 +337,7 @@ export default function RoomPage() {
                 ) : (
                   <>
                     <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+                    <div ref={remoteAudioContainerRef} className="hidden" aria-hidden />
                     {status === "failed" && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--brand-surface)] px-6 text-center">
                         <p className="text-sm font-semibold text-[var(--brand-accent)]">{tx("接続に失敗しました", "Connection failed")}</p>
