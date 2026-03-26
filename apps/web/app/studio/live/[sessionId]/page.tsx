@@ -374,7 +374,6 @@ export default function StudioLiveSessionPage() {
 
       const audioEl = track.attach() as HTMLAudioElement;
       audioEl.autoplay = true;
-      audioEl.playsInline = true;
       audioEl.muted = false;
       audioEl.dataset.lkTrackSid = track.sid;
       remoteAudioContainerRef.current.appendChild(audioEl);
