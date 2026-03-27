@@ -129,6 +129,28 @@
   ],
   "streamSessions": [
     {
+      "sessionId": "session-mn8780p4-88df08",
+      "hostUserId": "vtuber-mn7b1fp7-8bf720",
+      "title": "ああ",
+      "status": "ended",
+      "createdAt": "2026-03-27T01:04:24.711Z",
+      "startsAt": "2026-03-27T01:04:24.543Z",
+      "description": "",
+      "category": "英語",
+      "thumbnail": "/image/thumbnail/thumbnail_5.png",
+      "hostName": "バナージ2",
+      "participationType": "First-come",
+      "requiredPlan": "free",
+      "reservationRequired": false,
+      "slotsTotal": 50,
+      "slotsLeft": 50,
+      "speakerSlotsTotal": 5,
+      "speakerSlotsLeft": 5,
+      "speakerRequiredPlan": "free",
+      "preferredVideoDeviceId": "24cc7b66aacbdddcbdd3ecff83b4658327f21f6de0a2424860cde935a16db8bf",
+      "preferredVideoLabel": "OBS Virtual Camera"
+    },
+    {
       "sessionId": "session-mn7b1v93-bb397b",
       "hostUserId": "vtuber-mn7b1fp7-8bf720",
       "title": "ああ",
@@ -145,7 +167,7 @@
       "slotsTotal": 50,
       "slotsLeft": 50,
       "speakerSlotsTotal": 5,
-      "speakerSlotsLeft": 5,
+      "speakerSlotsLeft": 4,
       "speakerRequiredPlan": "free",
       "preferredVideoDeviceId": "24cc7b66aacbdddcbdd3ecff83b4658327f21f6de0a2424860cde935a16db8bf",
       "preferredVideoLabel": "OBS Virtual Camera"
@@ -240,6 +262,15 @@
     }
   ],
   "reservations": [
+    {
+      "reservationId": "reservation-mn7g75wy-f57ece",
+      "sessionId": "session-mn7b1v93-bb397b",
+      "userId": "vtuber-mn7b1fp7-8bf720",
+      "userName": "バナージ2",
+      "createdAt": "2026-03-26T12:27:55.186Z",
+      "status": "reserved",
+      "type": "speaker"
+    },
     {
       "reservationId": "reservation-mmn4pjl7-c0097b",
       "sessionId": "session-mmn4p6tr-c4f530",
