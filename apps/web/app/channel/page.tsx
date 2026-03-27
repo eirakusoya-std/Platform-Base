@@ -13,6 +13,7 @@ type ProfileDraft = {
   name: string;
   channelName: string;
   bio: string;
+  avatarUrl: string;
 };
 
 async function request(url: string, init?: RequestInit) {
@@ -36,7 +37,7 @@ export default function ChannelPage() {
 
   const parseTab = (value: string | null): ChannelView => (value === "sessions" ? "sessions" : "profile");
   const [activeView, setActiveView] = useState<ChannelView>(() => parseTab(searchParams.get("tab")));
-  const [draft, setDraft] = useState<ProfileDraft>({ name: "", channelName: "", bio: "" });
+  const [draft, setDraft] = useState<ProfileDraft>({ name: "", channelName: "", bio: "", avatarUrl: "" });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export default function ChannelPage() {
       name: user.name ?? "",
       channelName: user.channelName ?? "",
       bio: user.bio ?? "",
+      avatarUrl: user.avatarUrl ?? "",
     });
   }, [user]);
 
@@ -79,12 +81,14 @@ export default function ChannelPage() {
           name: draft.name,
           channelName: draft.channelName,
           bio: draft.bio,
+          avatarUrl: draft.avatarUrl,
         }),
       });
       updateUser({
         name: draft.name,
         channelName: draft.channelName || undefined,
         bio: draft.bio || undefined,
+        avatarUrl: draft.avatarUrl || undefined,
       });
       await refreshSession();
       setMessage(tx("プロフィールを保存しました。", "Profile saved."));
@@ -100,12 +104,38 @@ export default function ChannelPage() {
       name: user?.name ?? "",
       channelName: user?.channelName ?? "",
       bio: user?.bio ?? "",
+      avatarUrl: user?.avatarUrl ?? "",
     });
     setMessage(null);
     setError(null);
   }
 
   if (!hydrated || !isVtuber || !user) return null;
+
+  function handleAvatarFileChange(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError(tx("画像ファイルを選択してください。", "Please choose an image file."));
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError(tx("画像サイズは2MB以下にしてください。", "Please keep image size under 2MB."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result) return;
+      setDraft((prev) => ({ ...prev, avatarUrl: result }));
+      setMessage(null);
+      setError(null);
+    };
+    reader.onerror = () => {
+      setError(tx("画像の読み込みに失敗しました。", "Failed to read image file."));
+    };
+    reader.readAsDataURL(file);
+  }
 
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
@@ -150,6 +180,41 @@ export default function ChannelPage() {
                 </p>
 
                 <form onSubmit={saveProfile} className="mt-5 space-y-4">
+                  <div className="rounded-xl bg-[var(--brand-bg-900)] p-4">
+                    <p className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("チャンネルアイコン", "Channel Icon")}</p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="h-14 w-14 overflow-hidden rounded-full bg-[var(--brand-surface)]">
+                        {draft.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={draft.avatarUrl} alt={tx("チャンネルアイコン", "Channel Icon")} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="grid h-full w-full place-items-center text-lg font-bold text-[var(--brand-primary)]">
+                            {(draft.channelName || draft.name || "A").slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <label className="inline-flex cursor-pointer items-center rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] hover:brightness-110">
+                          {tx("画像をアップロード", "Upload image")}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleAvatarFileChange(e.target.files?.[0] ?? null)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setDraft((prev) => ({ ...prev, avatarUrl: "" }))}
+                          className="ml-2 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
+                        >
+                          {tx("削除", "Remove")}
+                        </button>
+                        <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">{tx("PNG/JPG/WebP・2MB以下", "PNG/JPG/WebP, up to 2MB")}</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <label className="block">
                     <span className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("表示名", "Display Name")}</span>
                     <input
