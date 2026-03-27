@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { MySessionsManager } from "../components/channel/MySessionsManager";
 import { TopNav } from "../components/home/TopNav";
 import { useI18n } from "../lib/i18n";
@@ -31,12 +31,11 @@ async function request(url: string, init?: RequestInit) {
 export default function ChannelPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { tx } = useI18n();
   const { user, hydrated, isVtuber, updateUser, refreshSession } = useUserSession();
 
   const parseTab = (value: string | null): ChannelView => (value === "sessions" ? "sessions" : "profile");
-  const [activeView, setActiveView] = useState<ChannelView>(() => parseTab(searchParams.get("tab")));
+  const [activeView, setActiveView] = useState<ChannelView>("profile");
   const [draft, setDraft] = useState<ProfileDraft>({ name: "", channelName: "", bio: "", avatarUrl: "" });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -58,13 +57,15 @@ export default function ChannelPage() {
   }, [user]);
 
   useEffect(() => {
-    const next = parseTab(searchParams.get("tab"));
+    if (typeof window === "undefined") return;
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    const next = parseTab(tab);
     setActiveView((prev) => (prev === next ? prev : next));
-  }, [searchParams]);
+  }, []);
 
   function switchView(next: ChannelView) {
     setActiveView(next);
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     params.set("tab", next);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
