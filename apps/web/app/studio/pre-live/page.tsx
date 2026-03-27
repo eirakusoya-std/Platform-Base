@@ -2,7 +2,7 @@
 
 import { ComponentType, SVGProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownCircleIcon, ChatBubbleLeftRightIcon, MicrophoneIcon, RadioIcon, VideoCameraIcon } from "@heroicons/react/24/solid";
+import { ArrowDownCircleIcon, ChatBubbleLeftRightIcon, ChevronDownIcon, MicrophoneIcon, RadioIcon, VideoCameraIcon, VideoCameraSlashIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../components/home/TopNav";
 import { StudioProgress } from "../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../lib/cameraDevices";
@@ -13,8 +13,10 @@ import { useUserSession } from "../../lib/userSession";
 const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
 
 type CircleControlProps = {
-  label: string;
+  label?: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
+  offIcon?: ComponentType<SVGProps<SVGSVGElement>>;
+  slashedWhenOff?: boolean;
   on: boolean;
   onToggle: () => void;
 };
@@ -26,20 +28,26 @@ type ChatItem = {
   mine?: boolean;
 };
 
-function CircleControl({ label, icon: Icon, on, onToggle }: CircleControlProps) {
+function CircleControl({ icon: Icon, offIcon: OffIcon, slashedWhenOff, on, onToggle }: CircleControlProps) {
+  const CurrentIcon = on ? Icon : (OffIcon ?? Icon);
   return (
-    <button onClick={onToggle} className="group flex w-[84px] flex-col items-center gap-1">
-      <span
-        className={`flex h-14 w-14 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
-          on
-            ? "bg-[var(--brand-primary)] text-white"
-            : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
-        }`}
-      >
-        <Icon className="h-6 w-6" aria-hidden />
+    <button
+      onClick={onToggle}
+      className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
+        on
+          ? "bg-[var(--brand-primary)] text-white"
+          : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
+      }`}
+    >
+      <span className="relative flex h-6 w-6 items-center justify-center">
+        <CurrentIcon className="h-6 w-6" aria-hidden />
+        {!on && slashedWhenOff && (
+          <>
+            <span className="pointer-events-none absolute h-7 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
+            <span className="pointer-events-none absolute h-7 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
+          </>
+        )}
       </span>
-      <span className="text-[10px] font-semibold text-[var(--brand-text-muted)]">{label}</span>
-      <span className={`text-[11px] font-semibold ${on ? "text-[var(--brand-primary)]" : "text-[var(--brand-text-muted)]"}`}>{on ? "ON" : "OFF"}</span>
     </button>
   );
 }
@@ -79,6 +87,10 @@ export default function StudioPreLivePage() {
 
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState("");
+  const [showMicMenu, setShowMicMenu] = useState(false);
+  const [showCamMenu, setShowCamMenu] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
@@ -99,7 +111,7 @@ export default function StudioPreLivePage() {
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true,
-          audio: true,
+          audio: selectedAudioDeviceId ? { deviceId: { exact: selectedAudioDeviceId } } : true,
         });
 
         if (cancelled) {
@@ -124,11 +136,16 @@ export default function StudioPreLivePage() {
         if (cancelled) return;
 
         const videos = devices.filter((device) => device.kind === "videoinput");
+        const audios = devices.filter((device) => device.kind === "audioinput");
         setVideoDevices(videos);
+        setAudioDevices(audios);
 
         if (!selectedVideoDeviceId && videos.length > 0) {
           const preferred = pickPreferredVideoDevice(videos);
           if (preferred?.deviceId) setSelectedVideoDeviceId(preferred.deviceId);
+        }
+        if (!selectedAudioDeviceId && audios.length > 0) {
+          setSelectedAudioDeviceId(audios[0].deviceId);
         }
 
         setMediaError(null);
@@ -147,7 +164,7 @@ export default function StudioPreLivePage() {
       streamRef.current = null;
       if (previewRef.current) previewRef.current.srcObject = null;
     };
-  }, [selectedVideoDeviceId, camOn, micOn, tx]);
+  }, [selectedVideoDeviceId, selectedAudioDeviceId, camOn, micOn, tx]);
 
   const selectedVideoLabel = useMemo(
     () => videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? tx("デフォルトカメラ", "Default camera"),
@@ -155,6 +172,11 @@ export default function StudioPreLivePage() {
   );
 
   const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
+
+  const selectedAudioLabel = useMemo(
+    () => audioDevices.find((device) => device.deviceId === selectedAudioDeviceId)?.label ?? tx("デフォルトマイク", "Default microphone"),
+    [audioDevices, selectedAudioDeviceId, tx],
+  );
 
   const startBroadcastFlow = async () => {
     setShowPublishMenu(false);
@@ -198,12 +220,20 @@ export default function StudioPreLivePage() {
         preferredVideoLabel: selectedVideoLabel || undefined,
       });
 
+      const query = new URLSearchParams();
+      if (selectedAudioDeviceId) query.set("micDeviceId", selectedAudioDeviceId);
       if (publishMode === "go_live_now") {
-        router.push(`/studio/live/${encodeURIComponent(created.sessionId)}?autostart=1`);
+        query.set("autostart", "1");
+        router.push(`/studio/live/${encodeURIComponent(created.sessionId)}?${query.toString()}`);
         return;
       }
 
-      router.push(`/studio/live/${encodeURIComponent(created.sessionId)}`);
+      const queryString = query.toString();
+      router.push(
+        queryString
+          ? `/studio/live/${encodeURIComponent(created.sessionId)}?${queryString}`
+          : `/studio/live/${encodeURIComponent(created.sessionId)}`,
+      );
     } catch {
       setStartWarnings([tx("配信枠の作成に失敗しました。時間をおいて再試行してください。", "Failed to create stream session. Please retry.")]);
       setCreating(false);
@@ -350,10 +380,76 @@ export default function StudioPreLivePage() {
             {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
 
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <CircleControl label="MIC" icon={MicrophoneIcon} on={micOn} onToggle={() => setMicOn((v) => !v)} />
-              <CircleControl label="CAM" icon={VideoCameraIcon} on={camOn} onToggle={() => setCamOn((v) => !v)} />
-              <CircleControl label="CHAT" icon={ChatBubbleLeftRightIcon} on={chatOn} onToggle={() => setChatOn((v) => !v)} />
-              <CircleControl label="REC" icon={RadioIcon} on={recordOn} onToggle={() => setRecordOn((v) => !v)} />
+              <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+                <CircleControl label="MIC" icon={MicrophoneIcon} slashedWhenOff on={micOn} onToggle={() => setMicOn((v) => !v)} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMicMenu((v) => !v);
+                    setShowCamMenu(false);
+                  }}
+                  className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+                >
+                  <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                </button>
+                {showMicMenu && (
+                  <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                    {audioDevices.map((device, index) => (
+                      <button
+                        key={device.deviceId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAudioDeviceId(device.deviceId);
+                          setShowMicMenu(false);
+                        }}
+                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                          selectedAudioDeviceId === device.deviceId
+                            ? "bg-[var(--brand-primary)] text-white font-bold"
+                            : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                        }`}
+                      >
+                        {device.label || `Microphone ${index + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+                <CircleControl label="CAM" icon={VideoCameraIcon} offIcon={VideoCameraSlashIcon} on={camOn} onToggle={() => setCamOn((v) => !v)} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCamMenu((v) => !v);
+                    setShowMicMenu(false);
+                  }}
+                  className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+                >
+                  <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                </button>
+                {showCamMenu && (
+                  <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                    {videoDevices.map((device, index) => (
+                      <button
+                        key={device.deviceId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedVideoDeviceId(device.deviceId);
+                          setShowCamMenu(false);
+                        }}
+                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                          selectedVideoDeviceId === device.deviceId
+                            ? "bg-[var(--brand-primary)] text-white font-bold"
+                            : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                        }`}
+                      >
+                        {device.label || `Camera ${index + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <CircleControl label="CHAT" icon={ChatBubbleLeftRightIcon} slashedWhenOff on={chatOn} onToggle={() => setChatOn((v) => !v)} />
+              <CircleControl label="REC" icon={RadioIcon} slashedWhenOff on={recordOn} onToggle={() => setRecordOn((v) => !v)} />
             </div>
           </section>
 
@@ -376,17 +472,9 @@ export default function StudioPreLivePage() {
                 </select>
               </label>
 
-              <label className="grid gap-1 text-sm">
-                <span className="text-[var(--brand-text-muted)]">{tx("配信カメラ", "Camera Source")}</span>
-                <select value={selectedVideoDeviceId} onChange={(event) => setSelectedVideoDeviceId(event.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
-                  <option value="">{tx("デフォルトカメラ", "Default camera")}</option>
-                  {videoDevices.map((device, index) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Camera ${index + 1}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs text-[var(--brand-text-muted)]">
+                {tx("マイク:", "Mic:")} {selectedAudioLabel} / {tx("カメラ:", "Camera:")} {selectedVideoLabel}
+              </div>
 
               {!usingVirtualCamera && (
                 <div className="rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">

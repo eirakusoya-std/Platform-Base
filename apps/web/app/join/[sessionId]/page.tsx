@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ChevronDownIcon, MicrophoneIcon, SpeakerWaveIcon } from "@heroicons/react/24/solid";
 import { useI18n } from "../../lib/i18n";
 import { getStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
@@ -176,15 +177,16 @@ export default function PreJoinPage() {
  [dynamicSession, sessionId],
  );
 
- const previewRef = useRef<HTMLVideoElement | null>(null);
  const streamRef = useRef<MediaStream | null>(null);
 
  const [micOn, setMicOn] = useState(true);
- const [camOn, setCamOn] = useState(true);
  const [speakerOn, setSpeakerOn] = useState(true);
  const [ready, setReady] = useState(false);
  const [errorMessage, setErrorMessage] = useState<string | null>(null);
  const [micLevel, setMicLevel] = useState(0);
+ const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+ const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState("");
+ const [showMicMenu, setShowMicMenu] = useState(false);
 
  useEffect(() => {
  let mounted = true;
@@ -195,17 +197,16 @@ export default function PreJoinPage() {
 
  const setup = async () => {
  try {
- const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+ const stream = await navigator.mediaDevices.getUserMedia({
+ audio: selectedAudioDeviceId ? { deviceId: { exact: selectedAudioDeviceId } } : true,
+ video: false,
+ });
  if (!mounted) {
  stream.getTracks().forEach((track) => track.stop());
  return;
  }
 
  streamRef.current = stream;
- if (previewRef.current) {
- previewRef.current.srcObject = stream;
- previewRef.current.muted = true;
- }
 
  audioContext = new AudioContext();
  analyser = audioContext.createAnalyser();
@@ -213,6 +214,15 @@ export default function PreJoinPage() {
  source = audioContext.createMediaStreamSource(stream);
  source.connect(analyser);
  const data = new Uint8Array(analyser.frequencyBinCount);
+
+ const devices = await navigator.mediaDevices.enumerateDevices();
+ const audios = devices.filter((device) => device.kind === "audioinput");
+ if (mounted) {
+ setAudioDevices(audios);
+ if (!selectedAudioDeviceId && audios.length > 0) {
+ setSelectedAudioDeviceId(audios[0].deviceId);
+ }
+ }
 
  meterTimer = window.setInterval(() => {
  if (!analyser) return;
@@ -242,16 +252,13 @@ export default function PreJoinPage() {
  streamRef.current?.getTracks().forEach((track) => track.stop());
  streamRef.current = null;
  };
- }, []);
+ }, [selectedAudioDeviceId]);
 
  useEffect(() => {
  streamRef.current?.getAudioTracks().forEach((track) => {
  track.enabled = micOn;
  });
- streamRef.current?.getVideoTracks().forEach((track) => {
- track.enabled = camOn;
- });
- }, [micOn, camOn]);
+ }, [micOn]);
 
  const applyMic = (enabled: boolean) => {
  streamRef.current?.getAudioTracks().forEach((track) => {
@@ -260,16 +267,14 @@ export default function PreJoinPage() {
  setMicOn(enabled);
  };
 
- const applyCam = (enabled: boolean) => {
- streamRef.current?.getVideoTracks().forEach((track) => {
- track.enabled = enabled;
- });
- setCamOn(enabled);
- };
-
  const joinNow = () => {
  const roomId = encodeURIComponent(session.id);
- const query = new URLSearchParams({ role: "speaker", mic: micOn ? "1" : "0", cam: camOn ? "1" : "0", speaker: speakerOn ? "1" : "0" }).toString();
+ const query = new URLSearchParams({
+ role: "speaker",
+ mic: micOn ? "1" : "0",
+ speaker: speakerOn ? "1" : "0",
+ ...(selectedAudioDeviceId ? { micDeviceId: selectedAudioDeviceId } : {}),
+ }).toString();
  router.push(`/room/${roomId}?${query}`);
  };
 
@@ -410,10 +415,9 @@ export default function PreJoinPage() {
  </div>
 
  <div className="relative overflow-hidden rounded-xl bg-[var(--brand-bg-900)]" style={{ aspectRatio: "16/10" }}>
- <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
- {!camOn && (
- <div className="absolute inset-0 flex items-center justify-center bg-[var(--brand-bg-900)]/70 text-sm font-medium text-[var(--brand-text)]">{tx("カメラはオフです", "Camera is off")}</div>
- )}
+ <div className="absolute inset-0 flex items-center justify-center text-sm font-medium text-[var(--brand-text-muted)]">
+ {tx("マイクをチェックしてください", "Microphone check")}
+ </div>
  </div>
 
  <div className="mt-4 rounded-xl bg-[var(--brand-bg-900)] p-4">
@@ -423,36 +427,58 @@ export default function PreJoinPage() {
  </div>
  </div>
 
- <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1">
+ <div className="mt-4 flex flex-wrap items-center gap-2">
+ <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
  <button
- className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
- micOn
- ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
- : " text-[var(--brand-text-muted)] "
- }`}
  onClick={() => applyMic(!micOn)}
+ className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+ micOn ? "bg-[var(--brand-primary)] text-white" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
+ }`}
  >
- {micOn ? tx("MIC ON", "MIC ON") : tx("MIC OFF", "MIC OFF")}
+ {micOn ? (
+ <MicrophoneIcon className="h-5 w-5" aria-hidden />
+ ) : (
+ <span className="relative flex h-5 w-5 items-center justify-center">
+ <MicrophoneIcon className="h-5 w-5" aria-hidden />
+ <span className="pointer-events-none absolute h-6 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
+ <span className="pointer-events-none absolute h-6 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
+ </span>
+ )}
  </button>
  <button
- className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
- camOn
- ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
- : " text-[var(--brand-text-muted)] "
- }`}
- onClick={() => applyCam(!camOn)}
+ type="button"
+ onClick={() => setShowMicMenu((v) => !v)}
+ className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
  >
- {camOn ? tx("CAM ON", "CAM ON") : tx("CAM OFF", "CAM OFF")}
+ <ChevronDownIcon className="h-4 w-4" aria-hidden />
  </button>
+ {showMicMenu && (
+ <div className="absolute left-0 top-14 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+ {audioDevices.map((device, index) => (
  <button
- className={`rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
- speakerOn
- ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
- : " text-[var(--brand-text-muted)] "
+ key={device.deviceId}
+ type="button"
+ onClick={() => {
+ setSelectedAudioDeviceId(device.deviceId);
+ setShowMicMenu(false);
+ }}
+ className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+ selectedAudioDeviceId === device.deviceId ? "bg-[var(--brand-primary)] text-white font-bold" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
  }`}
+ >
+ {device.label || `Microphone ${index + 1}`}
+ </button>
+ ))}
+ </div>
+ )}
+ </div>
+ <button
  onClick={() => setSpeakerOn((prev) => !prev)}
+ className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+ speakerOn ? "bg-[var(--brand-primary)] text-white" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
+ }`}
  >
- {speakerOn ? tx("SPK ON", "SPK ON") : tx("SPK OFF", "SPK OFF")}
+ <SpeakerWaveIcon className="h-5 w-5" aria-hidden />
  </button>
  </div>
 

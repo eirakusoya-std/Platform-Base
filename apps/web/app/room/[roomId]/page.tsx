@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDownCircleIcon } from "@heroicons/react/24/solid";
+import { ArrowDownCircleIcon, ChevronDownIcon, MicrophoneIcon, SpeakerWaveIcon, VideoCameraIcon, VideoCameraSlashIcon } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
 import { useI18n } from "../../lib/i18n";
 
@@ -52,6 +52,12 @@ export default function RoomPage() {
   const [micOn, setMicOn] = useState(requestedRole !== "listener" && searchParams.get("mic") !== "0");
   const [camOn, setCamOn] = useState(requestedRole === "host" && searchParams.get("cam") !== "0");
   const [speakerOn, setSpeakerOn] = useState(searchParams.get("speaker") !== "0");
+  const [selectedMicDeviceId, setSelectedMicDeviceId] = useState(searchParams.get("micDeviceId") ?? "");
+  const [selectedCamDeviceId, setSelectedCamDeviceId] = useState(searchParams.get("camDeviceId") ?? "");
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [showMicMenu, setShowMicMenu] = useState(false);
+  const [showCamMenu, setShowCamMenu] = useState(false);
 
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
@@ -79,10 +85,13 @@ export default function RoomPage() {
       if (!canSendMic) return;
       setMicOn(enabled);
       if (roomRef.current) {
-        void roomRef.current.localParticipant.setMicrophoneEnabled(enabled);
+        void roomRef.current.localParticipant.setMicrophoneEnabled(
+          enabled,
+          enabled && selectedMicDeviceId ? { deviceId: selectedMicDeviceId } : undefined,
+        );
       }
     },
-    [canSendMic],
+    [canSendMic, selectedMicDeviceId],
   );
 
   const applyCam = useCallback(
@@ -90,10 +99,13 @@ export default function RoomPage() {
       if (!canSendCam) return;
       setCamOn(enabled);
       if (roomRef.current) {
-        void roomRef.current.localParticipant.setCameraEnabled(enabled);
+        void roomRef.current.localParticipant.setCameraEnabled(
+          enabled,
+          enabled && selectedCamDeviceId ? { deviceId: selectedCamDeviceId } : undefined,
+        );
       }
     },
-    [canSendCam],
+    [canSendCam, selectedCamDeviceId],
   );
 
   const applySpeaker = useCallback((enabled: boolean) => {
@@ -174,10 +186,16 @@ export default function RoomPage() {
         setAssignedRole(requestedRole === "host" ? "host" : "speaker");
 
         // Publish mic (always true here since listener exits early above)
-        void room.localParticipant.setMicrophoneEnabled(micOn);
+        void room.localParticipant.setMicrophoneEnabled(
+          micOn,
+          micOn && selectedMicDeviceId ? { deviceId: selectedMicDeviceId } : undefined,
+        );
         // Publish camera for host only
         if (requestedRole === "host") {
-          void room.localParticipant.setCameraEnabled(camOn);
+          void room.localParticipant.setCameraEnabled(
+            camOn,
+            camOn && selectedCamDeviceId ? { deviceId: selectedCamDeviceId } : undefined,
+          );
         }
       });
 
@@ -277,7 +295,7 @@ export default function RoomPage() {
       mounted = false;
       cleanup();
     };
-  }, [cleanup, requestedRole, roomId]);
+  }, [cleanup, requestedRole, roomId, selectedMicDeviceId, selectedCamDeviceId]);
 
   useEffect(() => {
     if (remoteVideoRef.current) {
@@ -290,6 +308,31 @@ export default function RoomPage() {
       });
     }
   }, [speakerOn]);
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (!mounted) return;
+        const audios = devices.filter((d) => d.kind === "audioinput");
+        const videos = devices.filter((d) => d.kind === "videoinput");
+        setAudioDevices(audios);
+        setVideoDevices(videos);
+        if (!selectedMicDeviceId && audios.length > 0) setSelectedMicDeviceId(audios[0].deviceId);
+        if (!selectedCamDeviceId && videos.length > 0) setSelectedCamDeviceId(videos[0].deviceId);
+      } catch {
+        // no-op
+      }
+    };
+
+    void refreshDevices();
+    navigator.mediaDevices.addEventListener("devicechange", refreshDevices);
+    return () => {
+      mounted = false;
+      navigator.mediaDevices.removeEventListener("devicechange", refreshDevices);
+    };
+  }, [selectedMicDeviceId, selectedCamDeviceId]);
 
   useEffect(() => {
     const el = chatListRef.current;
@@ -419,39 +462,117 @@ export default function RoomPage() {
 
             <section className="rounded-2xl bg-[var(--brand-bg-800)] p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => applyMic(!micOn)}
-                  disabled={!canSendMic}
-                  className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                    canSendMic
-                      ? micOn
-                        ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
-                        : "text-[var(--brand-text-muted)]"
-                      : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
-                  }`}
-                >
-                  {micOn ? tx("MIC ON", "MIC ON") : tx("MIC OFF", "MIC OFF")}
-                </button>
-                <button
-                  onClick={() => applyCam(!camOn)}
-                  disabled={!canSendCam}
-                  className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                    canSendCam
-                      ? camOn
-                        ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
-                        : "text-[var(--brand-text-muted)]"
-                      : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
-                  }`}
-                >
-                  {camOn ? tx("CAM ON", "CAM ON") : tx("CAM OFF", "CAM OFF")}
-                </button>
+                <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+                  <button
+                    onClick={() => applyMic(!micOn)}
+                    disabled={!canSendMic}
+                    className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+                      canSendMic
+                        ? micOn
+                          ? "bg-[var(--brand-primary)] text-white"
+                          : "bg-transparent text-[var(--brand-text-muted)]"
+                        : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
+                    }`}
+                  >
+                    {micOn ? (
+                      <MicrophoneIcon className="h-5 w-5" aria-hidden />
+                    ) : (
+                      <span className="relative flex h-5 w-5 items-center justify-center">
+                        <MicrophoneIcon className="h-5 w-5" aria-hidden />
+                        <span className="pointer-events-none absolute h-6 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
+                        <span className="pointer-events-none absolute h-6 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSendMic}
+                    onClick={() => {
+                      setShowMicMenu((v) => !v);
+                      setShowCamMenu(false);
+                    }}
+                    className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+                  >
+                    <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                  </button>
+                  {showMicMenu && canSendMic && (
+                    <div className="absolute left-0 top-14 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                      {audioDevices.map((device, index) => (
+                        <button
+                          key={device.deviceId}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMicDeviceId(device.deviceId);
+                            setShowMicMenu(false);
+                            if (roomRef.current && micOn) {
+                              void roomRef.current.localParticipant.setMicrophoneEnabled(true, { deviceId: device.deviceId });
+                            }
+                          }}
+                          className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                            selectedMicDeviceId === device.deviceId
+                              ? "bg-[var(--brand-primary)] text-white font-bold"
+                              : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                          }`}
+                        >
+                          {device.label || `Microphone ${index + 1}`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {canSendCam && (
+                  <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+                    <button
+                      onClick={() => applyCam(!camOn)}
+                      className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+                        camOn ? "bg-[var(--brand-primary)] text-white" : "bg-transparent text-[var(--brand-text-muted)]"
+                      }`}
+                    >
+                      {camOn ? <VideoCameraIcon className="h-5 w-5" aria-hidden /> : <VideoCameraSlashIcon className="h-5 w-5" aria-hidden />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCamMenu((v) => !v);
+                        setShowMicMenu(false);
+                      }}
+                      className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+                    >
+                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                    </button>
+                    {showCamMenu && (
+                      <div className="absolute left-0 top-14 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                        {videoDevices.map((device, index) => (
+                          <button
+                            key={device.deviceId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCamDeviceId(device.deviceId);
+                              setShowCamMenu(false);
+                              if (roomRef.current && camOn) {
+                                void roomRef.current.localParticipant.setCameraEnabled(true, { deviceId: device.deviceId });
+                              }
+                            }}
+                            className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                              selectedCamDeviceId === device.deviceId
+                                ? "bg-[var(--brand-primary)] text-white font-bold"
+                                : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                            }`}
+                          >
+                            {device.label || `Camera ${index + 1}`}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button
                   onClick={() => applySpeaker(!speakerOn)}
-                  className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                    speakerOn ? "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]" : "text-[var(--brand-text-muted)]"
+                  className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+                    speakerOn ? "bg-[var(--brand-primary)] text-white" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
                   }`}
                 >
-                  {speakerOn ? tx("SPK ON", "SPK ON") : tx("SPK OFF", "SPK OFF")}
+                  <SpeakerWaveIcon className="h-5 w-5" aria-hidden />
                 </button>
                 <button onClick={() => { void copyRoomLink(); }} className="rounded-lg px-3 py-2 text-xs font-medium text-[var(--brand-text)] transition-colors">
                   {copied ? tx("COPY OK", "COPY OK") : tx("LINK COPY", "LINK COPY")}
