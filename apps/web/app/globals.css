@@ -4,6 +4,8 @@
   --bg: #1a1d25;
   --surface: color-mix(in srgb, var(--bg) 88%, #ffffff 12%);
   --primary: #7c6ae6;
+  --primary-light: #ac9eff;
+  --primary-dark: #6248f7;
   --secondary: #00e5ff;
   --accent: #ff3b5c;
   --text: #ededed;
@@ -16,6 +18,8 @@
   --brand-surface: var(--surface);
   --brand-surface-soft: color-mix(in srgb, var(--bg) 84%, #ffffff 16%);
   --brand-primary: var(--primary);
+  --brand-primary-light: var(--primary-light);
+  --brand-primary-dark: var(--primary-dark);
   --brand-secondary: var(--secondary);
   --brand-accent: var(--accent);
   --brand-text: var(--text);
