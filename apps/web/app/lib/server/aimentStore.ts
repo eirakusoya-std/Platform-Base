@@ -863,7 +863,7 @@ export async function googleAuthUser(input: {
 
 export async function updateAccountProfile(
   userId: string,
-  patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string },
+  patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string; avatarUrl?: string },
 ) {
   if (USE_NEON) {
     await ensureSchema();
@@ -874,6 +874,7 @@ export async function updateAccountProfile(
     const nextName = patch.name != null ? patch.name.trim() : current.name;
     const nextChannelName = patch.channelName != null ? patch.channelName.trim() || null : current.channelName ?? null;
     const nextBio = patch.bio != null ? patch.bio.trim() || null : current.bio ?? null;
+    const nextAvatarUrl = patch.avatarUrl != null ? patch.avatarUrl.trim() || null : current.avatarUrl ?? null;
 
     let nextPhoneNumber = current.phoneNumber ?? null;
     let nextPhoneVerifiedAt = current.phoneVerifiedAt ?? null;
@@ -893,6 +894,7 @@ export async function updateAccountProfile(
         name = ${nextName},
         channel_name = ${nextChannelName},
         bio = ${nextBio},
+        avatar_url = ${nextAvatarUrl},
         phone_number = ${nextPhoneNumber},
         phone_verified_at = ${nextPhoneVerifiedAt}
       WHERE id = ${userId}
@@ -909,6 +911,7 @@ export async function updateAccountProfile(
     if (patch.name != null) target.name = patch.name.trim();
     if (patch.channelName != null) target.channelName = patch.channelName.trim() || undefined;
     if (patch.bio != null) target.bio = patch.bio.trim() || undefined;
+    if (patch.avatarUrl != null) target.avatarUrl = patch.avatarUrl.trim() || undefined;
     if (patch.phoneNumber != null) {
       const normalized = patch.phoneNumber.trim() || undefined;
       if (normalized !== target.phoneNumber) {

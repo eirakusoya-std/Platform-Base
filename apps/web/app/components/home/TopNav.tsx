@@ -3,7 +3,7 @@
 import { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDaysIcon, HomeIcon, SparklesIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import { CalendarDaysIcon, HomeIcon, RectangleStackIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import { AuthProfileControl } from "../auth/AuthProfileControl";
 import { useI18n } from "../../lib/i18n";
 import { useUserSession } from "../../lib/userSession";
@@ -16,10 +16,9 @@ type NavItem = {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
 };
 
-const NAV_ITEMS: NavItem[] = [
+const BASE_NAV_ITEMS: NavItem[] = [
   { labelJp: "ライブ", labelEn: "Live", href: "/", shortLabelEn: "Live", icon: HomeIcon },
   { labelJp: "スケジュール", labelEn: "Schedule", href: "/schedule", shortLabelEn: "Schedule", icon: CalendarDaysIcon },
-  { labelJp: "タレント", labelEn: "Talent", shortLabelEn: "Talent", icon: SparklesIcon },
 ];
 
 type TopNavProps = {
@@ -31,6 +30,12 @@ export function TopNav({ mode = "default" }: TopNavProps) {
   const { locale, setLocale, tx } = useI18n();
   const { isVtuber } = useUserSession();
   const isStudioMode = mode === "studio";
+  const navItems: NavItem[] = isVtuber
+    ? [
+        ...BASE_NAV_ITEMS,
+        { labelJp: "チャンネル", labelEn: "Channel", href: "/channel", shortLabelEn: "Channel", icon: RectangleStackIcon },
+      ]
+    : BASE_NAV_ITEMS;
 
   return (
     <>
@@ -45,7 +50,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
             {!isStudioMode && (
             <div className="hidden min-w-0 flex-1 items-center justify-center overflow-x-auto md:flex">
               <div className="flex items-center gap-2 rounded-xl bg-[var(--brand-bg-900)] p-1">
-                {NAV_ITEMS.map((item) => {
+                {navItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = item.href ? pathname === item.href : false;
                   if (!item.href) {
@@ -126,7 +131,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
       {!isStudioMode && (
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[var(--brand-surface)]/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.25)] backdrop-blur md:hidden">
         <div className="flex items-center justify-between gap-3">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.href ? pathname === item.href : false;
             if (!item.href) {
