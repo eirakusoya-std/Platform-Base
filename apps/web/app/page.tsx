@@ -54,6 +54,9 @@ export default function HomePage() {
         .filter((session) => session.status === "prelive")
         .map((session) => ({
           id: session.sessionId,
+          hostUserId: session.hostUserId,
+          hostAvatarUrl: session.hostAvatarUrl,
+          hostChannelName: session.hostChannelName,
           vtuber: session.hostName,
           title: session.title,
           thumbnail: session.thumbnail,
@@ -77,6 +80,9 @@ export default function HomePage() {
         .filter((session) => session.status === "live")
         .map((session) => ({
           id: session.sessionId,
+          hostUserId: session.hostUserId,
+          hostAvatarUrl: session.hostAvatarUrl,
+          hostChannelName: session.hostChannelName,
           vtuber: session.hostName,
           title: session.title,
           thumbnail: session.thumbnail,
@@ -155,6 +161,10 @@ export default function HomePage() {
     router.push(`/join/${encodeURIComponent(sessionId)}`);
   };
 
+  const goChannel = (userId: string) => {
+    router.push(`/channels/${encodeURIComponent(userId)}`);
+  };
+
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] pb-20 md:pb-0">
       <TopNav />
@@ -176,6 +186,7 @@ export default function HomePage() {
           countdown={mergedCountdown}
           reservedSet={reservedSet}
           onOpenSession={setSelectedSession}
+          onOpenChannel={goChannel}
           onToggleReserve={handleToggleReserve}
         />
 
@@ -183,6 +194,7 @@ export default function HomePage() {
           sessions={filteredLive}
           notifySet={notifySet}
           onOpenSession={setSelectedSession}
+          onOpenChannel={goChannel}
           onToggleNotify={handleToggleNotify}
         />
       </div>

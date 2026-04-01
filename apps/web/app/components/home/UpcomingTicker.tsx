@@ -29,7 +29,19 @@ export function UpcomingTicker({ sessions, onParticipate }: UpcomingTickerProps)
 <img src={s.thumbnail} alt={s.vtuber} className="h-full w-full object-cover" />
 </div>
  <div className="flex flex-col">
- <span className="text-[10px] font-bold leading-tight text-[var(--brand-text)]">{s.vtuber}</span>
+ <span className="inline-flex items-center gap-1.5 text-[10px] font-bold leading-tight text-[var(--brand-text)]">
+ <span className="h-4 w-4 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
+ {s.hostAvatarUrl ? (
+ // eslint-disable-next-line @next/next/no-img-element
+ <img src={s.hostAvatarUrl} alt={s.vtuber} className="h-full w-full object-cover" />
+ ) : (
+ <span className="grid h-full w-full place-items-center text-[8px] font-bold text-[var(--brand-primary)]">
+ {(s.hostChannelName || s.vtuber || "A").slice(0, 1).toUpperCase()}
+ </span>
+ )}
+ </span>
+ <span>{s.vtuber}</span>
+ </span>
  <span className="max-w-[120px] truncate text-[9px] leading-tight text-[var(--brand-text-muted)]">{s.title}</span>
  </div>
  <div className="rounded bg-[var(--brand-accent)]/20 px-1.5 py-0.5 text-[9px] font-bold text-[var(--brand-accent)]">

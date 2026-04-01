@@ -63,6 +63,8 @@ export type ReservationStatus = "reserved" | "cancelled";
 export type StreamSession = {
   sessionId: string;
   hostUserId: string;
+  hostAvatarUrl?: string;
+  hostChannelName?: string;
   title: string;
   status: StreamSessionStatus;
   createdAt: string;

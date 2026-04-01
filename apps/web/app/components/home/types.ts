@@ -5,6 +5,9 @@ export type SessionId = string;
 
 export type StartingSoonSession = {
   id: SessionId;
+  hostUserId?: string;
+  hostAvatarUrl?: string;
+  hostChannelName?: string;
   vtuber: string;
   title: string;
   thumbnail: string;
@@ -23,6 +26,9 @@ export type StartingSoonSession = {
 
 export type LiveSession = {
   id: SessionId;
+  hostUserId?: string;
+  hostAvatarUrl?: string;
+  hostChannelName?: string;
   vtuber: string;
   title: string;
   thumbnail: string;

@@ -9,10 +9,11 @@ type NowLiveSectionProps = {
  sessions: LiveSession[];
  notifySet: Set<string>;
  onOpenSession: (session: ModalSession) => void;
+ onOpenChannel: (hostUserId: string) => void;
  onToggleNotify: (event: MouseEvent, sessionId: string) => void;
 };
 
-export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNotify }: NowLiveSectionProps) {
+export function NowLiveSection({ sessions, notifySet, onOpenSession, onOpenChannel, onToggleNotify }: NowLiveSectionProps) {
   const { tx } = useI18n();
   return (
     <section className="py-10">
@@ -85,7 +86,29 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onToggleNot
                   </div>
 
                   <p className="mb-0.5 line-clamp-2 text-sm font-bold text-[var(--brand-text)]">{session.title}</p>
-                  <p className="mb-3 text-xs text-[var(--brand-text-muted)]">{session.vtuber}</p>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      if (!session.hostUserId) return;
+                      event.stopPropagation();
+                      onOpenChannel(session.hostUserId);
+                    }}
+                    className={`mb-3 inline-flex items-center gap-2 rounded-full px-1 py-0.5 ${
+                      session.hostUserId ? "hover:bg-[var(--brand-bg-900)]" : ""
+                    }`}
+                  >
+                    <span className="h-5 w-5 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
+                      {session.hostAvatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={session.hostAvatarUrl} alt={session.vtuber} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="grid h-full w-full place-items-center text-[10px] font-bold text-[var(--brand-primary)]">
+                          {(session.hostChannelName || session.vtuber || "A").slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-[var(--brand-text-muted)]">{session.vtuber}</span>
+                  </button>
 
                   {slotsAvailable ? (
                     <div className="mb-3 rounded-lg bg-[var(--brand-primary)]/15 px-3 py-2">

@@ -1,6 +1,14 @@
 {
   "consents": [
     {
+      "consentId": "consent_mng1g46p_51e04f26",
+      "userId": "vtuber-mng1g46k-10a5b4",
+      "version": "2026-03-12",
+      "source": "signup",
+      "termsAcceptedAt": "2026-04-01T12:44:54.185Z",
+      "privacyAcceptedAt": "2026-04-01T12:44:54.185Z"
+    },
+    {
       "consentId": "consent_mn7b1fp9_7cf488c0",
       "userId": "vtuber-mn7b1fp7-8bf720",
       "version": "2026-03-12",

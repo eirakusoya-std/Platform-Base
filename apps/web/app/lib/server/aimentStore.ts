@@ -156,6 +156,10 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
   return {
     sessionId: entry.sessionId,
     hostUserId: entry.hostUserId,
+    hostAvatarUrl:
+      typeof entry.hostAvatarUrl === "string" ? entry.hostAvatarUrl : undefined,
+    hostChannelName:
+      typeof entry.hostChannelName === "string" ? entry.hostChannelName : undefined,
     title: entry.title,
     status,
     createdAt: entry.createdAt,
@@ -405,6 +409,8 @@ function rowToStreamSession(row: any): StreamSession {
   return {
     sessionId: row.session_id as string,
     hostUserId: row.host_user_id as string,
+    hostAvatarUrl: row.host_avatar_url ?? undefined,
+    hostChannelName: row.host_channel_name ?? undefined,
     title: row.title as string,
     status: row.status as StreamSessionStatus,
     createdAt: row.created_at as string,
@@ -424,6 +430,22 @@ function rowToStreamSession(row: any): StreamSession {
     preferredVideoDeviceId: row.preferred_video_device_id ?? undefined,
     preferredVideoLabel: row.preferred_video_label ?? undefined,
   };
+}
+
+function attachHostFields(
+  sessions: StreamSession[],
+  users: Pick<StoredUser, "id" | "avatarUrl" | "channelName" | "name">[],
+) {
+  const byId = new Map(users.map((user) => [user.id, user]));
+  return sessions.map((session) => {
+    const host = byId.get(session.hostUserId);
+    if (!host) return session;
+    return {
+      ...session,
+      hostAvatarUrl: host.avatarUrl,
+      hostChannelName: host.channelName ?? host.name,
+    };
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1034,8 +1056,19 @@ export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
     const db = getDb();
     const rows =
       statuses?.length
-        ? await db`SELECT * FROM stream_sessions WHERE status = ANY(${statuses}) ORDER BY created_at DESC`
-        : await db`SELECT * FROM stream_sessions ORDER BY created_at DESC`;
+        ? await db`
+            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            FROM stream_sessions s
+            LEFT JOIN users u ON u.id = s.host_user_id
+            WHERE s.status = ANY(${statuses})
+            ORDER BY s.created_at DESC
+          `
+        : await db`
+            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            FROM stream_sessions s
+            LEFT JOIN users u ON u.id = s.host_user_id
+            ORDER BY s.created_at DESC
+          `;
     return rows.map(rowToStreamSession);
   }
 
@@ -1043,20 +1076,28 @@ export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
   const filtered = statuses?.length
     ? store.streamSessions.filter((session) => statuses.includes(session.status))
     : store.streamSessions;
-  return filtered.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const sorted = filtered.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return attachHostFields(sorted, store.users);
 }
 
 export async function getStreamSessionById(sessionId: string) {
   if (USE_NEON) {
     await ensureSchema();
     const db = getDb();
-    const rows = await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    const rows = await db`
+      SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+      FROM stream_sessions s
+      LEFT JOIN users u ON u.id = s.host_user_id
+      WHERE s.session_id = ${sessionId}
+    `;
     if (!rows[0]) return null;
     return rowToStreamSession(rows[0]);
   }
 
   const store = await readStore();
-  return store.streamSessions.find((session) => session.sessionId === sessionId) ?? null;
+  const session = store.streamSessions.find((entry) => entry.sessionId === sessionId) ?? null;
+  if (!session) return null;
+  return attachHostFields([session], store.users)[0];
 }
 
 export async function listReservationsForUser(userId: string) {
@@ -1341,19 +1382,42 @@ export async function deleteStreamSession(sessionId: string, actor: SessionUser)
   });
 }
 
-export async function listStreamSessionsByHost(hostUserId: string): Promise<StreamSession[]> {
+export async function listStreamSessionsByHost(
+  hostUserId: string,
+  statuses?: StreamSessionStatus[],
+): Promise<StreamSession[]> {
   if (USE_NEON) {
     await ensureSchema();
     const db = getDb();
     const rows =
-      await db`SELECT * FROM stream_sessions WHERE host_user_id = ${hostUserId} ORDER BY created_at DESC`;
+      statuses?.length
+        ? await db`
+            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            FROM stream_sessions s
+            LEFT JOIN users u ON u.id = s.host_user_id
+            WHERE s.host_user_id = ${hostUserId}
+              AND s.status = ANY(${statuses})
+            ORDER BY s.created_at DESC
+          `
+        : await db`
+            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            FROM stream_sessions s
+            LEFT JOIN users u ON u.id = s.host_user_id
+            WHERE s.host_user_id = ${hostUserId}
+            ORDER BY s.created_at DESC
+          `;
     return rows.map(rowToStreamSession);
   }
 
   const store = await readStore();
-  return store.streamSessions
-    .filter((session) => session.hostUserId === hostUserId)
+  const filtered = store.streamSessions
+    .filter((session) => {
+      if (session.hostUserId !== hostUserId) return false;
+      if (statuses?.length && !statuses.includes(session.status)) return false;
+      return true;
+    })
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return attachHostFields(filtered, store.users);
 }
 
 export async function setStreamSessionStatus(

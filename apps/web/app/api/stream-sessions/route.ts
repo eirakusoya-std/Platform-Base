@@ -18,11 +18,17 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const statuses = parseStatuses(url);
   const mine = url.searchParams.get("mine") === "1";
+  const hostUserId = url.searchParams.get("hostUserId")?.trim();
 
   if (mine) {
     const actor = await resolveSessionUser();
     if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const sessions = await listStreamSessionsByHost(actor.id);
+    const sessions = await listStreamSessionsByHost(actor.id, statuses);
+    return NextResponse.json({ sessions });
+  }
+
+  if (hostUserId) {
+    const sessions = await listStreamSessionsByHost(hostUserId, statuses);
     return NextResponse.json({ sessions });
   }
 
