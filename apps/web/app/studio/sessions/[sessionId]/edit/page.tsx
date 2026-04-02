@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { ChevronLeftIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../../../components/home/TopNav";
 import { useI18n } from "../../../../lib/i18n";
 import { useUserSession } from "../../../../lib/userSession";
@@ -109,8 +110,12 @@ export default function SessionEditPage() {
 
       <main className="mx-auto max-w-2xl px-6 py-10">
         <div className="mb-6 flex items-center gap-3">
-          <Link href="/studio/sessions" className="text-sm text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]">
-            ← {tx("枠一覧", "My Sessions")}
+          <Link
+            href="/studio/sessions"
+            className="inline-flex items-center gap-1 text-sm text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
+          >
+            <ChevronLeftIcon className="h-4 w-4" aria-hidden />
+            <span>{tx("枠一覧", "My Sessions")}</span>
           </Link>
         </div>
 

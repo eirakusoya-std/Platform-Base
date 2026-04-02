@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ArrowRightIcon } from "@heroicons/react/24/solid";
 import { useI18n } from "../../lib/i18n";
 import { deleteStreamSession, listMyStreamSessions, type StreamSession } from "../../lib/streamSessions";
 
@@ -21,9 +22,10 @@ type MySessionsManagerProps = {
   title?: string;
   description?: string;
   showCreateButton?: boolean;
+  framed?: boolean;
 };
 
-export function MySessionsManager({ title, description, showCreateButton = true }: MySessionsManagerProps) {
+export function MySessionsManager({ title, description, showCreateButton = true, framed = true }: MySessionsManagerProps) {
   const { tx } = useI18n();
   const [sessions, setSessions] = useState<StreamSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ export function MySessionsManager({ title, description, showCreateButton = true 
   }
 
   return (
-    <section className="rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/20">
+    <section className={framed ? "rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/20" : ""}>
       <div className="mb-5 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">{title ?? tx("配信枠管理", "My Sessions")}</h2>
@@ -86,8 +88,9 @@ export function MySessionsManager({ title, description, showCreateButton = true 
       ) : sessions.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-[var(--brand-text-muted)]">{tx("まだ配信枠がありません。", "No sessions yet.")}</p>
-          <Link href="/studio/pre-live" className="mt-4 inline-block text-sm text-[var(--brand-primary)] hover:underline">
-            {tx("最初の枠を作成する →", "Create your first session →")}
+          <Link href="/studio/pre-live" className="mt-4 inline-flex items-center gap-1 text-sm text-[var(--brand-primary)] hover:underline">
+            <span>{tx("最初の枠を作成する", "Create your first session")}</span>
+            <ArrowRightIcon className="h-4 w-4" aria-hidden />
           </Link>
         </div>
       ) : (

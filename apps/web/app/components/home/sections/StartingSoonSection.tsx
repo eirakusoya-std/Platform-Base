@@ -11,15 +11,17 @@ type StartingSoonSectionProps = {
  countdown: Record<string, number>;
  reservedSet: Set<string>;
  onOpenSession: (session: ModalSession) => void;
+ onOpenChannel: (hostUserId: string) => void;
  onToggleReserve: (event: MouseEvent, sessionId: string) => void | Promise<void>;
 };
 
 export function StartingSoonSection({
  sessions,
  countdown,
- reservedSet,
- onOpenSession,
- onToggleReserve,
+  reservedSet,
+  onOpenSession,
+  onOpenChannel,
+  onToggleReserve,
 }: StartingSoonSectionProps) {
   const { tx } = useI18n();
   return (
@@ -90,7 +92,29 @@ export function StartingSoonSection({
                   </div>
 
                   <p className="mb-0.5 line-clamp-2 text-sm font-bold leading-tight text-[var(--brand-text)]">{session.title}</p>
-                  <p className="mb-3 text-xs text-[var(--brand-text-muted)]">{session.vtuber}</p>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      if (!session.hostUserId) return;
+                      event.stopPropagation();
+                      onOpenChannel(session.hostUserId);
+                    }}
+                    className={`mb-3 inline-flex items-center gap-2 rounded-full px-1 py-0.5 ${
+                      session.hostUserId ? "hover:bg-[var(--brand-bg-900)]" : ""
+                    }`}
+                  >
+                    <span className="h-5 w-5 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
+                      {session.hostAvatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={session.hostAvatarUrl} alt={session.vtuber} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="grid h-full w-full place-items-center text-[10px] font-bold text-[var(--brand-primary)]">
+                          {(session.hostChannelName || session.vtuber || "A").slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-[var(--brand-text-muted)]">{session.vtuber}</span>
+                  </button>
 
                   <div className="mb-3">
                     <SlotBar left={session.slotsLeft} total={session.slotsTotal} size="sm" />

@@ -21,6 +21,7 @@ export type SessionUser = {
   channelName?: string;
   bio?: string;
   avatarUrl?: string;
+  headerUrl?: string;
   phoneNumber?: string;
   emailVerifiedAt?: string;
   phoneVerifiedAt?: string;
@@ -63,6 +64,8 @@ export type ReservationStatus = "reserved" | "cancelled";
 export type StreamSession = {
   sessionId: string;
   hostUserId: string;
+  hostAvatarUrl?: string;
+  hostChannelName?: string;
   title: string;
   status: StreamSessionStatus;
   createdAt: string;

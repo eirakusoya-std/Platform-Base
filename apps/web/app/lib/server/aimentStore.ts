@@ -156,6 +156,10 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
   return {
     sessionId: entry.sessionId,
     hostUserId: entry.hostUserId,
+    hostAvatarUrl:
+      typeof entry.hostAvatarUrl === "string" ? entry.hostAvatarUrl : undefined,
+    hostChannelName:
+      typeof entry.hostChannelName === "string" ? entry.hostChannelName : undefined,
     title: entry.title,
     status,
     createdAt: entry.createdAt,
@@ -222,6 +226,7 @@ function normalizeStoredUser(entry: Partial<StoredUser>): StoredUser | null {
       typeof entry.channelName === "string" ? entry.channelName : legacyDefaults.channelName,
     bio: typeof entry.bio === "string" ? entry.bio : undefined,
     avatarUrl: typeof entry.avatarUrl === "string" ? entry.avatarUrl : undefined,
+    headerUrl: typeof entry.headerUrl === "string" ? entry.headerUrl : undefined,
     phoneNumber:
       typeof entry.phoneNumber === "string" ? entry.phoneNumber : legacyDefaults.phoneNumber,
     emailVerifiedAt:
@@ -324,6 +329,7 @@ async function initSchema() {
       channel_name TEXT,
       bio TEXT,
       avatar_url TEXT,
+      header_url TEXT,
       phone_number TEXT,
       email_verified_at TEXT,
       phone_verified_at TEXT,
@@ -335,6 +341,7 @@ async function initSchema() {
       verification_requested_at TEXT
     )
   `;
+  await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS header_url TEXT`;
   await db`
     CREATE TABLE IF NOT EXISTS stream_sessions (
       session_id TEXT PRIMARY KEY,
@@ -388,6 +395,7 @@ function rowToStoredUser(row: any): StoredUser {
     channelName: row.channel_name ?? undefined,
     bio: row.bio ?? undefined,
     avatarUrl: row.avatar_url ?? undefined,
+    headerUrl: row.header_url ?? undefined,
     phoneNumber: row.phone_number ?? undefined,
     emailVerifiedAt: row.email_verified_at ?? undefined,
     phoneVerifiedAt: row.phone_verified_at ?? undefined,
@@ -405,6 +413,8 @@ function rowToStreamSession(row: any): StreamSession {
   return {
     sessionId: row.session_id as string,
     hostUserId: row.host_user_id as string,
+    hostAvatarUrl: row.host_avatar_url ?? undefined,
+    hostChannelName: row.host_channel_name ?? undefined,
     title: row.title as string,
     status: row.status as StreamSessionStatus,
     createdAt: row.created_at as string,
@@ -424,6 +434,22 @@ function rowToStreamSession(row: any): StreamSession {
     preferredVideoDeviceId: row.preferred_video_device_id ?? undefined,
     preferredVideoLabel: row.preferred_video_label ?? undefined,
   };
+}
+
+function attachHostFields(
+  sessions: StreamSession[],
+  users: Pick<StoredUser, "id" | "avatarUrl" | "channelName" | "name">[],
+) {
+  const byId = new Map(users.map((user) => [user.id, user]));
+  return sessions.map((session) => {
+    const host = byId.get(session.hostUserId);
+    if (!host) return session;
+    return {
+      ...session,
+      hostAvatarUrl: host.avatarUrl,
+      hostChannelName: host.channelName ?? host.name,
+    };
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -863,7 +889,7 @@ export async function googleAuthUser(input: {
 
 export async function updateAccountProfile(
   userId: string,
-  patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string; avatarUrl?: string },
+  patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string; avatarUrl?: string; headerUrl?: string },
 ) {
   if (USE_NEON) {
     await ensureSchema();
@@ -875,6 +901,7 @@ export async function updateAccountProfile(
     const nextChannelName = patch.channelName != null ? patch.channelName.trim() || null : current.channelName ?? null;
     const nextBio = patch.bio != null ? patch.bio.trim() || null : current.bio ?? null;
     const nextAvatarUrl = patch.avatarUrl != null ? patch.avatarUrl.trim() || null : current.avatarUrl ?? null;
+    const nextHeaderUrl = patch.headerUrl != null ? patch.headerUrl.trim() || null : current.headerUrl ?? null;
 
     let nextPhoneNumber = current.phoneNumber ?? null;
     let nextPhoneVerifiedAt = current.phoneVerifiedAt ?? null;
@@ -895,6 +922,7 @@ export async function updateAccountProfile(
         channel_name = ${nextChannelName},
         bio = ${nextBio},
         avatar_url = ${nextAvatarUrl},
+        header_url = ${nextHeaderUrl},
         phone_number = ${nextPhoneNumber},
         phone_verified_at = ${nextPhoneVerifiedAt}
       WHERE id = ${userId}
@@ -912,6 +940,7 @@ export async function updateAccountProfile(
     if (patch.channelName != null) target.channelName = patch.channelName.trim() || undefined;
     if (patch.bio != null) target.bio = patch.bio.trim() || undefined;
     if (patch.avatarUrl != null) target.avatarUrl = patch.avatarUrl.trim() || undefined;
+    if (patch.headerUrl != null) target.headerUrl = patch.headerUrl.trim() || undefined;
     if (patch.phoneNumber != null) {
       const normalized = patch.phoneNumber.trim() || undefined;
       if (normalized !== target.phoneNumber) {
@@ -1034,8 +1063,19 @@ export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
     const db = getDb();
     const rows =
       statuses?.length
-        ? await db`SELECT * FROM stream_sessions WHERE status = ANY(${statuses}) ORDER BY created_at DESC`
-        : await db`SELECT * FROM stream_sessions ORDER BY created_at DESC`;
+        ? await db`
+            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            FROM stream_sessions s
+            LEFT JOIN users u ON u.id = s.host_user_id
+            WHERE s.status = ANY(${statuses})
+            ORDER BY s.created_at DESC
+          `
+        : await db`
+            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            FROM stream_sessions s
+            LEFT JOIN users u ON u.id = s.host_user_id
+            ORDER BY s.created_at DESC
+          `;
     return rows.map(rowToStreamSession);
   }
 
@@ -1043,20 +1083,28 @@ export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
   const filtered = statuses?.length
     ? store.streamSessions.filter((session) => statuses.includes(session.status))
     : store.streamSessions;
-  return filtered.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const sorted = filtered.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return attachHostFields(sorted, store.users);
 }
 
 export async function getStreamSessionById(sessionId: string) {
   if (USE_NEON) {
     await ensureSchema();
     const db = getDb();
-    const rows = await db`SELECT * FROM stream_sessions WHERE session_id = ${sessionId}`;
+    const rows = await db`
+      SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+      FROM stream_sessions s
+      LEFT JOIN users u ON u.id = s.host_user_id
+      WHERE s.session_id = ${sessionId}
+    `;
     if (!rows[0]) return null;
     return rowToStreamSession(rows[0]);
   }
 
   const store = await readStore();
-  return store.streamSessions.find((session) => session.sessionId === sessionId) ?? null;
+  const session = store.streamSessions.find((entry) => entry.sessionId === sessionId) ?? null;
+  if (!session) return null;
+  return attachHostFields([session], store.users)[0];
 }
 
 export async function listReservationsForUser(userId: string) {
@@ -1341,19 +1389,42 @@ export async function deleteStreamSession(sessionId: string, actor: SessionUser)
   });
 }
 
-export async function listStreamSessionsByHost(hostUserId: string): Promise<StreamSession[]> {
+export async function listStreamSessionsByHost(
+  hostUserId: string,
+  statuses?: StreamSessionStatus[],
+): Promise<StreamSession[]> {
   if (USE_NEON) {
     await ensureSchema();
     const db = getDb();
     const rows =
-      await db`SELECT * FROM stream_sessions WHERE host_user_id = ${hostUserId} ORDER BY created_at DESC`;
+      statuses?.length
+        ? await db`
+            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            FROM stream_sessions s
+            LEFT JOIN users u ON u.id = s.host_user_id
+            WHERE s.host_user_id = ${hostUserId}
+              AND s.status = ANY(${statuses})
+            ORDER BY s.created_at DESC
+          `
+        : await db`
+            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            FROM stream_sessions s
+            LEFT JOIN users u ON u.id = s.host_user_id
+            WHERE s.host_user_id = ${hostUserId}
+            ORDER BY s.created_at DESC
+          `;
     return rows.map(rowToStreamSession);
   }
 
   const store = await readStore();
-  return store.streamSessions
-    .filter((session) => session.hostUserId === hostUserId)
+  const filtered = store.streamSessions
+    .filter((session) => {
+      if (session.hostUserId !== hostUserId) return false;
+      if (statuses?.length && !statuses.includes(session.status)) return false;
+      return true;
+    })
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return attachHostFields(filtered, store.users);
 }
 
 export async function setStreamSessionStatus(

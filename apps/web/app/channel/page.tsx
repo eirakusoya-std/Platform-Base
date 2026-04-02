@@ -14,6 +14,7 @@ type ProfileDraft = {
   channelName: string;
   bio: string;
   avatarUrl: string;
+  headerUrl: string;
 };
 
 async function request(url: string, init?: RequestInit) {
@@ -36,7 +37,7 @@ export default function ChannelPage() {
 
   const parseTab = (value: string | null): ChannelView => (value === "sessions" ? "sessions" : "profile");
   const [activeView, setActiveView] = useState<ChannelView>("profile");
-  const [draft, setDraft] = useState<ProfileDraft>({ name: "", channelName: "", bio: "", avatarUrl: "" });
+  const [draft, setDraft] = useState<ProfileDraft>({ name: "", channelName: "", bio: "", avatarUrl: "", headerUrl: "" });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,7 @@ export default function ChannelPage() {
       channelName: user.channelName ?? "",
       bio: user.bio ?? "",
       avatarUrl: user.avatarUrl ?? "",
+      headerUrl: user.headerUrl ?? "",
     });
   }, [user]);
 
@@ -83,6 +85,7 @@ export default function ChannelPage() {
           channelName: draft.channelName,
           bio: draft.bio,
           avatarUrl: draft.avatarUrl,
+          headerUrl: draft.headerUrl,
         }),
       });
       updateUser({
@@ -90,6 +93,7 @@ export default function ChannelPage() {
         channelName: draft.channelName || undefined,
         bio: draft.bio || undefined,
         avatarUrl: draft.avatarUrl || undefined,
+        headerUrl: draft.headerUrl || undefined,
       });
       await refreshSession();
       setMessage(tx("プロフィールを保存しました。", "Profile saved."));
@@ -106,6 +110,7 @@ export default function ChannelPage() {
       channelName: user?.channelName ?? "",
       bio: user?.bio ?? "",
       avatarUrl: user?.avatarUrl ?? "",
+      headerUrl: user?.headerUrl ?? "",
     });
     setMessage(null);
     setError(null);
@@ -129,6 +134,31 @@ export default function ChannelPage() {
       const result = typeof reader.result === "string" ? reader.result : "";
       if (!result) return;
       setDraft((prev) => ({ ...prev, avatarUrl: result }));
+      setMessage(null);
+      setError(null);
+    };
+    reader.onerror = () => {
+      setError(tx("画像の読み込みに失敗しました。", "Failed to read image file."));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleHeaderFileChange(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError(tx("画像ファイルを選択してください。", "Please choose an image file."));
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setError(tx("画像サイズは4MB以下にしてください。", "Please keep image size under 4MB."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result) return;
+      setDraft((prev) => ({ ...prev, headerUrl: result }));
       setMessage(null);
       setError(null);
     };
@@ -174,13 +204,46 @@ export default function ChannelPage() {
         <section className="min-w-0 px-4 py-6 lg:px-8">
           <div className="mx-auto max-w-[1020px]">
             {activeView === "profile" ? (
-              <div className="rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/20">
+              <div>
                 <h1 className="text-2xl font-bold">{tx("プロフィール管理", "Profile Settings")}</h1>
                 <p className="mt-1 text-sm text-[var(--brand-text-muted)]">
                   {tx("チャンネルの公開情報を編集できます。", "Edit your channel public profile.")}
                 </p>
 
                 <form onSubmit={saveProfile} className="mt-5 space-y-4">
+                  <div className="rounded-xl bg-[var(--brand-bg-900)] p-4">
+                    <p className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("ヘッダー画像", "Header Image")}</p>
+                    <div className="mt-3 overflow-hidden rounded-xl bg-[var(--brand-surface)]">
+                      {draft.headerUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={draft.headerUrl} alt={tx("ヘッダー画像", "Header Image")} className="h-36 w-full object-cover" />
+                      ) : (
+                        <div className="grid h-36 w-full place-items-center bg-[var(--brand-surface)] text-sm font-semibold text-[var(--brand-text-muted)]">
+                          {tx("ヘッダー画像なし", "No header image")}
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <label className="inline-flex cursor-pointer items-center rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] hover:brightness-110">
+                        {tx("画像をアップロード", "Upload image")}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleHeaderFileChange(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setDraft((prev) => ({ ...prev, headerUrl: "" }))}
+                        className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
+                      >
+                        {tx("削除", "Remove")}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">{tx("推奨: 16:5以上の横長画像 / 4MB以下", "Recommended: wide image (16:5+), up to 4MB")}</p>
+                  </div>
+
                   <div className="rounded-xl bg-[var(--brand-bg-900)] p-4">
                     <p className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("チャンネルアイコン", "Channel Icon")}</p>
                     <div className="mt-3 flex items-center gap-3">
@@ -195,7 +258,7 @@ export default function ChannelPage() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <label className="inline-flex cursor-pointer items-center rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] hover:brightness-110">
+                          <label className="inline-flex cursor-pointer items-center rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] hover:brightness-110">
                           {tx("画像をアップロード", "Upload image")}
                           <input
                             type="file"
@@ -207,7 +270,7 @@ export default function ChannelPage() {
                         <button
                           type="button"
                           onClick={() => setDraft((prev) => ({ ...prev, avatarUrl: "" }))}
-                          className="ml-2 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
+                            className="ml-2 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
                         >
                           {tx("削除", "Remove")}
                         </button>
@@ -221,7 +284,7 @@ export default function ChannelPage() {
                     <input
                       value={draft.name}
                       onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
-                      className="mt-1 w-full rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm outline-none"
+                      className="mt-1 w-full rounded-lg bg-[#0a0d18] px-3 py-2 text-sm outline-none"
                     />
                   </label>
 
@@ -230,7 +293,7 @@ export default function ChannelPage() {
                     <input
                       value={draft.channelName}
                       onChange={(e) => setDraft((prev) => ({ ...prev, channelName: e.target.value }))}
-                      className="mt-1 w-full rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm outline-none"
+                      className="mt-1 w-full rounded-lg bg-[#0a0d18] px-3 py-2 text-sm outline-none"
                     />
                   </label>
 
@@ -240,7 +303,7 @@ export default function ChannelPage() {
                       value={draft.bio}
                       onChange={(e) => setDraft((prev) => ({ ...prev, bio: e.target.value }))}
                       rows={5}
-                      className="mt-1 w-full rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm outline-none"
+                      className="mt-1 w-full rounded-lg bg-[#0a0d18] px-3 py-2 text-sm outline-none"
                     />
                   </label>
 
@@ -269,6 +332,7 @@ export default function ChannelPage() {
               <MySessionsManager
                 title={tx("作成済み配信枠", "Your Stream Sessions")}
                 description={tx("studio/sessions と同じデータを表示しています。", "Showing the same data source as studio/sessions.")}
+                framed={false}
               />
             )}
           </div>
