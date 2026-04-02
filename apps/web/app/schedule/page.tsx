@@ -10,11 +10,24 @@ import { ScheduleGrid } from "../components/schedule/ScheduleGrid";
 import { SessionCategory } from "../components/schedule/types";
 import { useI18n } from "../lib/i18n";
 
+function todayYmd() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export default function SchedulePage() {
   const router = useRouter();
   const { tx } = useI18n();
+  const todayDate = todayYmd();
+  const dateOptions = useMemo(
+    () => Array.from(new Set([...SCHEDULE_DATES, todayDate])).sort(),
+    [todayDate],
+  );
 
-  const [selectedDate, setSelectedDate] = useState(SCHEDULE_DATES[0]);
+  const [selectedDate, setSelectedDate] = useState(dateOptions.includes(todayDate) ? todayDate : dateOptions[0]);
   const [talentQuery, setTalentQuery] = useState("");
   const [startHour, setStartHour] = useState(10);
   const [endHour, setEndHour] = useState(16);
@@ -71,7 +84,7 @@ export default function SchedulePage() {
 
         <div className="space-y-5">
           <ScheduleFilters
-            dates={SCHEDULE_DATES}
+            dates={dateOptions}
             selectedDate={selectedDate}
             talentQuery={talentQuery}
             startHour={startHour}
@@ -84,6 +97,7 @@ export default function SchedulePage() {
             onEndHourChange={handleEndHourChange}
             onOnlyAvailableChange={setOnlyAvailable}
             onToggleCategory={handleToggleCategory}
+            onBackToToday={() => setSelectedDate(todayDate)}
           />
 
           <ScheduleGrid talents={TALENTS} selectedDate={selectedDate} startHour={startHour} endHour={endHour} events={filteredEvents} onReserve={handleReserve} />

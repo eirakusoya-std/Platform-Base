@@ -150,16 +150,9 @@ export function ScheduleGrid({ talents, selectedDate, startHour, endHour, events
                 </div>
               );
             })}
-            {showNowLine && (
-              <div className="absolute left-0 right-0 z-20" style={{ top: nowTop }}>
-                <div className="relative h-px bg-[var(--brand-accent)]">
-                  <span className="absolute -left-1 -top-1.5 h-3 w-3 rounded-full bg-[var(--brand-accent)]" />
-                </div>
-              </div>
-            )}
           </div>
 
-          {talents.map((talent) => {
+          {talents.map((talent, talentIndex) => {
             const layouts = buildLayouts(events.filter((event) => event.talentId === talent.id));
 
             return (
@@ -170,7 +163,15 @@ export function ScheduleGrid({ talents, selectedDate, startHour, endHour, events
                   return <div key={`line-${talent.id}-${minutes}`} className="absolute left-0 right-0 h-px bg-[var(--brand-text-muted)]/20" style={{ top }} />;
                 })}
 
-                {showNowLine && <div className="absolute left-0 right-0 z-20 h-px bg-[var(--brand-accent)]" style={{ top: nowTop }} />}
+                {showNowLine && (
+                  <div className="absolute left-0 right-0 z-20" style={{ top: nowTop }}>
+                    <div className="relative h-px bg-[var(--brand-accent)]">
+                      {talentIndex === 0 && (
+                        <span className="absolute -left-1 -top-1.5 h-3 w-3 rounded-full bg-[var(--brand-accent)]" />
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {layouts.map(({ event, lane, laneCount, startMin, endMin }) => {
                   const clampedStart = Math.max(startMin, rangeStart);

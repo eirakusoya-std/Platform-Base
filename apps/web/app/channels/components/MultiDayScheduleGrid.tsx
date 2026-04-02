@@ -144,6 +144,10 @@ export function MultiDayScheduleGrid({
   const hourMarks = Array.from({ length: endHour - startHour + 1 }, (_, i) => (startHour + i) * 60);
 
   const todayKey = getTodayKeyLocal();
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const showNowLine = dates.includes(todayKey) && nowMinutes >= rangeStart && nowMinutes <= rangeEnd;
+  const nowTop = (nowMinutes - rangeStart) * pxPerMinute;
 
   return (
     <section className="overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
@@ -216,6 +220,13 @@ export function MultiDayScheduleGrid({
                     />
                   );
                 })}
+                {showNowLine && isToday && (
+                  <div className="absolute left-0 right-0 z-20" style={{ top: nowTop }}>
+                    <div className="relative h-px bg-[var(--brand-accent)]">
+                      <span className="absolute -left-1 -top-1.5 h-3 w-3 rounded-full bg-[var(--brand-accent)]" />
+                    </div>
+                  </div>
+                )}
 
                 {layouts.map(({ event, lane, laneCount, startMin, endMin }) => {
                   const clampedStart = Math.max(startMin, rangeStart);

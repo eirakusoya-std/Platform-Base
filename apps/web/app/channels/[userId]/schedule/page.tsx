@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
+import { ArrowPathIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 import { useParams, useRouter } from "next/navigation";
 import { TopNav } from "../../../components/home/TopNav";
 import { useI18n } from "../../../lib/i18n";
@@ -257,6 +257,14 @@ export default function ChannelSchedulePage() {
                 className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text-muted)]"
               >
                 <ChevronRightIcon className="h-5 w-5" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => setBaseDate(todayYmd())}
+                className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
+              >
+                <ArrowPathIcon className="h-4 w-4" aria-hidden />
+                <span>{tx("本日に戻る", "Back to Today")}</span>
               </button>
             </div>
 
