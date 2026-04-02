@@ -20,6 +20,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
         channelName: user.channelName ?? user.name,
         bio: user.bio ?? "",
         avatarUrl: user.avatarUrl ?? "",
+        headerUrl: user.headerUrl ?? "",
         role: user.role,
       },
       sessions,
@@ -29,4 +30,3 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
-

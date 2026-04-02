@@ -42,7 +42,7 @@ export function ChannelHero({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={headerUrl} alt={`${channelName} header`} className="h-full w-full object-cover" />
         ) : (
-          <div className="h-full w-full bg-[linear-gradient(120deg,rgba(111,79,238,0.72)_0%,rgba(37,45,89,0.85)_45%,rgba(16,19,32,0.92)_100%)]" />
+          <div className="h-full w-full bg-[var(--brand-surface)]" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--brand-bg-900)]/90 via-transparent to-black/30" />
       </div>

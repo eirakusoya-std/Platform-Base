@@ -226,6 +226,7 @@ function normalizeStoredUser(entry: Partial<StoredUser>): StoredUser | null {
       typeof entry.channelName === "string" ? entry.channelName : legacyDefaults.channelName,
     bio: typeof entry.bio === "string" ? entry.bio : undefined,
     avatarUrl: typeof entry.avatarUrl === "string" ? entry.avatarUrl : undefined,
+    headerUrl: typeof entry.headerUrl === "string" ? entry.headerUrl : undefined,
     phoneNumber:
       typeof entry.phoneNumber === "string" ? entry.phoneNumber : legacyDefaults.phoneNumber,
     emailVerifiedAt:
@@ -328,6 +329,7 @@ async function initSchema() {
       channel_name TEXT,
       bio TEXT,
       avatar_url TEXT,
+      header_url TEXT,
       phone_number TEXT,
       email_verified_at TEXT,
       phone_verified_at TEXT,
@@ -339,6 +341,7 @@ async function initSchema() {
       verification_requested_at TEXT
     )
   `;
+  await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS header_url TEXT`;
   await db`
     CREATE TABLE IF NOT EXISTS stream_sessions (
       session_id TEXT PRIMARY KEY,
@@ -392,6 +395,7 @@ function rowToStoredUser(row: any): StoredUser {
     channelName: row.channel_name ?? undefined,
     bio: row.bio ?? undefined,
     avatarUrl: row.avatar_url ?? undefined,
+    headerUrl: row.header_url ?? undefined,
     phoneNumber: row.phone_number ?? undefined,
     emailVerifiedAt: row.email_verified_at ?? undefined,
     phoneVerifiedAt: row.phone_verified_at ?? undefined,
@@ -885,7 +889,7 @@ export async function googleAuthUser(input: {
 
 export async function updateAccountProfile(
   userId: string,
-  patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string; avatarUrl?: string },
+  patch: { name?: string; channelName?: string; bio?: string; phoneNumber?: string; avatarUrl?: string; headerUrl?: string },
 ) {
   if (USE_NEON) {
     await ensureSchema();
@@ -897,6 +901,7 @@ export async function updateAccountProfile(
     const nextChannelName = patch.channelName != null ? patch.channelName.trim() || null : current.channelName ?? null;
     const nextBio = patch.bio != null ? patch.bio.trim() || null : current.bio ?? null;
     const nextAvatarUrl = patch.avatarUrl != null ? patch.avatarUrl.trim() || null : current.avatarUrl ?? null;
+    const nextHeaderUrl = patch.headerUrl != null ? patch.headerUrl.trim() || null : current.headerUrl ?? null;
 
     let nextPhoneNumber = current.phoneNumber ?? null;
     let nextPhoneVerifiedAt = current.phoneVerifiedAt ?? null;
@@ -917,6 +922,7 @@ export async function updateAccountProfile(
         channel_name = ${nextChannelName},
         bio = ${nextBio},
         avatar_url = ${nextAvatarUrl},
+        header_url = ${nextHeaderUrl},
         phone_number = ${nextPhoneNumber},
         phone_verified_at = ${nextPhoneVerifiedAt}
       WHERE id = ${userId}
@@ -934,6 +940,7 @@ export async function updateAccountProfile(
     if (patch.channelName != null) target.channelName = patch.channelName.trim() || undefined;
     if (patch.bio != null) target.bio = patch.bio.trim() || undefined;
     if (patch.avatarUrl != null) target.avatarUrl = patch.avatarUrl.trim() || undefined;
+    if (patch.headerUrl != null) target.headerUrl = patch.headerUrl.trim() || undefined;
     if (patch.phoneNumber != null) {
       const normalized = patch.phoneNumber.trim() || undefined;
       if (normalized !== target.phoneNumber) {

@@ -15,6 +15,7 @@ type ChannelInfo = {
   channelName: string;
   bio: string;
   avatarUrl: string;
+  headerUrl: string;
   role: "listener" | "vtuber";
 };
 
@@ -195,6 +196,7 @@ export default function ChannelSchedulePage() {
         userId={channel.userId}
         bio={channel.bio}
         avatarUrl={channel.avatarUrl}
+        headerUrl={channel.headerUrl}
         basePath={`/channels/${encodeURIComponent(channel.userId)}`}
         active="schedule"
         labels={{

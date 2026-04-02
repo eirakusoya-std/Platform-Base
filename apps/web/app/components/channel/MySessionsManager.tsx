@@ -22,9 +22,10 @@ type MySessionsManagerProps = {
   title?: string;
   description?: string;
   showCreateButton?: boolean;
+  framed?: boolean;
 };
 
-export function MySessionsManager({ title, description, showCreateButton = true }: MySessionsManagerProps) {
+export function MySessionsManager({ title, description, showCreateButton = true, framed = true }: MySessionsManagerProps) {
   const { tx } = useI18n();
   const [sessions, setSessions] = useState<StreamSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +65,7 @@ export function MySessionsManager({ title, description, showCreateButton = true 
   }
 
   return (
-    <section className="rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/20">
+    <section className={framed ? "rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/20" : ""}>
       <div className="mb-5 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">{title ?? tx("配信枠管理", "My Sessions")}</h2>

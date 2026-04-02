@@ -21,6 +21,7 @@ export type SessionUser = {
   channelName?: string;
   bio?: string;
   avatarUrl?: string;
+  headerUrl?: string;
   phoneNumber?: string;
   emailVerifiedAt?: string;
   phoneVerifiedAt?: string;
