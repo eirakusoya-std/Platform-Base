@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   title: "aiment",
   description: "beyond chat",
   icons: {
-    icon: "/logo/aiment_logo_white.svg",
+    icon: "/logo/aiment_logo_rounded.svg",
   },
 };
 
