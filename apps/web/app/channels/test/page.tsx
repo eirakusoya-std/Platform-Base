@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { TopNav } from "../../components/home/TopNav";
 import { useI18n } from "../../lib/i18n";
-import { ChannelMenu } from "../components/ChannelMenu";
+import { ChannelHero } from "../components/ChannelHero";
 
 type MockSession = {
   id: string;
@@ -20,7 +20,7 @@ const MOCK_SESSIONS: MockSession[] = [
     id: "preview-live-1",
     title: "視聴者参加型: エンドラRTA",
     thumbnail: "/image/thumbnail/thumbnail_1.png",
-    startsAt: new Date().toISOString(),
+    startsAt: "2026-04-01T22:38:00+09:00",
     category: "ゲーム",
     participationType: "First-come",
     status: "live",
@@ -29,7 +29,7 @@ const MOCK_SESSIONS: MockSession[] = [
     id: "preview-upcoming-1",
     title: "深夜まったり雑談",
     thumbnail: "/image/thumbnail/thumbnail_3.png",
-    startsAt: new Date(Date.now() + 1000 * 60 * 60 * 3).toISOString(),
+    startsAt: "2026-04-02T01:30:00+09:00",
     category: "雑談",
     participationType: "Lottery",
     status: "prelive",
@@ -38,7 +38,7 @@ const MOCK_SESSIONS: MockSession[] = [
     id: "preview-ended-1",
     title: "英会話トレーニング回",
     thumbnail: "/image/thumbnail/thumbnail_5.png",
-    startsAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+    startsAt: "2026-03-31T21:00:00+09:00",
     category: "英語",
     participationType: "First-come",
     status: "ended",
@@ -94,47 +94,32 @@ export default function ChannelPreviewPage() {
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav />
-      <main className="mx-auto max-w-[1200px] px-6 py-8">
+      <ChannelHero
+        channelName="Preview Channel"
+        userId="preview-user"
+        bio={tx(
+          "この領域はプロフィール文です。実際のデータ未作成でも配置・余白・見出し構成を確認できます。",
+          "This is profile bio area. You can validate spacing and structure without real data.",
+        )}
+        liveCount={live.length}
+        upcomingCount={upcoming.length}
+        archiveCount={archive.length}
+        headerUrl="/image/thumbnail/thumbnail_2.png"
+        basePath="/channels/test"
+        active="overview"
+        labels={{
+          upcoming: tx("予定", "Upcoming"),
+          archive: tx("アーカイブ", "Archive"),
+          noBio: tx("紹介文は未設定です。", "No bio yet."),
+        }}
+      />
+      <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
         <div className="mb-4 rounded-xl bg-[var(--brand-accent)]/15 px-4 py-3 text-sm text-[var(--brand-accent)]">
           {tx(
             "これはUI確認用のモックページです。ユーザー未作成でもチャンネル構成を確認できます。",
             "This is a mock page for UI verification. You can check channel layout without user data.",
           )}
         </div>
-        <section className="rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/25">
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="h-20 w-20 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
-              <div className="grid h-full w-full place-items-center text-2xl font-bold text-[var(--brand-primary)]">
-                P
-              </div>
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-extrabold">Preview Channel</h1>
-              <p className="mt-1 text-sm text-[var(--brand-text-muted)]">@preview-user</p>
-              <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[var(--brand-text)]">
-                {tx(
-                  "この領域はプロフィール文です。実際のデータ未作成でも配置・余白・見出し構成を確認できます。",
-                  "This is profile bio area. You can validate spacing and structure without real data.",
-                )}
-              </p>
-            </div>
-            <div className="grid min-w-[180px] grid-cols-3 gap-2 rounded-xl bg-[var(--brand-bg-900)] p-3 text-center">
-              <div>
-                <p className="text-[10px] text-[var(--brand-text-muted)]">LIVE</p>
-                <p className="text-lg font-black text-[var(--brand-accent)]">{live.length}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--brand-text-muted)]">{tx("予定", "Upcoming")}</p>
-                <p className="text-lg font-black text-[var(--brand-primary)]">{upcoming.length}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--brand-text-muted)]">{tx("アーカイブ", "Archive")}</p>
-                <p className="text-lg font-black text-[var(--brand-text)]">{archive.length}</p>
-              </div>
-            </div>
-          </div>
-          <ChannelMenu basePath="/channels/test" active="overview" />
-        </section>
 
         <section className="mt-8">
           <h2 className="mb-3 text-lg font-bold text-[var(--brand-accent)]">{tx("配信中", "Live Now")}</h2>

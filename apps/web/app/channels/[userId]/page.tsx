@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
 import { useI18n } from "../../lib/i18n";
 import type { StreamSession } from "../../lib/streamSessions";
-import { ChannelMenu } from "../components/ChannelMenu";
+import { ChannelHero } from "../components/ChannelHero";
 
 type ChannelInfo = {
   userId: string;
@@ -135,45 +135,23 @@ export default function PublicChannelPage() {
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav />
-      <main className="mx-auto max-w-[1200px] px-6 py-8">
-        <section className="rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/25">
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="h-20 w-20 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
-              {channel.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={channel.avatarUrl} alt={channel.channelName} className="h-full w-full object-cover" />
-              ) : (
-                <div className="grid h-full w-full place-items-center text-2xl font-bold text-[var(--brand-primary)]">
-                  {channel.channelName.slice(0, 1).toUpperCase()}
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-extrabold">{channel.channelName}</h1>
-              <p className="mt-1 text-sm text-[var(--brand-text-muted)]">@{channel.userId}</p>
-              {channel.bio ? (
-                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[var(--brand-text)]">{channel.bio}</p>
-              ) : (
-                <p className="mt-3 text-sm text-[var(--brand-text-muted)]">{tx("紹介文は未設定です。", "No bio yet.")}</p>
-              )}
-            </div>
-            <div className="grid min-w-[180px] grid-cols-3 gap-2 rounded-xl bg-[var(--brand-bg-900)] p-3 text-center">
-              <div>
-                <p className="text-[10px] text-[var(--brand-text-muted)]">LIVE</p>
-                <p className="text-lg font-black text-[var(--brand-accent)]">{liveSessions.length}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--brand-text-muted)]">{tx("予定", "Upcoming")}</p>
-                <p className="text-lg font-black text-[var(--brand-primary)]">{upcomingSessions.length}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--brand-text-muted)]">{tx("アーカイブ", "Archive")}</p>
-                <p className="text-lg font-black text-[var(--brand-text)]">{archivedSessions.length}</p>
-              </div>
-            </div>
-          </div>
-          <ChannelMenu basePath={`/channels/${encodeURIComponent(channel.userId)}`} active="overview" />
-        </section>
+      <ChannelHero
+        channelName={channel.channelName}
+        userId={channel.userId}
+        bio={channel.bio}
+        avatarUrl={channel.avatarUrl}
+        liveCount={liveSessions.length}
+        upcomingCount={upcomingSessions.length}
+        archiveCount={archivedSessions.length}
+        basePath={`/channels/${encodeURIComponent(channel.userId)}`}
+        active="overview"
+        labels={{
+          upcoming: tx("予定", "Upcoming"),
+          archive: tx("アーカイブ", "Archive"),
+          noBio: tx("紹介文は未設定です。", "No bio yet."),
+        }}
+      />
+      <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
 
         <section className="mt-8">
           <h2 className="mb-3 text-lg font-bold text-[var(--brand-accent)]">{tx("配信中", "Live Now")}</h2>

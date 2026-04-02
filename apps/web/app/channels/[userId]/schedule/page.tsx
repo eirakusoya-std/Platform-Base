@@ -3,12 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { TopNav } from "../../../components/home/TopNav";
-import { ScheduleFilters } from "../../../components/schedule/ScheduleFilters";
-import { ScheduleGrid } from "../../../components/schedule/ScheduleGrid";
-import type { SessionCategory, Talent, ScheduleEvent } from "../../../components/schedule/types";
 import { useI18n } from "../../../lib/i18n";
 import type { StreamSession } from "../../../lib/streamSessions";
-import { ChannelMenu } from "../../components/ChannelMenu";
+import { ChannelHero } from "../../components/ChannelHero";
+import { MultiDayScheduleGrid, type MultiDayEvent } from "../../components/MultiDayScheduleGrid";
 
 type ChannelInfo = {
   userId: string;
@@ -24,7 +22,7 @@ type ChannelResponse = {
   sessions: StreamSession[];
 };
 
-const CATEGORIES: SessionCategory[] = ["雑談", "ゲーム", "歌枠", "英語"];
+type RangeMode = "3d" | "week";
 
 function toLocalYmd(value: string) {
   const date = new Date(value);
@@ -43,8 +41,26 @@ function toLocalHm(value: string) {
   return `${h}:${m}`;
 }
 
-function toCategory(value: string): SessionCategory {
-  return CATEGORIES.includes(value as SessionCategory) ? (value as SessionCategory) : "雑談";
+function parseYmd(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+function addDaysYmd(ymd: string, days: number) {
+  const date = parseYmd(ymd);
+  date.setDate(date.getDate() + days);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function todayYmd() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export default function ChannelSchedulePage() {
@@ -58,12 +74,11 @@ export default function ChannelSchedulePage() {
   const [channel, setChannel] = useState<ChannelInfo | null>(null);
   const [sessions, setSessions] = useState<StreamSession[]>([]);
 
-  const [selectedDate, setSelectedDate] = useState("");
-  const [talentQuery, setTalentQuery] = useState("");
+  const [rangeMode, setRangeMode] = useState<RangeMode>("3d");
+  const [baseDate, setBaseDate] = useState("");
   const [startHour, setStartHour] = useState(10);
   const [endHour, setEndHour] = useState(24);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
-  const [selectedCategories, setSelectedCategories] = useState<SessionCategory[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,99 +107,58 @@ export default function ChannelSchedulePage() {
   }, [userId, tx]);
 
   const scheduleSource = useMemo(
-    () => sessions.filter((session) => session.status === "prelive" || session.status === "live"),
+    () =>
+      sessions
+        .filter((session) => session.status === "prelive" || session.status === "live")
+        .slice()
+        .sort((a, b) => (a.startsAt > b.startsAt ? 1 : -1)),
     [sessions],
   );
 
-  const dates = useMemo(
+  const dateOptions = useMemo(
     () => Array.from(new Set(scheduleSource.map((session) => toLocalYmd(session.startsAt)))).sort(),
     [scheduleSource],
   );
 
-  useEffect(() => {
-    if (dates.length === 0) {
-      setSelectedDate("");
-      return;
-    }
-    setSelectedDate((prev) => (prev && dates.includes(prev) ? prev : dates[0]));
-  }, [dates]);
+  const effectiveBaseDate = baseDate || dateOptions[0] || todayYmd();
+  const rangeDays = rangeMode === "3d" ? 3 : 7;
+  const visibleDates = useMemo(
+    () => Array.from({ length: rangeDays }, (_, idx) => addDaysYmd(effectiveBaseDate, idx)),
+    [effectiveBaseDate, rangeDays],
+  );
+  const visibleDateSet = useMemo(() => new Set(visibleDates), [visibleDates]);
 
-  const talents = useMemo<Talent[]>(
+  const events = useMemo<MultiDayEvent[]>(
     () =>
-      channel
-        ? [
-            {
-              id: channel.userId,
-              name: channel.channelName,
-              avatar: channel.avatarUrl || "/image/thumbnail/thumbnail_5.png",
-              specialty: toCategory(scheduleSource[0]?.category ?? "雑談"),
-            },
-          ]
-        : [],
-    [channel, scheduleSource],
+      scheduleSource
+        .map((session) => {
+          const status =
+            session.participationType === "Lottery"
+              ? "lottery"
+              : session.slotsLeft > 0
+                ? "available"
+                : "booked";
+          return {
+            id: session.sessionId,
+            date: toLocalYmd(session.startsAt),
+            start: toLocalHm(session.startsAt),
+            durationMin: 60,
+            title: session.title,
+            category: session.category,
+            status,
+            href:
+              session.status === "live"
+                ? `/room/${encodeURIComponent(session.sessionId)}?role=listener`
+                : `/join/${encodeURIComponent(session.sessionId)}`,
+          } satisfies MultiDayEvent;
+        })
+        .filter((event) => visibleDateSet.has(event.date))
+        .filter((event) => (onlyAvailable ? event.status === "available" : true)),
+    [scheduleSource, visibleDateSet, onlyAvailable],
   );
 
-  const sessionIdMap = useMemo(() => new Map<number, string>(), []);
-
-  const events = useMemo<ScheduleEvent[]>(() => {
-    sessionIdMap.clear();
-    let index = 1;
-    return scheduleSource.map((session) => {
-      sessionIdMap.set(index, session.sessionId);
-      const status =
-        session.participationType === "Lottery"
-          ? "lottery"
-          : session.slotsLeft > 0
-            ? "available"
-            : "booked";
-      const event: ScheduleEvent = {
-        id: index,
-        sessionId: index,
-        date: toLocalYmd(session.startsAt),
-        talentId: channel?.userId ?? "unknown",
-        title: session.title,
-        start: toLocalHm(session.startsAt),
-        durationMin: 60,
-        status,
-        category: toCategory(session.category),
-      };
-      index += 1;
-      return event;
-    });
-  }, [scheduleSource, channel?.userId, sessionIdMap]);
-
-  const filteredEvents = useMemo(() => {
-    const query = talentQuery.trim().toLowerCase();
-    return events.filter((event) => {
-      if (selectedDate && event.date !== selectedDate) return false;
-      if (query.length > 0) {
-        const talentName = talents.find((talent) => talent.id === event.talentId)?.name ?? "";
-        if (!talentName.toLowerCase().includes(query)) return false;
-      }
-      if (selectedCategories.length > 0 && !selectedCategories.includes(event.category)) return false;
-      if (onlyAvailable && event.status !== "available") return false;
-      return true;
-    });
-  }, [events, selectedDate, talentQuery, selectedCategories, onlyAvailable, talents]);
-
-  const handleToggleCategory = (category: SessionCategory) => {
-    setSelectedCategories((prev) => (prev.includes(category) ? prev.filter((item) => item !== category) : [...prev, category]));
-  };
-
-  const handleStartHourChange = (value: number) => {
-    setStartHour(value);
-    if (value >= endHour) setEndHour(Math.min(24, value + 1));
-  };
-
-  const handleEndHourChange = (value: number) => {
-    setEndHour(value);
-    if (value <= startHour) setStartHour(Math.max(0, value - 1));
-  };
-
-  const handleReserve = (eventSessionId: number) => {
-    const realSessionId = sessionIdMap.get(eventSessionId);
-    if (!realSessionId) return;
-    router.push(`/join/${encodeURIComponent(realSessionId)}`);
+  const handleMoveWindow = (direction: -1 | 1) => {
+    setBaseDate(addDaysYmd(effectiveBaseDate, direction * rangeDays));
   };
 
   if (loading) {
@@ -215,60 +189,111 @@ export default function ChannelSchedulePage() {
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav />
-      <main className="mx-auto max-w-[1400px] px-6 py-8">
-        <section className="mb-5 rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/25">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="h-14 w-14 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
-              {channel.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={channel.avatarUrl} alt={channel.channelName} className="h-full w-full object-cover" />
-              ) : (
-                <div className="grid h-full w-full place-items-center text-xl font-bold text-[var(--brand-primary)]">
-                  {channel.channelName.slice(0, 1).toUpperCase()}
-                </div>
-              )}
+      <ChannelHero
+        channelName={channel.channelName}
+        userId={channel.userId}
+        bio={channel.bio}
+        avatarUrl={channel.avatarUrl}
+        basePath={`/channels/${encodeURIComponent(channel.userId)}`}
+        active="schedule"
+        labels={{
+          upcoming: tx("予定", "Upcoming"),
+          archive: tx("アーカイブ", "Archive"),
+          noBio: tx("紹介文は未設定です。", "No bio yet."),
+        }}
+      />
+      <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
+
+        <section className="mb-5 rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/20">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-1 rounded-xl bg-[var(--brand-bg-900)] p-1">
+              <button
+                type="button"
+                onClick={() => setRangeMode("3d")}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                  rangeMode === "3d" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text-muted)]"
+                }`}
+              >
+                3日
+              </button>
+              <button
+                type="button"
+                onClick={() => setRangeMode("week")}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                  rangeMode === "week" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text-muted)]"
+                }`}
+              >
+                1週間
+              </button>
             </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-extrabold">{channel.channelName}</h1>
-              <p className="text-sm text-[var(--brand-text-muted)]">@{channel.userId}</p>
+
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => handleMoveWindow(-1)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]">
+                ←
+              </button>
+              <select
+                value={effectiveBaseDate}
+                onChange={(event) => setBaseDate(event.target.value)}
+                className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none"
+              >
+                {(dateOptions.length ? dateOptions : [todayYmd()]).map((date) => (
+                  <option key={date} value={date}>
+                    {date}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => handleMoveWindow(1)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]">
+                →
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-[var(--brand-text-muted)]">
+                開始
+                <select
+                  value={startHour}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setStartHour(value);
+                    if (value >= endHour) setEndHour(Math.min(24, value + 1));
+                  }}
+                  className="rounded-md bg-[var(--brand-bg-900)] px-2 py-1 text-sm text-[var(--brand-text)] outline-none"
+                >
+                  {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
+                    <option key={hour} value={hour}>
+                      {String(hour).padStart(2, "0")}:00
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--brand-text-muted)]">
+                終了
+                <select
+                  value={endHour}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setEndHour(value);
+                    if (value <= startHour) setStartHour(Math.max(0, value - 1));
+                  }}
+                  className="rounded-md bg-[var(--brand-bg-900)] px-2 py-1 text-sm text-[var(--brand-text)] outline-none"
+                >
+                  {Array.from({ length: 24 }, (_, i) => i + 1).map((hour) => (
+                    <option key={hour} value={hour}>
+                      {String(hour).padStart(2, "0")}:00
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 rounded-md bg-[var(--brand-bg-900)] px-2 py-1.5 text-sm text-[var(--brand-text-muted)]">
+                <input type="checkbox" checked={onlyAvailable} onChange={(event) => setOnlyAvailable(event.target.checked)} />
+                予約可能のみ
+              </label>
             </div>
           </div>
-          <ChannelMenu basePath={`/channels/${encodeURIComponent(channel.userId)}`} active="schedule" />
         </section>
 
-        {dates.length === 0 ? (
-          <section className="rounded-2xl bg-[var(--brand-surface)] p-6 text-sm text-[var(--brand-text-muted)] shadow-lg shadow-black/20">
-            {tx("公開中の配信予定はありません。", "No scheduled sessions available.")}
-          </section>
-        ) : (
-          <div className="space-y-5">
-            <ScheduleFilters
-              dates={dates}
-              selectedDate={selectedDate}
-              talentQuery={talentQuery}
-              startHour={startHour}
-              endHour={endHour}
-              onlyAvailable={onlyAvailable}
-              selectedCategories={selectedCategories}
-              onDateChange={setSelectedDate}
-              onTalentQueryChange={setTalentQuery}
-              onStartHourChange={handleStartHourChange}
-              onEndHourChange={handleEndHourChange}
-              onOnlyAvailableChange={setOnlyAvailable}
-              onToggleCategory={handleToggleCategory}
-            />
-            <ScheduleGrid
-              talents={talents}
-              selectedDate={selectedDate}
-              startHour={startHour}
-              endHour={endHour}
-              events={filteredEvents}
-              onReserve={handleReserve}
-            />
-          </div>
-        )}
+        <MultiDayScheduleGrid dates={visibleDates} events={events} startHour={startHour} endHour={endHour} />
       </main>
     </div>
   );
 }
-
