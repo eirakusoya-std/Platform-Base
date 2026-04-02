@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ArrowRightIcon } from "@heroicons/react/24/solid";
 import { useI18n } from "../../lib/i18n";
 import { deleteStreamSession, listMyStreamSessions, type StreamSession } from "../../lib/streamSessions";
 
@@ -86,8 +87,9 @@ export function MySessionsManager({ title, description, showCreateButton = true 
       ) : sessions.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-[var(--brand-text-muted)]">{tx("まだ配信枠がありません。", "No sessions yet.")}</p>
-          <Link href="/studio/pre-live" className="mt-4 inline-block text-sm text-[var(--brand-primary)] hover:underline">
-            {tx("最初の枠を作成する →", "Create your first session →")}
+          <Link href="/studio/pre-live" className="mt-4 inline-flex items-center gap-1 text-sm text-[var(--brand-primary)] hover:underline">
+            <span>{tx("最初の枠を作成する", "Create your first session")}</span>
+            <ArrowRightIcon className="h-4 w-4" aria-hidden />
           </Link>
         </div>
       ) : (

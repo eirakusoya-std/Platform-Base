@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../../components/home/TopNav";
 import { ChannelHero } from "../../components/ChannelHero";
 import { MultiDayScheduleGrid, type MultiDayEvent } from "../../components/MultiDayScheduleGrid";
@@ -150,8 +151,13 @@ export default function ChannelTestSchedulePage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => handleMoveWindow(-1)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]">
-                ←
+              <button
+                type="button"
+                onClick={() => handleMoveWindow(-1)}
+                aria-label="Previous range"
+                className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text-muted)]"
+              >
+                <ChevronLeftIcon className="h-5 w-5" aria-hidden />
               </button>
               <select
                 value={effectiveBaseDate}
@@ -164,8 +170,13 @@ export default function ChannelTestSchedulePage() {
                   </option>
                 ))}
               </select>
-              <button type="button" onClick={() => handleMoveWindow(1)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]">
-                →
+              <button
+                type="button"
+                onClick={() => handleMoveWindow(1)}
+                aria-label="Next range"
+                className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text-muted)]"
+              >
+                <ChevronRightIcon className="h-5 w-5" aria-hidden />
               </button>
             </div>
 
