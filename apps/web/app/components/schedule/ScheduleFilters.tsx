@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SessionCategory } from "./types";
 import { useI18n } from "../../lib/i18n";
@@ -18,6 +19,7 @@ type ScheduleFiltersProps = {
   onEndHourChange: (value: number) => void;
   onOnlyAvailableChange: (value: boolean) => void;
   onToggleCategory: (category: SessionCategory) => void;
+  onBackToToday: () => void;
 };
 
 const CATEGORIES: SessionCategory[] = ["雑談", "ゲーム", "歌枠", "英語"];
@@ -41,6 +43,7 @@ export function ScheduleFilters({
   onEndHourChange,
   onOnlyAvailableChange,
   onToggleCategory,
+  onBackToToday,
 }: ScheduleFiltersProps) {
   const { tx } = useI18n();
   return (
@@ -59,6 +62,14 @@ export function ScheduleFilters({
             {formatDateLabel(date)}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={onBackToToday}
+          className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs font-medium text-[var(--brand-text-muted)] transition-colors hover:text-[var(--brand-text)]"
+        >
+          <ArrowPathIcon className="h-3.5 w-3.5" aria-hidden />
+          <span>{tx("本日に戻る", "Back to Today")}</span>
+        </button>
       </div>
 
       <div className="space-y-3">

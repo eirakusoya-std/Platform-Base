@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
+import { ArrowPathIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../../components/home/TopNav";
 import { ChannelHero } from "../../components/ChannelHero";
 import { MultiDayScheduleGrid, type MultiDayEvent } from "../../components/MultiDayScheduleGrid";
@@ -177,6 +177,14 @@ export default function ChannelTestSchedulePage() {
                 className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text-muted)]"
               >
                 <ChevronRightIcon className="h-5 w-5" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => setBaseDate(todayYmd())}
+                className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
+              >
+                <ArrowPathIcon className="h-4 w-4" aria-hidden />
+                <span>本日に戻る</span>
               </button>
             </div>
 
