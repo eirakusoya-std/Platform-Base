@@ -8,6 +8,7 @@ import { CalendarDaysIcon, HomeIcon, RectangleStackIcon, VideoCameraIcon } from 
 import { AuthProfileControl } from "../auth/AuthProfileControl";
 import { useI18n } from "../../lib/i18n";
 import { useUserSession } from "../../lib/userSession";
+import { buttonClassName } from "../ui/Button";
 
 type NavItem = {
   labelJp: string;
@@ -116,7 +117,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                 {isStudioMode && isVtuber && (
                 <Link
                   href="/studio/sessions"
-                  className="hidden items-center gap-2 rounded-xl bg-[var(--brand-surface)] px-4 py-2 text-sm font-semibold text-[var(--brand-text-muted)] transition-all hover:text-[var(--brand-text)] sm:inline-flex"
+                  className={`hidden sm:inline-flex ${buttonClassName({ variant: "ghost", size: "md" })}`}
                 >
                   {tx("枠管理", "My Sessions")}
                 </Link>
@@ -124,7 +125,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
               {!isStudioMode && isVtuber && (
                 <Link
                   href="/studio/pre-live"
-                  className="hidden items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_8px_24px_rgba(124,106,230,0.45)] transition-all hover:brightness-110 sm:inline-flex"
+                  className={`hidden shadow-[var(--ui-shadow-1)] sm:inline-flex ${buttonClassName({ variant: "primary", size: "md" })}`}
                 >
                   <VideoCameraIcon className="h-5 w-5" aria-hidden />
                   <span>{tx("配信を作成", "Create Stream")}</span>
