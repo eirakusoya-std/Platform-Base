@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
 import { useUserSession } from "../../lib/userSession";
-import type { SignupInput } from "../../lib/apiTypes";
+import type { SignupInput, UserRole } from "../../lib/apiTypes";
 
 async function postJson<T>(url: string, body: unknown) {
   const response = await fetch(url, {
@@ -72,9 +72,11 @@ export default function SignupPage() {
   const router = useRouter();
   const { isAuthenticated, refreshSession } = useUserSession();
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [role, setRole] = useState<UserRole>("listener");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -114,12 +116,30 @@ export default function SignupPage() {
     setStep(2);
   };
 
+  const goStep3 = () => {
+    setError(null);
+    if (!role) {
+      setError("アカウント種別を選択してください。");
+      return;
+    }
+    if (role === "vtuber" && !phoneNumber.trim()) {
+      setError("VTuber登録には電話番号の入力が必要です。");
+      return;
+    }
+    setStep(3);
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
 
     if (step === 1) {
       goStep2();
+      return;
+    }
+
+    if (step === 2) {
+      goStep3();
       return;
     }
 
@@ -131,17 +151,18 @@ export default function SignupPage() {
     setSubmitting(true);
     try {
       const payload: SignupInput = {
-        role: "listener",
+        role,
         name: displayName,
         email,
         password,
         provider: "password",
+        phoneNumber: role === "vtuber" ? phoneNumber : undefined,
         termsAccepted,
         privacyAccepted,
       };
       await postJson("/api/auth/signup", payload);
       await refreshSession();
-      router.push(redirectTo ?? "/account");
+      router.push(redirectTo ?? "/");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "処理に失敗しました。");
     } finally {
@@ -151,11 +172,15 @@ export default function SignupPage() {
 
   const handleGoogleSignup = () => {
     setError(null);
+    if (role === "vtuber") {
+      setError("VTuber登録は電話番号入力のため、メール登録を利用してください。");
+      return;
+    }
     if (!termsAccepted || !privacyAccepted) {
       setError("利用規約とプライバシーポリシーへの同意が必要です。");
       return;
     }
-    window.location.href = "/api/auth/google?role=listener";
+    window.location.href = `/api/auth/google?role=${role}`;
   };
 
   return (
@@ -165,7 +190,13 @@ export default function SignupPage() {
         <section className="rounded-[28px] border border-white/10 bg-[var(--brand-surface)] p-7">
           <div className="mb-6">
             <h1 className="text-2xl font-semibold tracking-[0.02em]">サインアップ</h1>
-            <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{step === 1 ? "STEP 1/2: 認証情報と同意" : "STEP 2/2: プロフィール"}</p>
+            <p className="mt-1 text-sm text-[var(--brand-text-muted)]">
+              {step === 1
+                ? "STEP 1/3: 認証情報と同意"
+                : step === 2
+                  ? "STEP 2/3: アカウント種別"
+                  : "STEP 3/3: プロフィール"}
+            </p>
           </div>
 
           <form onSubmit={submit} className="space-y-4">
@@ -196,6 +227,45 @@ export default function SignupPage() {
                   </label>
                 </div>
               </>
+            ) : step === 2 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setRole("listener")}
+                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                    role === "listener"
+                      ? "border-[var(--brand-secondary)] bg-[color-mix(in_srgb,var(--brand-secondary)_10%,transparent)]"
+                      : "border-white/10 bg-white/[0.015]"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-[var(--brand-text)]">Listener</p>
+                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">視聴・予約・通知向け</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole("vtuber")}
+                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                    role === "vtuber"
+                      ? "border-[var(--brand-secondary)] bg-[color-mix(in_srgb,var(--brand-secondary)_10%,transparent)]"
+                      : "border-white/10 bg-white/[0.015]"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-[var(--brand-text)]">VTuber</p>
+                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">配信作成・管理</p>
+                </button>
+                {role === "vtuber" ? (
+                  <div className="sm:col-span-2">
+                    <InputLabel label="Phone Number">
+                      <TextInput
+                        type="tel"
+                        placeholder="09012345678"
+                        value={phoneNumber}
+                        onChange={(event) => setPhoneNumber(event.target.value)}
+                      />
+                    </InputLabel>
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <>
                 <InputLabel label="Display Name">
@@ -226,11 +296,28 @@ export default function SignupPage() {
                   {submitting ? "WORKING..." : "次へ"}
                 </button>
               </div>
-            ) : (
+            ) : step === 2 ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
+                  className="h-11 rounded-xl bg-[var(--brand-bg-900)] px-5 text-sm font-bold tracking-[0.08em] text-[var(--brand-text)] transition hover:brightness-110"
+                >
+                  BACK
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="h-11 rounded-xl bg-[var(--brand-secondary)] px-5 text-sm font-bold tracking-[0.08em] text-black transition hover:brightness-110 disabled:opacity-60"
+                >
+                  {submitting ? "WORKING..." : "次へ"}
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
                   className="h-11 rounded-xl bg-[var(--brand-bg-900)] px-5 text-sm font-bold tracking-[0.08em] text-[var(--brand-text)] transition hover:brightness-110"
                 >
                   BACK

@@ -234,8 +234,18 @@ export default function StudioPreLivePage() {
           ? `/studio/live/${encodeURIComponent(created.sessionId)}?${queryString}`
           : `/studio/live/${encodeURIComponent(created.sessionId)}`,
       );
-    } catch {
-      setStartWarnings([tx("配信枠の作成に失敗しました。時間をおいて再試行してください。", "Failed to create stream session. Please retry.")]);
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "";
+      if (message.includes("VTuber registration requires verified phone")) {
+        setStartWarnings([
+          tx(
+            "電話番号認証が未完了です。アカウント設定で電話番号を認証してから配信枠を作成してください。",
+            "Phone verification is required. Verify your phone in account settings before creating a stream.",
+          ),
+        ]);
+      } else {
+        setStartWarnings([tx("配信枠の作成に失敗しました。時間をおいて再試行してください。", "Failed to create stream session. Please retry.")]);
+      }
       setCreating(false);
     }
   };
