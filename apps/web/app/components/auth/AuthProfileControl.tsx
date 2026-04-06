@@ -52,7 +52,7 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
               チャンネル管理
             </Link>
           )}
-          <Link href="/account/settings" onClick={onClose} className={buttonClassName({ variant: "ghost", size: "md", fullWidth: true, className: "justify-start" })}>
+          <Link href="/account" onClick={onClose} className={buttonClassName({ variant: "ghost", size: "md", fullWidth: true, className: "justify-start" })}>
             <Cog6ToothIcon className="h-4 w-4" aria-hidden />
             アカウント設定
           </Link>
