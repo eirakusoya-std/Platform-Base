@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { QueueListIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import { MySessionsManager } from "../components/channel/MySessionsManager";
 import { TopNav } from "../components/home/TopNav";
 import { Button } from "../components/ui/Button";
@@ -19,6 +20,16 @@ type ProfileDraft = {
   avatarUrl: string;
   headerUrl: string;
 };
+
+const CHANNEL_TABS: Array<{
+  key: ChannelView;
+  labelJa: string;
+  labelEn: string;
+  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+}> = [
+  { key: "profile", labelJa: "プロフィール", labelEn: "Profile", Icon: UserCircleIcon },
+  { key: "sessions", labelJa: "配信枠管理", labelEn: "Session Manager", Icon: QueueListIcon },
+];
 
 async function request(url: string, init?: RequestInit) {
   const response = await fetch(url, {
@@ -182,12 +193,21 @@ export default function ChannelPage() {
               {tx("チャンネル管理", "Channel")}
             </p>
             <div className="space-y-1">
-              <Button variant={activeView === "profile" ? "primary" : "ghost"} size="md" fullWidth className="justify-start" onClick={() => switchView("profile")}>
-                {tx("プロフィール", "Profile")}
-              </Button>
-              <Button variant={activeView === "sessions" ? "primary" : "ghost"} size="md" fullWidth className="justify-start" onClick={() => switchView("sessions")}>
-                {tx("配信枠管理", "Session Manager")}
-              </Button>
+              {CHANNEL_TABS.map(({ key, labelJa, labelEn, Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => switchView(key)}
+                  className={`flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold transition ${
+                    activeView === key
+                      ? "bg-[var(--brand-primary)] text-white"
+                      : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                  {tx(labelJa, labelEn)}
+                </button>
+              ))}
             </div>
           </div>
         </aside>
