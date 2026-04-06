@@ -1,19 +1,17 @@
 "use client";
 
-import { MouseEvent } from "react";
 import { LiveSession, ModalSession } from "../types";
 import { getTypeInfo } from "../utils";
 import { useI18n } from "../../../lib/i18n";
+import { EyeIcon, UsersIcon } from "@heroicons/react/24/outline";
 
 type NowLiveSectionProps = {
  sessions: LiveSession[];
- notifySet: Set<string>;
  onOpenSession: (session: ModalSession) => void;
  onOpenChannel: (hostUserId: string) => void;
- onToggleNotify: (event: MouseEvent, sessionId: string) => void;
 };
 
-export function NowLiveSection({ sessions, notifySet, onOpenSession, onOpenChannel, onToggleNotify }: NowLiveSectionProps) {
+export function NowLiveSection({ sessions, onOpenSession, onOpenChannel }: NowLiveSectionProps) {
   const { tx } = useI18n();
   return (
     <section className="py-10">
@@ -37,7 +35,6 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onOpenChann
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sessions.map((session) => {
             const typeInfo = getTypeInfo(session.participationType);
-            const notified = notifySet.has(session.id);
             const slotsAvailable = session.slotsLeft > 0;
 
             return (
@@ -97,7 +94,7 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onOpenChann
                       session.hostUserId ? "hover:bg-[var(--brand-bg-900)]" : ""
                     }`}
                   >
-                    <span className="h-5 w-5 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
+                    <span className="h-6 w-6 overflow-hidden rounded-full bg-[var(--brand-bg-900)] ring-1 ring-white/10">
                       {session.hostAvatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={session.hostAvatarUrl} alt={session.vtuber} className="h-full w-full object-cover" />
@@ -107,7 +104,9 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onOpenChann
                         </span>
                       )}
                     </span>
-                    <span className="text-xs text-[var(--brand-text-muted)]">{session.vtuber}</span>
+                    <span className="text-xs text-[var(--brand-text-muted)]">
+                      {session.hostChannelName || session.vtuber}
+                    </span>
                   </button>
 
                   {slotsAvailable ? (
@@ -126,21 +125,15 @@ export function NowLiveSection({ sessions, notifySet, onOpenSession, onOpenChann
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2">
-                    <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-white transition-all hover:brightness-110">
-                      {tx("LIVE 視聴", "Watch Live")}
-                    </button>
-
-                    <button
-                      className={`flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
-                        notified
-                          ? "bg-[var(--brand-primary)] text-white"
-                          : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)] hover:text-[var(--brand-primary)]"
-                      }`}
-                      onClick={(event) => onToggleNotify(event, session.id)}
-                    >
-                      <span className="whitespace-nowrap">{notified ? tx("通知ON", "Notify ON") : tx("空きが出たら参加", "Notify when open")}</span>
-                    </button>
+                  <div className="flex items-center justify-between text-[11px] text-[var(--brand-text-muted)]">
+                    <span className="inline-flex items-center gap-1">
+                      <EyeIcon className="h-3.5 w-3.5" aria-hidden />
+                      {session.viewers.toLocaleString()}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <UsersIcon className="h-3.5 w-3.5" aria-hidden />
+                      {session.slotsLeft}/{session.slotsTotal}
+                    </span>
                   </div>
 
                   {session.userHistory && (

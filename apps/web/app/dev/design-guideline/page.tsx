@@ -1,9 +1,27 @@
 "use client";
 
+import { ComponentType, SVGProps, useState } from "react";
 import { TopNav } from "../../components/home/TopNav";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { FieldLabel, SelectField, TextArea, TextInput } from "../../components/ui/Field";
+import {
+  ClockIcon,
+  EyeIcon,
+  PencilSquareIcon,
+  PlayIcon,
+  TrashIcon,
+  UserPlusIcon,
+  UsersIcon,
+} from "@heroicons/react/24/outline";
+import {
+  ChevronDownIcon,
+  MicrophoneIcon,
+  StopIcon,
+  VideoCameraIcon,
+  VideoCameraSlashIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/solid";
 
 type ColorItem = {
   label: string;
@@ -32,7 +50,42 @@ const RADII = [
   { label: "Pill", token: "--ui-radius-pill" },
 ];
 
+type CircleControlProps = {
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  offIcon?: ComponentType<SVGProps<SVGSVGElement>>;
+  slashedWhenOff?: boolean;
+  on: boolean;
+  onToggle: () => void;
+};
+
+function CircleControl({ icon: Icon, offIcon: OffIcon, slashedWhenOff, on, onToggle }: CircleControlProps) {
+  const CurrentIcon = on ? Icon : (OffIcon ?? Icon);
+  return (
+    <button
+      onClick={onToggle}
+      className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
+        on
+          ? "bg-[var(--brand-primary)] text-white"
+          : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
+      }`}
+    >
+      <span className="relative flex h-6 w-6 items-center justify-center">
+        <CurrentIcon className="h-6 w-6" aria-hidden />
+        {!on && slashedWhenOff && (
+          <>
+            <span className="pointer-events-none absolute h-7 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
+            <span className="pointer-events-none absolute h-7 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
+          </>
+        )}
+      </span>
+    </button>
+  );
+}
+
 export default function DesignGuidelinePage() {
+  const [guideMicOn, setGuideMicOn] = useState(true);
+  const [guideCamOn, setGuideCamOn] = useState(true);
+
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav />
@@ -78,6 +131,95 @@ export default function DesignGuidelinePage() {
                 <Button size="md" variant="primary">
                   Primary / Medium
                 </Button>
+              </div>
+
+              <div className="rounded-[var(--ui-radius-sm)] bg-[var(--brand-bg-900)] p-3 text-xs leading-6 text-[var(--brand-text-muted)]">
+                <p className="mb-1 font-semibold text-[var(--brand-text)]">Heroicons Rules</p>
+                <p>1. ボタン先頭に配置、右側には置かない</p>
+                <p>2. サイズは `h-4 w-4` を基本、強調ボタンのみ `h-5 w-5`</p>
+                <p>3. Stroke系（outline）を基本運用、solidは警告/強調のみ</p>
+                <p>4. アイコン色はボタン文字色と同一にする</p>
+                <p>5. 文言なしのアイコン単体ボタンは `aria-label` 必須</p>
+              </div>
+
+              <div className="ui-card-subtle p-3">
+                <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">Heroicons Visual</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="primary" size="md">
+                    <PlayIcon className="h-4 w-4" aria-hidden />
+                    配信開始
+                  </Button>
+                  <Button variant="soft" size="md">
+                    <PencilSquareIcon className="h-4 w-4" aria-hidden />
+                    編集
+                  </Button>
+                  <Button variant="danger" size="md">
+                    <TrashIcon className="h-4 w-4" aria-hidden />
+                    削除
+                  </Button>
+                  <Button variant="ghost" size="md">
+                    <UserPlusIcon className="h-4 w-4" aria-hidden />
+                    参加
+                  </Button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    aria-label="Add participant"
+                    className="ui-btn ui-btn-sm ui-btn-ghost h-9 w-9 rounded-[var(--ui-radius-sm)] p-0"
+                  >
+                    <UserPlusIcon className="h-4 w-4" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Open camera menu"
+                    className="ui-btn ui-btn-sm ui-btn-ghost h-9 w-9 rounded-[var(--ui-radius-sm)] p-0"
+                  >
+                    <VideoCameraIcon className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+              </div>
+
+              <div className="ui-card-subtle p-3">
+                <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">Mic / Cam Control Reference</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+                    <CircleControl icon={MicrophoneIcon} slashedWhenOff on={guideMicOn} onToggle={() => setGuideMicOn((v) => !v)} />
+                    <button type="button" aria-label="Mic device menu" className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]">
+                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+
+                  <div className="inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+                    <CircleControl icon={VideoCameraIcon} offIcon={VideoCameraSlashIcon} on={guideCamOn} onToggle={() => setGuideCamOn((v) => !v)} />
+                    <button type="button" aria-label="Cam device menu" className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]">
+                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="ui-card-subtle p-3">
+                <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">Live State Action (Accent)</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn-md inline-flex items-center gap-1.5 rounded-xl bg-[var(--brand-accent)] px-4 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
+                  >
+                    <StopIcon className="h-4 w-4" aria-hidden />
+                    配信終了
+                  </button>
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn-md inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
+                  >
+                    <XMarkIcon className="h-4 w-4" aria-hidden />
+                    閉じる
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">
+                  {`accent は「停止・終了・危険操作」など明確な強調状態でのみ使用。`}
+                </p>
               </div>
             </div>
           </Card>
@@ -160,10 +302,15 @@ export default function DesignGuidelinePage() {
                 </div>
                 <div className="p-3.5">
                   <p className="line-clamp-1 text-sm font-bold">【参加型】英語でフリートーク耐久</p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">夜城ルミナ</p>
+                  <div className="mt-1 inline-flex items-center gap-2 rounded-full px-1 py-0.5">
+                    <span className="h-6 w-6 overflow-hidden rounded-full bg-[var(--brand-bg-900)] ring-1 ring-white/10">
+                      <img src="/image/thumbnail/thumbnail_1.png" alt="channel icon sample" className="h-full w-full object-cover" />
+                    </span>
+                    <span className="text-xs text-[var(--brand-text-muted)]">夜城ルミナ</span>
+                  </div>
                   <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--brand-text-muted)]">
-                    <span>視聴 126</span>
-                    <span>参加 3 / 8</span>
+                    <span className="inline-flex items-center gap-1"><EyeIcon className="h-3.5 w-3.5" aria-hidden />126</span>
+                    <span className="inline-flex items-center gap-1"><UsersIcon className="h-3.5 w-3.5" aria-hidden />3 / 8</span>
                   </div>
                 </div>
               </article>
@@ -177,10 +324,15 @@ export default function DesignGuidelinePage() {
                 </div>
                 <div className="p-3.5">
                   <p className="line-clamp-1 text-sm font-bold">発音矯正チャレンジ</p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">白雪ノエルナ</p>
+                  <div className="mt-1 inline-flex items-center gap-2 rounded-full px-1 py-0.5">
+                    <span className="h-6 w-6 overflow-hidden rounded-full bg-[var(--brand-bg-900)] ring-1 ring-white/10">
+                      <img src="/image/thumbnail/thumbnail_3.png" alt="channel icon sample" className="h-full w-full object-cover" />
+                    </span>
+                    <span className="text-xs text-[var(--brand-text-muted)]">白雪ノエルナ</span>
+                  </div>
                   <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--brand-text-muted)]">
-                    <span>開始 19:30</span>
-                    <span>予約 5 / 10</span>
+                    <span className="inline-flex items-center gap-1"><ClockIcon className="h-3.5 w-3.5" aria-hidden />19:30</span>
+                    <span className="inline-flex items-center gap-1"><UsersIcon className="h-3.5 w-3.5" aria-hidden />5 / 10</span>
                   </div>
                 </div>
               </article>
@@ -194,10 +346,15 @@ export default function DesignGuidelinePage() {
                 </div>
                 <div className="p-3.5">
                   <p className="line-clamp-1 text-sm font-bold">初心者向け 30分英会話</p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">陽葵エルナ</p>
+                  <div className="mt-1 inline-flex items-center gap-2 rounded-full px-1 py-0.5">
+                    <span className="h-6 w-6 overflow-hidden rounded-full bg-[var(--brand-bg-900)] ring-1 ring-white/10">
+                      <img src="/image/thumbnail/thumbnail_5.png" alt="channel icon sample" className="h-full w-full object-cover" />
+                    </span>
+                    <span className="text-xs text-[var(--brand-text-muted)]">陽葵エルナ</span>
+                  </div>
                   <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--brand-text-muted)]">
-                    <span>開始 21:00</span>
-                    <span>空き 4 / 6</span>
+                    <span className="inline-flex items-center gap-1"><ClockIcon className="h-3.5 w-3.5" aria-hidden />21:00</span>
+                    <span className="inline-flex items-center gap-1"><UsersIcon className="h-3.5 w-3.5" aria-hidden />4 / 6</span>
                   </div>
                 </div>
               </article>
@@ -207,7 +364,24 @@ export default function DesignGuidelinePage() {
               <p>1. サムネイルは常に16:9固定</p>
               <p>2. 状態ラベルは左上に1つだけ（LIVE / STARTING SOON / BOOKABLE）</p>
               <p>3. タイトルを主、配信者名を副、メタ情報を最下段に配置</p>
-              <p>4. 配信枠カードは bg 上に直接配置（親に別途 surface パネルを敷かない）</p>
+              <p>4. 配信者名の前にチャンネルアイコン（丸）を必ず表示する</p>
+              <p>5. メタ情報は必ずアイコン付きで表示（Clock / Eye / Users）</p>
+              <p>6. 配信枠カードは bg 上に直接配置（親に別途 surface パネルを敷かない）</p>
+            </div>
+
+            <div className="mt-3 grid gap-2 rounded-[var(--ui-radius-sm)] bg-[var(--brand-bg-900)] p-3 text-xs text-[var(--brand-text-muted)] sm:grid-cols-3">
+              <div className="inline-flex items-center gap-1.5">
+                <ClockIcon className="h-3.5 w-3.5 text-[var(--brand-primary)]" aria-hidden />
+                <span>{`開始時刻 / カウントダウン`}</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5">
+                <EyeIcon className="h-3.5 w-3.5 text-[var(--brand-primary)]" aria-hidden />
+                <span>{`視聴者数`}</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5">
+                <UsersIcon className="h-3.5 w-3.5 text-[var(--brand-primary)]" aria-hidden />
+                <span>{`参加枠（残り/総数）`}</span>
+              </div>
             </div>
           </section>
         </div>
