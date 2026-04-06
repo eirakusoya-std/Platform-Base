@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowRightIcon } from "@heroicons/react/24/solid";
 import { useI18n } from "../../lib/i18n";
 import { deleteStreamSession, listMyStreamSessions, type StreamSession } from "../../lib/streamSessions";
+import { Button, buttonClassName } from "../ui/Button";
+import { Card } from "../ui/Card";
 
 const STATUS_LABEL: Record<StreamSession["status"], { jp: string; en: string }> = {
   prelive: { jp: "待機中", en: "Ready" },
@@ -65,7 +67,7 @@ export function MySessionsManager({ title, description, showCreateButton = true,
   }
 
   return (
-    <section className={framed ? "rounded-2xl bg-[var(--brand-surface)] p-5 shadow-lg shadow-black/20" : ""}>
+    <section className={framed ? "ui-card p-5" : ""}>
       <div className="mb-5 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">{title ?? tx("配信枠管理", "My Sessions")}</h2>
@@ -74,7 +76,7 @@ export function MySessionsManager({ title, description, showCreateButton = true,
         {showCreateButton && (
           <Link
             href="/studio/pre-live"
-            className="rounded-xl bg-[var(--brand-primary)] px-5 py-2.5 text-sm font-bold text-white shadow-[0_6px_20px_rgba(124,106,230,0.4)] transition-all hover:brightness-110"
+            className={buttonClassName({ variant: "primary", size: "md" })}
           >
             {tx("+ 新しい枠を作成", "+ New Session")}
           </Link>
@@ -96,7 +98,7 @@ export function MySessionsManager({ title, description, showCreateButton = true,
       ) : (
         <div className="space-y-3">
           {sessions.map((session) => (
-            <div key={session.sessionId} className="flex items-center gap-4 rounded-2xl bg-[var(--brand-bg-900)] p-4">
+            <Card key={session.sessionId} tone="subtle" className="flex items-center gap-4 p-4">
               <img src={session.thumbnail} alt={session.title} className="h-16 w-28 flex-shrink-0 rounded-lg object-cover" />
 
               <div className="min-w-0 flex-1">
@@ -117,7 +119,7 @@ export function MySessionsManager({ title, description, showCreateButton = true,
                 {session.status === "prelive" && (
                   <Link
                     href={`/studio/live/${encodeURIComponent(session.sessionId)}`}
-                    className="rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:brightness-110"
+                    className={buttonClassName({ variant: "success", size: "sm" })}
                   >
                     {tx("配信開始", "Go Live")}
                   </Link>
@@ -125,22 +127,23 @@ export function MySessionsManager({ title, description, showCreateButton = true,
                 {session.status !== "live" && (
                   <Link
                     href={`/studio/sessions/${encodeURIComponent(session.sessionId)}/edit`}
-                    className="rounded-lg bg-[var(--brand-primary)]/20 px-3 py-2 text-xs font-bold text-[var(--brand-primary)] hover:brightness-110"
+                    className={buttonClassName({ variant: "soft", size: "sm" })}
                   >
                     {tx("編集", "Edit")}
                   </Link>
                 )}
                 {session.status !== "live" && (
-                  <button
+                  <Button
                     onClick={() => handleDelete(session.sessionId)}
                     disabled={deletingId === session.sessionId}
-                    className="rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs font-bold text-[var(--brand-accent)] hover:brightness-110 disabled:opacity-50"
+                    variant="danger"
+                    size="sm"
                   >
                     {deletingId === session.sessionId ? tx("削除中...", "Deleting...") : tx("削除", "Delete")}
-                  </button>
+                  </Button>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

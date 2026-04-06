@@ -4,6 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { MySessionsManager } from "../components/channel/MySessionsManager";
 import { TopNav } from "../components/home/TopNav";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { FieldLabel, TextArea, TextInput } from "../components/ui/Field";
 import { useI18n } from "../lib/i18n";
 import { useUserSession } from "../lib/userSession";
 
@@ -173,30 +176,18 @@ export default function ChannelPage() {
       <TopNav />
 
       <main className="min-h-[calc(100vh-72px)] lg:grid lg:grid-cols-[240px_1fr]">
-        <aside className="bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/20 lg:min-h-[calc(100vh-72px)] lg:rounded-none lg:border-r lg:border-black/20">
+        <aside className="bg-[var(--brand-surface)] p-3 shadow-[var(--ui-shadow-1)] lg:min-h-[calc(100vh-72px)] lg:rounded-none lg:border-r lg:border-black/20">
           <div className="lg:sticky lg:top-[84px]">
             <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--brand-text-muted)]">
               {tx("チャンネル管理", "Channel")}
             </p>
             <div className="space-y-1">
-              <button
-                type="button"
-                onClick={() => switchView("profile")}
-                className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold ${
-                  activeView === "profile" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text-muted)] hover:bg-[var(--brand-bg-900)] hover:text-[var(--brand-text)]"
-                }`}
-              >
+              <Button variant={activeView === "profile" ? "primary" : "ghost"} size="md" fullWidth className="justify-start" onClick={() => switchView("profile")}>
                 {tx("プロフィール", "Profile")}
-              </button>
-              <button
-                type="button"
-                onClick={() => switchView("sessions")}
-                className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold ${
-                  activeView === "sessions" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text-muted)] hover:bg-[var(--brand-bg-900)] hover:text-[var(--brand-text)]"
-                }`}
-              >
+              </Button>
+              <Button variant={activeView === "sessions" ? "primary" : "ghost"} size="md" fullWidth className="justify-start" onClick={() => switchView("sessions")}>
                 {tx("配信枠管理", "Session Manager")}
-              </button>
+              </Button>
             </div>
           </div>
         </aside>
@@ -211,9 +202,9 @@ export default function ChannelPage() {
                 </p>
 
                 <form onSubmit={saveProfile} className="mt-5 space-y-4">
-                  <div className="rounded-xl bg-[var(--brand-bg-900)] p-4">
-                    <p className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("ヘッダー画像", "Header Image")}</p>
-                    <div className="mt-3 overflow-hidden rounded-xl bg-[var(--brand-surface)]">
+                  <Card tone="subtle" className="p-4">
+                    <FieldLabel>{tx("ヘッダー画像", "Header Image")}</FieldLabel>
+                    <div className="mt-3 overflow-hidden rounded-[var(--ui-radius-md)] bg-[var(--brand-surface)]">
                       {draft.headerUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={draft.headerUrl} alt={tx("ヘッダー画像", "Header Image")} className="h-36 w-full object-cover" />
@@ -224,7 +215,7 @@ export default function ChannelPage() {
                       )}
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <label className="inline-flex cursor-pointer items-center rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] hover:brightness-110">
+                      <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
                         {tx("画像をアップロード", "Upload image")}
                         <input
                           type="file"
@@ -233,19 +224,15 @@ export default function ChannelPage() {
                           onChange={(e) => handleHeaderFileChange(e.target.files?.[0] ?? null)}
                         />
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setDraft((prev) => ({ ...prev, headerUrl: "" }))}
-                        className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
-                      >
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setDraft((prev) => ({ ...prev, headerUrl: "" }))}>
                         {tx("削除", "Remove")}
-                      </button>
+                      </Button>
                     </div>
                     <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">{tx("推奨: 16:5以上の横長画像 / 4MB以下", "Recommended: wide image (16:5+), up to 4MB")}</p>
-                  </div>
+                  </Card>
 
-                  <div className="rounded-xl bg-[var(--brand-bg-900)] p-4">
-                    <p className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("チャンネルアイコン", "Channel Icon")}</p>
+                  <Card tone="subtle" className="p-4">
+                    <FieldLabel>{tx("チャンネルアイコン", "Channel Icon")}</FieldLabel>
                     <div className="mt-3 flex items-center gap-3">
                       <div className="h-14 w-14 overflow-hidden rounded-full bg-[var(--brand-surface)]">
                         {draft.avatarUrl ? (
@@ -258,7 +245,7 @@ export default function ChannelPage() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                          <label className="inline-flex cursor-pointer items-center rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] hover:brightness-110">
+                        <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
                           {tx("画像をアップロード", "Upload image")}
                           <input
                             type="file"
@@ -267,61 +254,49 @@ export default function ChannelPage() {
                             onChange={(e) => handleAvatarFileChange(e.target.files?.[0] ?? null)}
                           />
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => setDraft((prev) => ({ ...prev, avatarUrl: "" }))}
-                            className="ml-2 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
-                        >
+                        <Button type="button" variant="ghost" size="sm" className="ml-2" onClick={() => setDraft((prev) => ({ ...prev, avatarUrl: "" }))}>
                           {tx("削除", "Remove")}
-                        </button>
+                        </Button>
                         <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">{tx("PNG/JPG/WebP・2MB以下", "PNG/JPG/WebP, up to 2MB")}</p>
                       </div>
                     </div>
-                  </div>
+                  </Card>
 
                   <label className="block">
-                    <span className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("表示名", "Display Name")}</span>
-                    <input
+                    <FieldLabel>{tx("表示名", "Display Name")}</FieldLabel>
+                    <TextInput
                       value={draft.name}
                       onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
-                      className="mt-1 w-full rounded-lg bg-[#0a0d18] px-3 py-2 text-sm outline-none"
+                      className="mt-1"
                     />
                   </label>
 
                   <label className="block">
-                    <span className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("チャンネル名", "Channel Name")}</span>
-                    <input
+                    <FieldLabel>{tx("チャンネル名", "Channel Name")}</FieldLabel>
+                    <TextInput
                       value={draft.channelName}
                       onChange={(e) => setDraft((prev) => ({ ...prev, channelName: e.target.value }))}
-                      className="mt-1 w-full rounded-lg bg-[#0a0d18] px-3 py-2 text-sm outline-none"
+                      className="mt-1"
                     />
                   </label>
 
                   <label className="block">
-                    <span className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("紹介文", "Bio")}</span>
-                    <textarea
+                    <FieldLabel>{tx("紹介文", "Bio")}</FieldLabel>
+                    <TextArea
                       value={draft.bio}
                       onChange={(e) => setDraft((prev) => ({ ...prev, bio: e.target.value }))}
                       rows={5}
-                      className="mt-1 w-full rounded-lg bg-[#0a0d18] px-3 py-2 text-sm outline-none"
+                      className="mt-1"
                     />
                   </label>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                    >
+                    <Button type="submit" disabled={saving} variant="primary" size="md">
                       {saving ? tx("保存中...", "Saving...") : tx("保存", "Save")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetProfile}
-                      className="rounded-lg bg-[var(--brand-bg-900)] px-4 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
-                    >
+                    </Button>
+                    <Button type="button" onClick={resetProfile} variant="ghost" size="md">
                       {tx("リセット", "Reset")}
-                    </button>
+                    </Button>
                   </div>
 
                   {message ? <p className="text-sm text-[var(--brand-secondary)]">{message}</p> : null}

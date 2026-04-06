@@ -1,27 +1,23 @@
 "use client";
 
-import { MouseEvent } from "react";
 import { SlotBar } from "../SlotBar";
 import { ModalSession, StartingSoonSession } from "../types";
 import { formatCountdown, formatCountdownLabel, getTypeInfo } from "../utils";
 import { useI18n } from "../../../lib/i18n";
+import { ClockIcon, UsersIcon } from "@heroicons/react/24/outline";
 
 type StartingSoonSectionProps = {
  sessions: StartingSoonSession[];
  countdown: Record<string, number>;
- reservedSet: Set<string>;
  onOpenSession: (session: ModalSession) => void;
  onOpenChannel: (hostUserId: string) => void;
- onToggleReserve: (event: MouseEvent, sessionId: string) => void | Promise<void>;
 };
 
 export function StartingSoonSection({
  sessions,
  countdown,
-  reservedSet,
   onOpenSession,
   onOpenChannel,
-  onToggleReserve,
 }: StartingSoonSectionProps) {
   const { tx } = useI18n();
   return (
@@ -44,7 +40,7 @@ export function StartingSoonSection({
             const seconds = countdown[session.id] ?? session.startsInSeconds;
             const typeInfo = getTypeInfo(session.participationType);
             const urgent = seconds < 20 * 60;
-            const reserved = reservedSet.has(session.id);
+            const reserved = false;
 
             return (
               <div
@@ -103,7 +99,7 @@ export function StartingSoonSection({
                       session.hostUserId ? "hover:bg-[var(--brand-bg-900)]" : ""
                     }`}
                   >
-                    <span className="h-5 w-5 overflow-hidden rounded-full bg-[var(--brand-bg-900)]">
+                    <span className="h-6 w-6 overflow-hidden rounded-full bg-[var(--brand-bg-900)] ring-1 ring-white/10">
                       {session.hostAvatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={session.hostAvatarUrl} alt={session.vtuber} className="h-full w-full object-cover" />
@@ -113,23 +109,23 @@ export function StartingSoonSection({
                         </span>
                       )}
                     </span>
-                    <span className="text-xs text-[var(--brand-text-muted)]">{session.vtuber}</span>
+                    <span className="text-xs text-[var(--brand-text-muted)]">
+                      {session.hostChannelName || session.vtuber}
+                    </span>
                   </button>
 
-                  <div className="mb-3">
+                  <div className="mb-2">
                     <SlotBar left={session.slotsLeft} total={session.slotsTotal} size="sm" />
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--brand-primary)] py-2.5 text-sm font-bold text-white transition-all hover:brightness-110"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onToggleReserve(event, session.id);
-                      }}
-                    >
-                      {reserved ? tx("予約済み", "Reserved") : session.reservationRequired ? tx("予約する", "Reserve") : tx("参加する", "Join")}
-                    </button>
-                    <button className="rounded-lg px-3 py-2.5 text-xs text-[var(--brand-text-muted)] transition-all">DETAIL</button>
+                  <div className="flex items-center justify-between text-[11px] text-[var(--brand-text-muted)]">
+                    <span className="inline-flex items-center gap-1">
+                      <ClockIcon className="h-3.5 w-3.5" aria-hidden />
+                      {tx("開始前", "Before live")}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <UsersIcon className="h-3.5 w-3.5" aria-hidden />
+                      {session.slotsLeft}/{session.slotsTotal}
+                    </span>
                   </div>
                 </div>
               </div>

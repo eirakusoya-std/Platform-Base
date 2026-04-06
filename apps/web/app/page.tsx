@@ -1,6 +1,6 @@
 "use client";
 
-import { MouseEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Footer } from "./components/home/Footer";
 import { SearchFilterBar } from "./components/home/SearchFilterBar";
@@ -25,8 +25,6 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [selectedSession, setSelectedSession] = useState<ModalSession | null>(null);
-  const [notifySet, setNotifySet] = useState<Set<string>>(new Set());
-  const [reservedSet, setReservedSet] = useState<Set<string>>(new Set());
   const [dynamicSessions, setDynamicSessions] = useState<StreamSession[]>([]);
   const [countdown, setCountdown] = useState<Record<string, number>>({});
 
@@ -137,26 +135,6 @@ export default function HomePage() {
     setActiveTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   };
 
-  const handleToggleReserve = (event: MouseEvent, sessionId: string) => {
-    event.stopPropagation();
-    setReservedSet((prev) => {
-      const next = new Set(prev);
-      if (next.has(sessionId)) next.delete(sessionId);
-      else next.add(sessionId);
-      return next;
-    });
-  };
-
-  const handleToggleNotify = (event: MouseEvent, sessionId: string) => {
-    event.stopPropagation();
-    setNotifySet((prev) => {
-      const next = new Set(prev);
-      if (next.has(sessionId)) next.delete(sessionId);
-      else next.add(sessionId);
-      return next;
-    });
-  };
-
   const goPreJoin = (sessionId: string) => {
     router.push(`/join/${encodeURIComponent(sessionId)}`);
   };
@@ -184,18 +162,14 @@ export default function HomePage() {
         <StartingSoonSection
           sessions={filteredStartingSoon}
           countdown={mergedCountdown}
-          reservedSet={reservedSet}
           onOpenSession={setSelectedSession}
           onOpenChannel={goChannel}
-          onToggleReserve={handleToggleReserve}
         />
 
         <NowLiveSection
           sessions={filteredLive}
-          notifySet={notifySet}
           onOpenSession={setSelectedSession}
           onOpenChannel={goChannel}
-          onToggleNotify={handleToggleNotify}
         />
       </div>
 
