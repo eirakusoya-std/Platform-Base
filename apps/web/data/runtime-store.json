@@ -1,6 +1,31 @@
 {
   "users": [
     {
+      "id": "vtuber-mnn6rklh-336275",
+      "name": "バナージ6世",
+      "role": "vtuber",
+      "email": "soredemo@banaji6",
+      "authProvider": "password",
+      "createdAt": "2026-04-06T12:48:09.983Z",
+      "lastLoginAt": "2026-04-06T12:48:09.983Z",
+      "phoneNumber": "01010101",
+      "termsAcceptedAt": "2026-04-06T12:48:09.983Z",
+      "privacyAcceptedAt": "2026-04-06T12:48:09.983Z",
+      "passwordHash": "db708e00829445940936c44bae37ad6be0904e5952433805d3a840932d080efc"
+    },
+    {
+      "id": "listener-mnmua4gx-531780",
+      "name": "バナージ５",
+      "role": "listener",
+      "email": "soredemo@banaji5",
+      "authProvider": "password",
+      "createdAt": "2026-04-06T06:58:40.535Z",
+      "lastLoginAt": "2026-04-06T06:58:40.535Z",
+      "termsAcceptedAt": "2026-04-06T06:58:40.535Z",
+      "privacyAcceptedAt": "2026-04-06T06:58:40.535Z",
+      "passwordHash": "db708e00829445940936c44bae37ad6be0904e5952433805d3a840932d080efc"
+    },
+    {
       "id": "vtuber-mng1g46k-10a5b4",
       "name": "バナージ４",
       "role": "vtuber",

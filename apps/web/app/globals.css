@@ -136,8 +136,8 @@ body {
 }
 
 .ui-btn-secondary {
-  background: var(--brand-primary-light);
-  color: var(--brand-bg-900);
+  background: var(--brand-secondary);
+  color: #000;
 }
 
 .ui-btn-ghost {

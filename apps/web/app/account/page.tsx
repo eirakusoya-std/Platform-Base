@@ -2,6 +2,13 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  BellAlertIcon,
+  CreditCardIcon,
+  ShieldCheckIcon,
+  UserCircleIcon,
+  WrenchScrewdriverIcon,
+} from "@heroicons/react/24/outline";
 import { TopNav } from "../components/home/TopNav";
 import { createCheckout, cancelBillingSubscription, listBillingSubscriptions } from "../lib/billing";
 import { getMonitoringSummary } from "../lib/monitoring";
@@ -18,7 +25,8 @@ import type {
   SessionUser,
 } from "../lib/apiTypes";
 
-const SETTINGS_STORAGE_KEY = "aiment.account-settings.ui.v1";
+const SETTINGS_STORAGE_KEY_PREFIX = "aiment.account-settings.ui.v1";
+const IS_DEV = process.env.NODE_ENV !== "production";
 
 type AccountUiSettings = {
   mfaEnabled: boolean;
@@ -29,6 +37,29 @@ type AccountUiSettings = {
   liveNotification: boolean;
   marketingNotification: boolean;
 };
+
+type AccountTab = "profile" | "security" | "notifications" | "billing" | "ops";
+
+type AccountSnapshot = {
+  draft: SessionUser;
+  uiSettings: AccountUiSettings;
+};
+
+const ACCOUNT_TABS: Array<{
+  key: AccountTab;
+  label: string;
+  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+}> = [
+  { key: "profile", label: "プロフィール", Icon: UserCircleIcon },
+  { key: "security", label: "セキュリティ", Icon: ShieldCheckIcon },
+  { key: "notifications", label: "通知・データ", Icon: BellAlertIcon },
+  { key: "billing", label: "課金", Icon: CreditCardIcon },
+  { key: "ops", label: "運用", Icon: WrenchScrewdriverIcon },
+];
+
+function getSettingsStorageKey(userId: string) {
+  return `${SETTINGS_STORAGE_KEY_PREFIX}:${userId}`;
+}
 
 async function request<T>(url: string, init?: RequestInit) {
   const response = await fetch(url, {
@@ -119,6 +150,9 @@ export default function AccountPage() {
   const [reportTargetId, setReportTargetId] = useState("");
   const [reportCategory, setReportCategory] = useState<ReportCategory>("other");
   const [reportDetails, setReportDetails] = useState("");
+  const [phoneCodeRequested, setPhoneCodeRequested] = useState(false);
+  const [activeTab, setActiveTab] = useState<AccountTab>("profile");
+  const [initialSnapshot, setInitialSnapshot] = useState<AccountSnapshot | null>(null);
 
   const defaultUiSettings = useMemo<AccountUiSettings>(
     () => ({
@@ -140,23 +174,25 @@ export default function AccountPage() {
   }, [isAuthenticated, loading, router]);
 
   useEffect(() => {
+    if (!user?.id) return;
     setDraft(user);
-  }, [user]);
-
-  useEffect(() => {
-    if (uiSettings) return;
     try {
-      const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+      const raw = window.localStorage.getItem(getSettingsStorageKey(user.id));
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<AccountUiSettings>;
-        setUiSettings({ ...defaultUiSettings, ...parsed });
+        const merged = { ...defaultUiSettings, ...parsed };
+        setUiSettings(merged);
+        setInitialSnapshot({ draft: user, uiSettings: merged });
+        setHasChanges(false);
         return;
       }
     } catch {
       // ignore invalid local state
     }
     setUiSettings(defaultUiSettings);
-  }, [defaultUiSettings, uiSettings]);
+    setInitialSnapshot({ draft: user, uiSettings: defaultUiSettings });
+    setHasChanges(false);
+  }, [defaultUiSettings, user]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -210,8 +246,11 @@ export default function AccountPage() {
           phoneNumber: draft.phoneNumber ?? "",
         }),
       });
-      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(uiSettings));
+      if (user?.id) {
+        window.localStorage.setItem(getSettingsStorageKey(user.id), JSON.stringify(uiSettings));
+      }
       await refreshSession();
+      setInitialSnapshot({ draft: { ...draft }, uiSettings: { ...uiSettings } });
       setHasChanges(false);
       setMessage("設定を保存しました。");
     } catch (caughtError) {
@@ -222,9 +261,10 @@ export default function AccountPage() {
   };
 
   const resetAll = () => {
-    setDraft(user);
-    setUiSettings(defaultUiSettings);
-    setHasChanges(true);
+    if (!initialSnapshot) return;
+    setDraft({ ...initialSnapshot.draft });
+    setUiSettings({ ...initialSnapshot.uiSettings });
+    setHasChanges(false);
     setMessage(null);
     setError(null);
   };
@@ -291,40 +331,68 @@ export default function AccountPage() {
   const currentSubscription = subscriptions.find((entry) => entry.status !== "canceled") ?? null;
 
   return (
-    <div className="min-h-screen bg-[var(--brand-bg-900)] pb-16">
+    <div className="min-h-screen bg-[var(--brand-bg-900)]">
       <TopNav />
 
-      <main className="mx-auto mt-6 max-w-[1080px] px-4 md:px-8">
-        <header className="mb-6">
-          <p className="text-[11px] uppercase tracking-[0.32em] text-[var(--brand-text-muted)]">Account Settings</p>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-3xl font-semibold tracking-[0.03em] text-[var(--brand-text)]">アカウント設定</h1>
+      <main className="min-h-[calc(100vh-72px)] lg:grid lg:grid-cols-[240px_1fr]">
+        <aside className="bg-[var(--brand-surface)] p-3 lg:min-h-[calc(100vh-72px)] lg:rounded-none">
+          <div className="lg:sticky lg:top-[84px]">
+            <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--brand-text-muted)]">
+              ACCOUNT MENU
+            </p>
+            <div className="space-y-1">
+              {ACCOUNT_TABS.map(({ key, label, Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveTab(key)}
+                  className={`flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold transition ${
+                    activeTab === key
+                      ? "bg-[var(--brand-primary)] text-white"
+                      : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="mt-2 text-sm text-[var(--brand-text-muted)]">Platform-Base の設定画面レイアウトに合わせつつ、保存と認証確認は現在の backend を利用しています。</p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void saveAll()}
-              className="h-10 rounded-lg bg-[var(--brand-secondary)] px-4 text-sm font-semibold text-[var(--brand-bg-900)] disabled:opacity-60"
-              disabled={saving}
-            >
-              {saving ? "保存中..." : "変更を保存"}
-            </button>
-            <button
-              type="button"
-              onClick={resetAll}
-              className="h-10 rounded-lg bg-[var(--brand-surface)] px-4 text-sm font-medium text-[var(--brand-text)]"
-            >
-              リセット
-            </button>
-            {hasChanges ? <p className="text-sm text-[var(--brand-text-muted)]">未保存の変更があります。</p> : null}
-          </div>
-          {message ? <p className="mt-3 text-sm text-[var(--brand-secondary)]">{message}</p> : null}
-          {error ? <p className="mt-3 text-sm text-[var(--brand-accent)]">{error}</p> : null}
-        </header>
+        </aside>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SectionCard title="プロフィール" subtitle="表示情報と基本アカウント情報">
+        <section className="min-w-0 px-4 py-6 pb-16 lg:px-8">
+          <div className="mx-auto max-w-[1080px]">
+            <header className="mb-6">
+              <p className="text-[11px] uppercase tracking-[0.32em] text-[var(--brand-text-muted)]">Account Settings</p>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                <h1 className="text-3xl font-semibold tracking-[0.03em] text-[var(--brand-text)]">アカウント設定</h1>
+              </div>
+              <p className="mt-2 text-sm text-[var(--brand-text-muted)]">Platform-Base の設定画面レイアウトに合わせつつ、保存と認証確認は現在の backend を利用しています。</p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void saveAll()}
+                  className="h-10 rounded-lg bg-[var(--brand-secondary)] px-4 text-sm font-semibold text-[var(--brand-bg-900)] disabled:opacity-60"
+                  disabled={saving}
+                >
+                  {saving ? "保存中..." : "変更を保存"}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetAll}
+                  className="h-10 rounded-lg bg-[var(--brand-surface)] px-4 text-sm font-medium text-[var(--brand-text)]"
+                >
+                  リセット
+                </button>
+                {hasChanges ? <p className="text-sm text-[var(--brand-text-muted)]">未保存の変更があります。</p> : null}
+              </div>
+              {message ? <p className="mt-3 text-sm text-[var(--brand-secondary)]">{message}</p> : null}
+              {error ? <p className="mt-3 text-sm text-[var(--brand-accent)]">{error}</p> : null}
+            </header>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+          {activeTab === "profile" ? (
+            <SectionCard title="プロフィール" subtitle="表示情報と基本アカウント情報">
             <form onSubmit={saveAll} className="space-y-3">
               <div className="rounded-lg bg-[var(--brand-surface)] p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Profile Image</p>
@@ -392,9 +460,11 @@ export default function AccountPage() {
                 </>
               ) : null}
             </form>
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
-          <SectionCard title="セキュリティ" subtitle="ログイン方法と本人確認">
+          {activeTab === "security" ? (
+            <SectionCard title="セキュリティ" subtitle="ログイン方法と本人確認">
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
               <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">ログイン方法</p>
               <p className="mt-1 text-sm text-[var(--brand-text)]">{draft.authProvider}</p>
@@ -410,7 +480,7 @@ export default function AccountPage() {
                     type="button"
                     onClick={() => {
                       void request<{ devCode: string }>("/api/account/verify/email/request", { method: "POST" }).then((payload) => {
-                        setDevEmailCode(payload.devCode);
+                        setDevEmailCode(IS_DEV ? payload.devCode : null);
                         setMessage("メール確認コードを発行しました。");
                         setError(null);
                       }).catch((caughtError) => {
@@ -425,7 +495,7 @@ export default function AccountPage() {
               </div>
               {!draft.emailVerifiedAt ? (
                 <div className="mt-3 space-y-2">
-                  {devEmailCode ? <p className="text-xs text-[var(--brand-secondary)]">開発用コード: {devEmailCode}</p> : null}
+                  {IS_DEV && devEmailCode ? <p className="text-xs text-[var(--brand-secondary)]">開発用コード: {devEmailCode}</p> : null}
                   <div className="flex gap-2">
                     <input
                       value={emailCode}
@@ -492,7 +562,8 @@ export default function AccountPage() {
                       type="button"
                       onClick={() => {
                         void request<{ devCode: string }>("/api/account/verify/phone/request", { method: "POST" }).then((payload) => {
-                          setDevPhoneCode(payload.devCode);
+                          setDevPhoneCode(IS_DEV ? payload.devCode : null);
+                          setPhoneCodeRequested(true);
                           setMessage("電話確認コードを発行しました。");
                           setError(null);
                         }).catch((caughtError) => {
@@ -504,8 +575,8 @@ export default function AccountPage() {
                       コード送信
                     </button>
                   </div>
-                  {devPhoneCode ? <p className="text-xs text-[var(--brand-secondary)]">開発用コード: {devPhoneCode}</p> : null}
-                  {devPhoneCode ? (
+                  {IS_DEV && devPhoneCode ? <p className="text-xs text-[var(--brand-secondary)]">開発用コード: {devPhoneCode}</p> : null}
+                  {phoneCodeRequested ? (
                     <div className="flex gap-2">
                       <input
                         value={phoneCode}
@@ -523,6 +594,7 @@ export default function AccountPage() {
                             await refreshSession();
                             setMessage("電話番号確認が完了しました。");
                             setDevPhoneCode(null);
+                            setPhoneCodeRequested(false);
                             setPhoneCode("");
                             setError(null);
                           }).catch((caughtError) => {
@@ -550,9 +622,11 @@ export default function AccountPage() {
               on={uiSettings.passkeyEnabled}
               onChange={(next) => updateUiSetting("passkeyEnabled", next)}
             />
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
-          <SectionCard title="プライバシーとデータ" subtitle="収集・利用・エクスポート設定">
+          {activeTab === "notifications" ? (
+            <SectionCard title="プライバシーとデータ" subtitle="収集・利用・エクスポート設定">
             <ToggleItem
               label="利用データをサービス改善に使用"
               description="操作データを品質改善に使います。"
@@ -567,9 +641,11 @@ export default function AccountPage() {
             />
             <button className="h-11 w-full rounded-lg bg-[var(--brand-surface)] text-sm font-medium text-[var(--brand-text)]">データをダウンロード</button>
             <button className="h-11 w-full rounded-lg bg-[var(--brand-surface)] text-sm font-medium text-[var(--brand-text)]">アカウントデータの削除申請</button>
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
-          <SectionCard title="通知" subtitle="連絡手段と受信頻度">
+          {activeTab === "notifications" ? (
+            <SectionCard title="通知" subtitle="連絡手段と受信頻度">
             <ToggleItem
               label="メール通知"
               description="重要なお知らせとセキュリティ通知を受け取ります。"
@@ -588,9 +664,11 @@ export default function AccountPage() {
               on={uiSettings.marketingNotification}
               onChange={(next) => updateUiSetting("marketingNotification", next)}
             />
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
-          <SectionCard title="Billing" subtitle="Stripe サブスク作成、解約、現在プラン">
+          {activeTab === "billing" ? (
+            <SectionCard title="Billing" subtitle="Stripe サブスク作成、解約、現在プラン">
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
               <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Current Plan</p>
               <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{planLabel(draft.plan)}</p>
@@ -626,9 +704,11 @@ export default function AccountPage() {
                 現在のサブスクを解約
               </button>
             ) : null}
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
-          <SectionCard title="Monitoring" subtitle="接続失敗率、決済失敗、サーバーエラー">
+          {activeTab === "ops" ? (
+            <SectionCard title="Monitoring" subtitle="接続失敗率、決済失敗、サーバーエラー">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-[var(--brand-surface)] p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Connection Failure</p>
@@ -647,9 +727,11 @@ export default function AccountPage() {
                 <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{monitoringSummary?.connectionAttempts ?? 0}</p>
               </div>
             </div>
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
-          <SectionCard title="Consent History" subtitle="利用規約とプライバシー同意の保存履歴">
+          {activeTab === "security" ? (
+            <SectionCard title="Consent History" subtitle="利用規約とプライバシー同意の保存履歴">
             {consents.length === 0 ? (
               <p className="rounded-lg bg-[var(--brand-surface)] p-4 text-sm text-[var(--brand-text-muted)]">同意履歴はまだありません。</p>
             ) : (
@@ -660,9 +742,11 @@ export default function AccountPage() {
                 </div>
               ))
             )}
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
-          <SectionCard title="Reports" subtitle="最低限の通報導線と保存">
+          {activeTab === "ops" ? (
+            <SectionCard title="Reports" subtitle="最低限の通報導線と保存">
             <div className="grid gap-3">
               <select
                 value={reportTargetType}
@@ -716,25 +800,30 @@ export default function AccountPage() {
                 ))}
               </div>
             ) : null}
-          </SectionCard>
-        </div>
+            </SectionCard>
+          ) : null}
+            </div>
 
-        <section className="mt-4 rounded-xl bg-[var(--brand-surface-soft)] p-5 md:p-6">
-          <h2 className="text-lg font-semibold text-[var(--brand-accent)]">Danger Zone</h2>
-          <p className="mt-1 text-sm text-[var(--brand-text-muted)]">不可逆な操作です。実行前に確認してください。</p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                void logout().then(() => {
-                  router.push("/");
-                });
-              }}
-              className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white"
-            >
-              ログアウト
-            </button>
-            <button className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white">アカウントを削除</button>
+            {activeTab === "profile" ? (
+              <section className="mt-4 rounded-xl bg-[var(--brand-surface-soft)] p-5 md:p-6">
+                <h2 className="text-lg font-semibold text-[var(--brand-accent)]">Danger Zone</h2>
+                <p className="mt-1 text-sm text-[var(--brand-text-muted)]">不可逆な操作です。実行前に確認してください。</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void logout().then(() => {
+                        router.push("/");
+                      });
+                    }}
+                    className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white"
+                  >
+                    ログアウト
+                  </button>
+                  <button className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white">アカウントを削除</button>
+                </div>
+              </section>
+            ) : null}
           </div>
         </section>
       </main>
