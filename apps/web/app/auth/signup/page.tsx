@@ -214,14 +214,14 @@ export default function SignupPage() {
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
                     <span>
-                      <Link href="/terms" className="text-[var(--brand-secondary)] underline-offset-2 hover:underline">利用規約</Link>
+                      <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-secondary)] underline-offset-2 hover:underline">利用規約</Link>
                       {" "}に同意します
                     </span>
                   </label>
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} />
                     <span>
-                      <Link href="/privacy" className="text-[var(--brand-secondary)] underline-offset-2 hover:underline">プライバシーポリシー</Link>
+                      <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-secondary)] underline-offset-2 hover:underline">プライバシーポリシー</Link>
                       {" "}に同意します
                     </span>
                   </label>
@@ -280,6 +280,13 @@ export default function SignupPage() {
             {step === 1 ? (
               <div className="grid gap-3">
                 <button
+                  type="submit"
+                  disabled={submitting}
+                  className="h-11 rounded-xl bg-[var(--brand-secondary)] px-5 text-sm font-bold tracking-[0.08em] text-black transition hover:brightness-110 disabled:opacity-60"
+                >
+                  {submitting ? "WORKING..." : "次へ"}
+                </button>
+                <button
                   type="button"
                   disabled={submitting}
                   onClick={handleGoogleSignup}
@@ -287,13 +294,6 @@ export default function SignupPage() {
                 >
                   <GoogleLogo />
                   Googleでサインアップ
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="h-11 rounded-xl bg-[var(--brand-secondary)] px-5 text-sm font-bold tracking-[0.08em] text-black transition hover:brightness-110 disabled:opacity-60"
-                >
-                  {submitting ? "WORKING..." : "次へ"}
                 </button>
               </div>
             ) : step === 2 ? (

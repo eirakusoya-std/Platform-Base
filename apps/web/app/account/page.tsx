@@ -110,14 +110,16 @@ function ToggleItem({
 function SectionCard({
   title,
   subtitle,
+  className,
   children,
 }: {
   title: string;
   subtitle?: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl bg-[var(--brand-surface-soft)] p-5 md:p-6">
+    <section className={`rounded-xl bg-[var(--brand-surface-soft)] p-5 md:p-6 ${className ?? ""}`}>
       <header className="mb-4">
         <h2 className="text-lg font-semibold tracking-[0.03em] text-[var(--brand-text)]">{title}</h2>
         {subtitle ? <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{subtitle}</p> : null}
@@ -244,6 +246,8 @@ export default function AccountPage() {
           channelName: draft.channelName,
           bio: draft.bio,
           phoneNumber: draft.phoneNumber ?? "",
+          avatarUrl: draft.avatarUrl ?? "",
+          headerUrl: draft.headerUrl ?? "",
         }),
       });
       if (user?.id) {
@@ -330,6 +334,56 @@ export default function AccountPage() {
 
   const currentSubscription = subscriptions.find((entry) => entry.status !== "canceled") ?? null;
 
+  const handleAvatarFileChange = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("画像ファイルを選択してください。");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("画像サイズは2MB以下にしてください。");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result) return;
+      setDraft((prev) => (prev ? { ...prev, avatarUrl: result } : prev));
+      setHasChanges(true);
+      setMessage(null);
+      setError(null);
+    };
+    reader.onerror = () => {
+      setError("画像の読み込みに失敗しました。");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleHeaderFileChange = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("画像ファイルを選択してください。");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setError("画像サイズは4MB以下にしてください。");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result) return;
+      setDraft((prev) => (prev ? { ...prev, headerUrl: result } : prev));
+      setHasChanges(true);
+      setMessage(null);
+      setError(null);
+    };
+    reader.onerror = () => {
+      setError("画像の読み込みに失敗しました。");
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)]">
       <TopNav />
@@ -361,7 +415,7 @@ export default function AccountPage() {
         </aside>
 
         <section className="min-w-0 px-4 py-6 pb-16 lg:px-8">
-          <div className="mx-auto max-w-[1080px]">
+          <div className="w-full">
             <header className="mb-6">
               <p className="text-[11px] uppercase tracking-[0.32em] text-[var(--brand-text-muted)]">Account Settings</p>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
@@ -392,47 +446,116 @@ export default function AccountPage() {
 
             <div className="grid gap-4 lg:grid-cols-2">
           {activeTab === "profile" ? (
-            <SectionCard title="プロフィール" subtitle="表示情報と基本アカウント情報">
-            <form onSubmit={saveAll} className="space-y-3">
-              <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Profile Image</p>
-                <div className="mt-2 flex items-center gap-3">
-                  <div className="h-12 w-12 overflow-hidden rounded-full bg-[var(--brand-bg-800)]">
-                    <div className="grid h-full w-full place-items-center bg-[color-mix(in_srgb,var(--brand-secondary)_20%,var(--brand-bg-800))] text-sm font-bold text-[var(--brand-secondary)]">
-                      {draft.name.slice(0, 1).toUpperCase()}
+            <SectionCard title="プロフィール" subtitle="表示情報と基本アカウント情報" className="lg:col-span-2">
+              <form onSubmit={saveAll} className="space-y-4">
+                <div className="rounded-lg bg-[var(--brand-surface)] p-4">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div className="overflow-hidden rounded-lg bg-[var(--brand-bg-800)]">
+                      <div className="relative">
+                        {draft.headerUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={draft.headerUrl} alt="Header" className="h-56 w-full object-cover" />
+                        ) : (
+                          <div className="grid h-56 w-full place-items-center text-sm font-semibold text-[var(--brand-text-muted)]">
+                            ヘッダー画像なし
+                          </div>
+                        )}
+                        <div className="absolute -bottom-10 left-6 h-20 w-20 overflow-hidden rounded-full border-2 border-[var(--brand-surface)] bg-[var(--brand-bg-800)]">
+                          {draft.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={draft.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="grid h-full w-full place-items-center text-xl font-bold text-[var(--brand-primary)]">
+                              {draft.name.slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-6 pt-12">
+                        <p className="text-lg font-semibold text-[var(--brand-text)]">{draft.channelName || draft.name}</p>
+                        <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{draft.role === "vtuber" ? "VTuber" : "Listener"}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="rounded-lg bg-[var(--brand-surface-soft)] p-4">
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Header Image</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
+                            画像をアップロード
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleHeaderFileChange(e.target.files?.[0] ?? null)}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDraft((prev) => (prev ? { ...prev, headerUrl: undefined } : prev));
+                              setHasChanges(true);
+                            }}
+                            className="ui-btn ui-btn-sm ui-btn-ghost"
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-[var(--brand-surface-soft)] p-4">
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Profile Image</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
+                            画像をアップロード
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleAvatarFileChange(e.target.files?.[0] ?? null)}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDraft((prev) => (prev ? { ...prev, avatarUrl: undefined } : prev));
+                              setHasChanges(true);
+                            }}
+                            className="ui-btn ui-btn-sm ui-btn-ghost"
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex-1 rounded-lg bg-[var(--brand-bg-800)] px-3 py-2 text-xs text-[var(--brand-text-muted)]">
-                    アバター画像の保存 API は未実装です。現在は設定 UI のみを揃えています。
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-lg bg-[var(--brand-surface)] p-4">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Display Name</p>
+                    <input
+                      type="text"
+                      value={draft.name}
+                      onChange={(event) => {
+                        setDraft((prev) => (prev ? { ...prev, name: event.target.value } : prev));
+                        setHasChanges(true);
+                      }}
+                      className="mt-2 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
+                    />
+                  </div>
+
+                  <div className="rounded-lg bg-[var(--brand-surface)] p-4">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">User ID</p>
+                    <input
+                      type="text"
+                      value={draft.id}
+                      readOnly
+                      className="mt-2 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text-muted)] outline-none"
+                    />
                   </div>
                 </div>
-              </div>
 
-              <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Display Name</p>
-                <input
-                  type="text"
-                  value={draft.name}
-                  onChange={(event) => {
-                    setDraft((prev) => (prev ? { ...prev, name: event.target.value } : prev));
-                    setHasChanges(true);
-                  }}
-                  className="mt-2 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
-                />
-              </div>
-
-              <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">User ID</p>
-                <input
-                  type="text"
-                  value={draft.id}
-                  readOnly
-                  className="mt-2 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text-muted)] outline-none"
-                />
-              </div>
-
-              {draft.role === "vtuber" ? (
-                <>
+                {draft.role === "vtuber" ? (
                   <div className="rounded-lg bg-[var(--brand-surface)] p-4">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Channel Name</p>
                     <input
@@ -445,21 +568,21 @@ export default function AccountPage() {
                       className="mt-2 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
                     />
                   </div>
-                  <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Bio</p>
-                    <textarea
-                      value={draft.bio ?? ""}
-                      onChange={(event) => {
-                        setDraft((prev) => (prev ? { ...prev, bio: event.target.value } : prev));
-                        setHasChanges(true);
-                      }}
-                      rows={4}
-                      className="mt-2 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 py-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
-                    />
-                  </div>
-                </>
-              ) : null}
-            </form>
+                ) : null}
+
+                <div className="rounded-lg bg-[var(--brand-surface)] p-4">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">紹介文</p>
+                  <textarea
+                    value={draft.bio ?? ""}
+                    onChange={(event) => {
+                      setDraft((prev) => (prev ? { ...prev, bio: event.target.value } : prev));
+                      setHasChanges(true);
+                    }}
+                    rows={6}
+                    className="mt-2 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 py-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
+                  />
+                </div>
+              </form>
             </SectionCard>
           ) : null}
 
