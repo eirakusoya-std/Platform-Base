@@ -213,7 +213,7 @@ export default function ChannelPage() {
         </aside>
 
         <section className="min-w-0 px-4 py-6 lg:px-8">
-          <div className="mx-auto max-w-[1020px]">
+          <div className="mx-auto max-w-[1400px]">
             {activeView === "profile" ? (
               <div>
                 <h1 className="text-2xl font-bold">{tx("プロフィール管理", "Profile Settings")}</h1>
@@ -221,50 +221,104 @@ export default function ChannelPage() {
                   {tx("チャンネルの公開情報を編集できます。", "Edit your channel public profile.")}
                 </p>
 
-                <form onSubmit={saveProfile} className="mt-5 space-y-4">
-                  <Card tone="subtle" className="p-4">
-                    <FieldLabel>{tx("ヘッダー画像", "Header Image")}</FieldLabel>
-                    <div className="mt-3 overflow-hidden rounded-[var(--ui-radius-md)] bg-[var(--brand-surface)]">
-                      {draft.headerUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={draft.headerUrl} alt={tx("ヘッダー画像", "Header Image")} className="h-36 w-full object-cover" />
-                      ) : (
-                        <div className="grid h-36 w-full place-items-center bg-[var(--brand-surface)] text-sm font-semibold text-[var(--brand-text-muted)]">
-                          {tx("ヘッダー画像なし", "No header image")}
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
-                        {tx("画像をアップロード", "Upload image")}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleHeaderFileChange(e.target.files?.[0] ?? null)}
+                <form onSubmit={saveProfile} className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+                  <div className="space-y-4">
+                    <Card tone="subtle" className="p-4">
+                      <label className="block">
+                        <FieldLabel>{tx("表示名", "Display Name")}</FieldLabel>
+                        <TextInput
+                          value={draft.name}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
+                          className="mt-1"
                         />
                       </label>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setDraft((prev) => ({ ...prev, headerUrl: "" }))}>
-                        {tx("削除", "Remove")}
+
+                      <label className="mt-4 block">
+                        <FieldLabel>{tx("チャンネル名", "Channel Name")}</FieldLabel>
+                        <TextInput
+                          value={draft.channelName}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, channelName: e.target.value }))}
+                          className="mt-1"
+                        />
+                      </label>
+
+                      <label className="mt-4 block">
+                        <FieldLabel>{tx("紹介文", "Introduction")}</FieldLabel>
+                        <TextArea
+                          value={draft.bio}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, bio: e.target.value }))}
+                          rows={7}
+                          className="mt-1"
+                        />
+                      </label>
+                    </Card>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="submit" disabled={saving} variant="primary" size="md">
+                        {saving ? tx("保存中...", "Saving...") : tx("保存", "Save")}
+                      </Button>
+                      <Button type="button" onClick={resetProfile} variant="ghost" size="md">
+                        {tx("リセット", "Reset")}
                       </Button>
                     </div>
-                    <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">{tx("推奨: 16:5以上の横長画像 / 4MB以下", "Recommended: wide image (16:5+), up to 4MB")}</p>
-                  </Card>
 
-                  <Card tone="subtle" className="p-4">
-                    <FieldLabel>{tx("チャンネルアイコン", "Channel Icon")}</FieldLabel>
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="h-14 w-14 overflow-hidden rounded-full bg-[var(--brand-surface)]">
-                        {draft.avatarUrl ? (
+                    {message ? <p className="text-sm text-[var(--brand-secondary)]">{message}</p> : null}
+                    {error ? <p className="text-sm text-[var(--brand-accent)]">{error}</p> : null}
+                  </div>
+
+                  <div className="space-y-4">
+                    <Card tone="subtle" className="p-0 overflow-hidden">
+                      <div className="relative">
+                        {draft.headerUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={draft.avatarUrl} alt={tx("チャンネルアイコン", "Channel Icon")} className="h-full w-full object-cover" />
+                          <img src={draft.headerUrl} alt={tx("ヘッダー画像", "Header Image")} className="h-40 w-full object-cover" />
                         ) : (
-                          <div className="grid h-full w-full place-items-center text-lg font-bold text-[var(--brand-primary)]">
-                            {(draft.channelName || draft.name || "A").slice(0, 1).toUpperCase()}
+                          <div className="grid h-40 w-full place-items-center bg-[var(--brand-surface)] text-sm font-semibold text-[var(--brand-text-muted)]">
+                            {tx("ヘッダー画像なし", "No header image")}
                           </div>
                         )}
+                        <div className="absolute -bottom-8 left-4 h-16 w-16 overflow-hidden rounded-full border-2 border-[var(--brand-surface-soft)] bg-[var(--brand-surface)]">
+                          {draft.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={draft.avatarUrl} alt={tx("チャンネルアイコン", "Channel Icon")} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="grid h-full w-full place-items-center text-lg font-bold text-[var(--brand-primary)]">
+                              {(draft.channelName || draft.name || "A").slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
+                      <div className="p-4 pt-10">
+                        <p className="text-base font-semibold text-[var(--brand-text)]">{draft.channelName || tx("チャンネル名未設定", "No channel name")}</p>
+                        <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{draft.name || tx("表示名未設定", "No display name")}</p>
+                        <p className="mt-3 text-xs leading-5 text-[var(--brand-text-muted)]">
+                          {draft.bio || tx("紹介文が未設定です。", "No introduction yet.")}
+                        </p>
+                      </div>
+                    </Card>
+
+                    <Card tone="subtle" className="p-4">
+                      <FieldLabel>{tx("ヘッダー画像", "Header Image")}</FieldLabel>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
+                          {tx("画像をアップロード", "Upload image")}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleHeaderFileChange(e.target.files?.[0] ?? null)}
+                          />
+                        </label>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setDraft((prev) => ({ ...prev, headerUrl: "" }))}>
+                          {tx("削除", "Remove")}
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">{tx("推奨: 16:5以上の横長画像 / 4MB以下", "Recommended: wide image (16:5+), up to 4MB")}</p>
+                    </Card>
+
+                    <Card tone="subtle" className="p-4">
+                      <FieldLabel>{tx("プロフィール画像", "Profile Image")}</FieldLabel>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
                         <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
                           {tx("画像をアップロード", "Upload image")}
                           <input
@@ -274,53 +328,13 @@ export default function ChannelPage() {
                             onChange={(e) => handleAvatarFileChange(e.target.files?.[0] ?? null)}
                           />
                         </label>
-                        <Button type="button" variant="ghost" size="sm" className="ml-2" onClick={() => setDraft((prev) => ({ ...prev, avatarUrl: "" }))}>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setDraft((prev) => ({ ...prev, avatarUrl: "" }))}>
                           {tx("削除", "Remove")}
                         </Button>
-                        <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">{tx("PNG/JPG/WebP・2MB以下", "PNG/JPG/WebP, up to 2MB")}</p>
                       </div>
-                    </div>
-                  </Card>
-
-                  <label className="block">
-                    <FieldLabel>{tx("表示名", "Display Name")}</FieldLabel>
-                    <TextInput
-                      value={draft.name}
-                      onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
-                      className="mt-1"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <FieldLabel>{tx("チャンネル名", "Channel Name")}</FieldLabel>
-                    <TextInput
-                      value={draft.channelName}
-                      onChange={(e) => setDraft((prev) => ({ ...prev, channelName: e.target.value }))}
-                      className="mt-1"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <FieldLabel>{tx("紹介文", "Bio")}</FieldLabel>
-                    <TextArea
-                      value={draft.bio}
-                      onChange={(e) => setDraft((prev) => ({ ...prev, bio: e.target.value }))}
-                      rows={5}
-                      className="mt-1"
-                    />
-                  </label>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button type="submit" disabled={saving} variant="primary" size="md">
-                      {saving ? tx("保存中...", "Saving...") : tx("保存", "Save")}
-                    </Button>
-                    <Button type="button" onClick={resetProfile} variant="ghost" size="md">
-                      {tx("リセット", "Reset")}
-                    </Button>
+                      <p className="mt-2 text-[11px] text-[var(--brand-text-muted)]">{tx("PNG/JPG/WebP・2MB以下", "PNG/JPG/WebP, up to 2MB")}</p>
+                    </Card>
                   </div>
-
-                  {message ? <p className="text-sm text-[var(--brand-secondary)]">{message}</p> : null}
-                  {error ? <p className="text-sm text-[var(--brand-accent)]">{error}</p> : null}
                 </form>
               </div>
             ) : (
