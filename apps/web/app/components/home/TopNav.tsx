@@ -3,7 +3,7 @@
 import { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { CalendarDaysIcon, HomeIcon, RectangleStackIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import { AuthProfileControl } from "../auth/AuthProfileControl";
 import { useI18n } from "../../lib/i18n";
@@ -28,9 +28,10 @@ type TopNavProps = {
 };
 
 export function TopNav({ mode = "default" }: TopNavProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const { locale, setLocale, tx } = useI18n();
-  const { isVtuber } = useUserSession();
+  const { isVtuber, user } = useUserSession();
   const isStudioMode = mode === "studio";
   const navItems: NavItem[] = isVtuber
     ? [
@@ -123,13 +124,25 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                 </Link>
               )}
               {!isStudioMode && isVtuber && (
-                <Link
-                  href="/studio/pre-live"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!user?.phoneVerifiedAt) {
+                      window.alert(
+                        tx(
+                          "電話番号認証が完了していません。アカウント設定で電話番号を認証してから配信を作成してください。",
+                          "Phone verification is not complete. Please verify your phone in Account Settings before creating a stream.",
+                        ),
+                      );
+                      return;
+                    }
+                    router.push("/studio/pre-live");
+                  }}
                   className={`hidden shadow-[var(--ui-shadow-1)] sm:inline-flex ${buttonClassName({ variant: "primary", size: "md" })}`}
                 >
                   <VideoCameraIcon className="h-5 w-5" aria-hidden />
                   <span>{tx("配信を作成", "Create Stream")}</span>
-                </Link>
+                </button>
               )}
               <div>
                 <AuthProfileControl />

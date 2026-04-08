@@ -77,6 +77,11 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneVerificationRequested, setPhoneVerificationRequested] = useState(false);
+  const [devPhoneCode, setDevPhoneCode] = useState<string | null>(null);
+  const [phoneCodeInput, setPhoneCodeInput] = useState("");
+  const [phoneVerifiedInSignup, setPhoneVerifiedInSignup] = useState(false);
+  const [phoneVerificationSkipped, setPhoneVerificationSkipped] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -96,6 +101,16 @@ export default function SignupPage() {
       router.replace("/account");
     }
   }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    if (role === "listener") {
+      setPhoneVerificationRequested(false);
+      setDevPhoneCode(null);
+      setPhoneCodeInput("");
+      setPhoneVerifiedInSignup(false);
+      setPhoneVerificationSkipped(false);
+    }
+  }, [role]);
 
   if (isAuthenticated) return null;
 
@@ -124,6 +139,10 @@ export default function SignupPage() {
     }
     if (role === "vtuber" && !phoneNumber.trim()) {
       setError("VTuber登録には電話番号の入力が必要です。");
+      return;
+    }
+    if (role === "vtuber" && !phoneVerifiedInSignup && !phoneVerificationSkipped) {
+      setError("電話番号を認証するか、スキップを選択してください。");
       return;
     }
     setStep(3);
@@ -161,6 +180,9 @@ export default function SignupPage() {
         privacyAccepted,
       };
       await postJson("/api/auth/signup", payload);
+      if (role === "vtuber" && phoneVerifiedInSignup) {
+        await postJson("/api/account/verify/phone/confirm", { code: phoneCodeInput || "000000" });
+      }
       await refreshSession();
       router.push(redirectTo ?? "/");
     } catch (caughtError) {
@@ -181,6 +203,33 @@ export default function SignupPage() {
       return;
     }
     window.location.href = `/api/auth/google?role=${role}`;
+  };
+
+  const handleRequestPhoneCode = () => {
+    setError(null);
+    if (!phoneNumber.trim()) {
+      setError("先に電話番号を入力してください。");
+      return;
+    }
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setDevPhoneCode(code);
+    setPhoneVerificationRequested(true);
+    setPhoneVerifiedInSignup(false);
+    setPhoneVerificationSkipped(false);
+  };
+
+  const handleConfirmPhone = () => {
+    setError(null);
+    if (!phoneVerificationRequested) {
+      setError("先にコード送信を行ってください。");
+      return;
+    }
+    if (!/^\d+$/.test(phoneCodeInput.trim())) {
+      setError("数字の確認コードを入力してください。");
+      return;
+    }
+    setPhoneVerifiedInSignup(true);
+    setPhoneVerificationSkipped(false);
   };
 
   return (
@@ -256,13 +305,51 @@ export default function SignupPage() {
                 {role === "vtuber" ? (
                   <div className="sm:col-span-2">
                     <InputLabel label="Phone Number">
-                      <TextInput
-                        type="tel"
-                        placeholder="09012345678"
-                        value={phoneNumber}
-                        onChange={(event) => setPhoneNumber(event.target.value)}
-                      />
+                      <div className="flex gap-2">
+                        <TextInput
+                          type="tel"
+                          placeholder="09012345678"
+                          value={phoneNumber}
+                          onChange={(event) => setPhoneNumber(event.target.value)}
+                          className="flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleRequestPhoneCode}
+                          className="h-11 rounded-xl bg-[var(--brand-secondary)] px-4 text-xs font-semibold text-black"
+                        >
+                          コード送信
+                        </button>
+                      </div>
                     </InputLabel>
+                    <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.015] p-4">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Phone Verification</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <input
+                          value={phoneCodeInput}
+                          onChange={(event) => setPhoneCodeInput(event.target.value)}
+                          placeholder="確認コード"
+                          className="h-9 min-w-[120px] flex-1 rounded-lg border border-[var(--brand-text-muted)]/70 bg-[var(--brand-bg-900)] px-3 text-sm text-[var(--brand-text)] outline-none focus:border-[var(--brand-secondary)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleConfirmPhone}
+                          className="h-9 rounded-lg bg-[var(--brand-bg-900)] px-3 text-xs font-semibold text-[var(--brand-text)]"
+                        >
+                          認証する
+                        </button>
+                      </div>
+                      {devPhoneCode ? (
+                        <p className="mt-2 text-xs text-[var(--brand-secondary)]">開発用コード: {devPhoneCode}</p>
+                      ) : null}
+                      <p className="mt-2 text-xs text-[var(--brand-text-muted)]">
+                        {phoneVerifiedInSignup
+                          ? "認証済みです。"
+                          : phoneVerificationSkipped
+                            ? "認証をスキップして進行します。"
+                            : "認証するか、下のスキップで進めます。"}
+                      </p>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -312,6 +399,20 @@ export default function SignupPage() {
                 >
                   {submitting ? "WORKING..." : "次へ"}
                 </button>
+                {role === "vtuber" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhoneVerificationSkipped(true);
+                      setPhoneVerifiedInSignup(false);
+                      setError(null);
+                      setStep(3);
+                    }}
+                    className="sm:col-span-2 h-10 rounded-lg bg-[var(--brand-surface)] px-4 text-sm font-medium text-[var(--brand-text)]"
+                  >
+                    認証をスキップして次へ
+                  </button>
+                ) : null}
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
