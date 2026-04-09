@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronDownIcon, MicrophoneIcon, SpeakerWaveIcon } from "@heroicons/react/24/solid";
+import { ChevronDownIcon, MicrophoneIcon } from "@heroicons/react/24/solid";
 import { useI18n } from "../../lib/i18n";
 import { getStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
@@ -180,7 +180,6 @@ export default function PreJoinPage() {
  const streamRef = useRef<MediaStream | null>(null);
 
  const [micOn, setMicOn] = useState(true);
- const [speakerOn, setSpeakerOn] = useState(true);
  const [ready, setReady] = useState(false);
  const [errorMessage, setErrorMessage] = useState<string | null>(null);
  const [micLevel, setMicLevel] = useState(0);
@@ -272,7 +271,6 @@ export default function PreJoinPage() {
  const query = new URLSearchParams({
  role: "speaker",
  mic: micOn ? "1" : "0",
- speaker: speakerOn ? "1" : "0",
  ...(selectedAudioDeviceId ? { micDeviceId: selectedAudioDeviceId } : {}),
  }).toString();
  router.push(`/room/${roomId}?${query}`);
@@ -472,15 +470,7 @@ export default function PreJoinPage() {
  </div>
  )}
  </div>
- <button
- onClick={() => setSpeakerOn((prev) => !prev)}
- className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
- speakerOn ? "bg-[var(--brand-primary)] text-white" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
- }`}
- >
- <SpeakerWaveIcon className="h-5 w-5" aria-hidden />
- </button>
- </div>
+</div>
 
  {errorMessage && <p className="mt-4 rounded-xl bg-[var(--brand-accent)]/15 px-4 py-3 text-sm text-[var(--brand-accent)]">{errorMessage}</p>}
 

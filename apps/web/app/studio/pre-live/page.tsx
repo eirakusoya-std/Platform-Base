@@ -1,8 +1,8 @@
 "use client";
 
-import { ComponentType, SVGProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ComponentType, SVGProps, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownCircleIcon, ChatBubbleLeftRightIcon, ChevronDownIcon, MicrophoneIcon, RadioIcon, VideoCameraIcon, VideoCameraSlashIcon } from "@heroicons/react/24/solid";
+import { ChatBubbleLeftRightIcon, ChevronDownIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../components/home/TopNav";
 import { StudioProgress } from "../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../lib/cameraDevices";
@@ -12,6 +12,11 @@ import { useUserSession } from "../../lib/userSession";
 
 const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
 
+type NoticeItem = {
+  id: string;
+  text: string;
+};
+
 type CircleControlProps = {
   label?: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
@@ -19,13 +24,6 @@ type CircleControlProps = {
   slashedWhenOff?: boolean;
   on: boolean;
   onToggle: () => void;
-};
-
-type ChatItem = {
-  id: string;
-  user: string;
-  text: string;
-  mine?: boolean;
 };
 
 function CircleControl({ icon: Icon, offIcon: OffIcon, slashedWhenOff, on, onToggle }: CircleControlProps) {
@@ -63,7 +61,6 @@ export default function StudioPreLivePage() {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [chatOn, setChatOn] = useState(true);
-  const [recordOn, setRecordOn] = useState(true);
   const [creating, setCreating] = useState(false);
   const [publishMode, setPublishMode] = useState<"create_only" | "scheduled" | "go_live_now">("go_live_now");
   const [showPublishMenu, setShowPublishMenu] = useState(false);
@@ -77,13 +74,8 @@ export default function StudioPreLivePage() {
 
   const [speakerSlotsTotal, setSpeakerSlotsTotal] = useState(5);
   const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<"free" | "supporter" | "premium">("free");
-
   const [chatInput, setChatInput] = useState("");
-  const [chat, setChat] = useState<ChatItem[]>([
-    { id: "m1", user: "mod_nana", text: "配信前チェック中です。音量テスト歓迎です。" },
-    { id: "m2", user: "viewer_21", text: "待機しています！" },
-  ]);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [notices, setNotices] = useState<NoticeItem[]>([]);
 
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
@@ -93,9 +85,25 @@ export default function StudioPreLivePage() {
   const [showCamMenu, setShowCamMenu] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
-  const chatListRef = useRef<HTMLDivElement | null>(null);
-  const shouldAutoScrollRef = useRef(true);
   const streamRef = useRef<MediaStream | null>(null);
+
+  const clearResolvedWarnings = (next: { micOn?: boolean; camOn?: boolean; hasVideoDevice?: boolean }) => {
+    setStartWarnings((prev) =>
+      prev.filter((warning) => {
+        if ((warning.includes("マイク") || warning.includes("MIC")) && next.micOn) return false;
+        if ((warning.includes("カメラ") || warning.includes("CAM")) && next.camOn) return false;
+        if ((warning.includes("カメラソース") || warning.includes("camera source")) && next.hasVideoDevice) return false;
+        return true;
+      }),
+    );
+  };
+
+  const sendNotice = () => {
+    const text = chatInput.trim();
+    if (!text) return;
+    setNotices((prev) => [...prev, { id: crypto.randomUUID(), text }]);
+    setChatInput("");
+  };
 
   useEffect(() => {
     if (!hydrated) return;
@@ -183,9 +191,6 @@ export default function StudioPreLivePage() {
     const warnings: string[] = [];
     if (title.trim().length < 2) warnings.push(tx("タイトルを入力してください。", "Please enter a title."));
     if (!category) warnings.push(tx("カテゴリを選択してください。", "Choose a category."));
-    if (!micOn) warnings.push(tx("マイクをONにしてください。", "Turn MIC ON before continue."));
-    if (!camOn) warnings.push(tx("カメラをONにしてください。", "Turn CAM ON before continue."));
-    if (!selectedVideoDeviceId) warnings.push(tx("カメラソースを選択してください。", "Choose a camera source."));
     if (publishMode === "scheduled") {
       const parsed = new Date(scheduledAt);
       if (!scheduledAt || Number.isNaN(parsed.getTime())) {
@@ -249,47 +254,6 @@ export default function StudioPreLivePage() {
       setCreating(false);
     }
   };
-
-  const sendChat = () => {
-    const value = chatInput.trim();
-    if (!value) return;
-    setChat((prev) => [...prev, { id: `${Date.now()}`, user: "host", text: value, mine: true }]);
-    setChatInput("");
-  };
-
-  useEffect(() => {
-    const el = chatListRef.current;
-    if (!el) return;
-    if (!shouldAutoScrollRef.current) {
-      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      setShowScrollToBottom(distanceFromBottom >= 24);
-      return;
-    }
-    const raf = window.requestAnimationFrame(() => {
-      const target = chatListRef.current;
-      if (!target) return;
-      target.scrollTo({ top: target.scrollHeight, behavior: "auto" });
-      setShowScrollToBottom(false);
-    });
-    return () => window.cancelAnimationFrame(raf);
-  }, [chat]);
-
-  const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const el = chatListRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior });
-    shouldAutoScrollRef.current = true;
-    setShowScrollToBottom(false);
-  }, []);
-
-  const handleChatScroll = useCallback(() => {
-    const el = chatListRef.current;
-    if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const atBottom = distanceFromBottom < 24;
-    shouldAutoScrollRef.current = atBottom;
-    setShowScrollToBottom(!atBottom);
-  }, []);
 
   if (!hydrated || !isVtuber) return null;
 
@@ -377,7 +341,7 @@ export default function StudioPreLivePage() {
 
           <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
             <div
-              className="relative mx-auto max-w-[640px] overflow-hidden rounded-xl bg-[var(--brand-bg-900)]"
+              className="relative mx-auto max-w-[520px] overflow-hidden rounded-xl bg-[var(--brand-bg-900)]"
               style={{ aspectRatio: "16/9" }}
             >
               <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
@@ -391,7 +355,17 @@ export default function StudioPreLivePage() {
 
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-                <CircleControl label="MIC" icon={MicrophoneIcon} slashedWhenOff on={micOn} onToggle={() => setMicOn((v) => !v)} />
+                <CircleControl
+                  label="MIC"
+                  icon={MicrophoneIcon}
+                  slashedWhenOff
+                  on={micOn}
+                  onToggle={() => {
+                    const next = !micOn;
+                    setMicOn(next);
+                    clearResolvedWarnings({ micOn: next });
+                  }}
+                />
                 <button
                   type="button"
                   onClick={() => {
@@ -425,7 +399,17 @@ export default function StudioPreLivePage() {
                 )}
               </div>
               <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-                <CircleControl label="CAM" icon={VideoCameraIcon} offIcon={VideoCameraSlashIcon} on={camOn} onToggle={() => setCamOn((v) => !v)} />
+                <CircleControl
+                  label="CAM"
+                  icon={VideoCameraIcon}
+                  offIcon={VideoCameraSlashIcon}
+                  on={camOn}
+                  onToggle={() => {
+                    const next = !camOn;
+                    setCamOn(next);
+                    clearResolvedWarnings({ camOn: next });
+                  }}
+                />
                 <button
                   type="button"
                   onClick={() => {
@@ -444,6 +428,7 @@ export default function StudioPreLivePage() {
                         type="button"
                         onClick={() => {
                           setSelectedVideoDeviceId(device.deviceId);
+                          clearResolvedWarnings({ hasVideoDevice: true });
                           setShowCamMenu(false);
                         }}
                         className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
@@ -459,95 +444,103 @@ export default function StudioPreLivePage() {
                 )}
               </div>
               <CircleControl label="CHAT" icon={ChatBubbleLeftRightIcon} slashedWhenOff on={chatOn} onToggle={() => setChatOn((v) => !v)} />
-              <CircleControl label="REC" icon={RadioIcon} slashedWhenOff on={recordOn} onToggle={() => setRecordOn((v) => !v)} />
             </div>
           </section>
 
           <section className="mt-3 min-h-0 flex-1 overflow-hidden rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
             <h2 className="mb-2 text-xs font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("配信設定", "Stream Settings")}</h2>
-            <div className="h-full space-y-3 overflow-y-auto pr-1">
-              <label className="grid gap-1 text-sm">
-                <span className="text-[var(--brand-text-muted)]">{tx("タイトル", "Title")}</span>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none" />
-              </label>
-
-              <label className="grid gap-1 text-sm">
-                <span className="text-[var(--brand-text-muted)]">{tx("カテゴリ", "Category")}</span>
-                <select value={category} onChange={(e) => setCategory(e.target.value as (typeof CATEGORY_OPTIONS)[number])} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
-                  {CATEGORY_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs text-[var(--brand-text-muted)]">
-                {tx("マイク:", "Mic:")} {selectedAudioLabel} / {tx("カメラ:", "Camera:")} {selectedVideoLabel}
-              </div>
-
-              {!usingVirtualCamera && (
-                <div className="rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
-                  {tx("仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。", "A non-virtual camera is selected. Virtual camera is recommended.")}
-                </div>
-              )}
-
-              <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm">
-                <p className="text-[11px] text-[var(--brand-text-muted)]">{tx("公開方法", "Publish Mode")}</p>
-                <p className="font-semibold text-[var(--brand-text)]">
-                  {publishMode === "go_live_now"
-                    ? tx("今すぐ開始", "Start now")
-                    : publishMode === "scheduled"
-                      ? tx("予約配信", "Schedule stream")
-                      : tx("枠だけ作成", "Create room only")}
-                </p>
-              </div>
-
-              {publishMode === "scheduled" && (
-                <label className="grid gap-1 text-sm">
-                  <span className="text-[var(--brand-text-muted)]">{tx("開始時刻", "Start time")}</span>
-                  <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
-                  />
-                </label>
-              )}
-
-              <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
-                <p className="mb-2 text-[11px] font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー枠設定", "Speaker Slot Settings")}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="grid gap-1 text-xs">
-                    <span className="text-[var(--brand-text-muted)]">{tx("最大人数", "Max speakers")}</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={speakerSlotsTotal}
-                      onChange={(e) => setSpeakerSlotsTotal(Math.max(1, Math.min(10, Number(e.target.value))))}
-                      className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
-                    />
+            <div className="h-full overflow-y-auto pr-1">
+              <div className="rounded-xl bg-[var(--brand-bg-900)]/28 p-3">
+                <div className="grid auto-rows-max content-start gap-3 pb-3 lg:grid-cols-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-[var(--brand-text-muted)]">{tx("タイトル", "Title")}</span>
+                    <input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none" />
                   </label>
-                  <label className="grid gap-1 text-xs">
-                    <span className="text-[var(--brand-text-muted)]">{tx("必要プラン", "Required plan")}</span>
-                    <select
-                      value={speakerRequiredPlan}
-                      onChange={(e) => setSpeakerRequiredPlan(e.target.value as "free" | "supporter" | "premium")}
-                      className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
-                    >
-                      <option value="free">{tx("なし", "None (free)")}</option>
-                      <option value="supporter">Supporter</option>
-                      <option value="premium">Premium</option>
+
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-[var(--brand-text-muted)]">{tx("カテゴリ", "Category")}</span>
+                    <select value={category} onChange={(e) => setCategory(e.target.value as (typeof CATEGORY_OPTIONS)[number])} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
+                      {CATEGORY_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
                     </select>
                   </label>
+
+                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs text-[var(--brand-text-muted)] lg:col-span-2">
+                    {tx("マイク:", "Mic:")} {selectedAudioLabel} / {tx("カメラ:", "Camera:")} {selectedVideoLabel}
+                  </div>
+
+                  {!usingVirtualCamera && (
+                    <div className="rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)] lg:col-span-2">
+                      {tx("仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。", "A non-virtual camera is selected. Virtual camera is recommended.")}
+                    </div>
+                  )}
+
+                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm">
+                    <p className="text-[11px] text-[var(--brand-text-muted)]">{tx("公開方法", "Publish Mode")}</p>
+                    <p className="font-semibold text-[var(--brand-text)]">
+                      {publishMode === "go_live_now"
+                        ? tx("今すぐ開始", "Start now")
+                        : publishMode === "scheduled"
+                          ? tx("予約配信", "Schedule stream")
+                          : tx("枠だけ作成", "Create room only")}
+                    </p>
+                  </div>
+
+                  {publishMode === "scheduled" && (
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-[var(--brand-text-muted)]">{tx("開始時刻", "Start time")}</span>
+                      <input
+                        type="datetime-local"
+                        value={scheduledAt}
+                        onChange={(e) => setScheduledAt(e.target.value)}
+                        className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
+                      />
+                    </label>
+                  )}
+
+                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 lg:col-span-2">
+                    <p className="mb-2 text-[11px] font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー枠設定", "Speaker Slot Settings")}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="grid gap-1 text-xs">
+                        <span className="text-[var(--brand-text-muted)]">{tx("最大人数", "Max speakers")}</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={speakerSlotsTotal}
+                          onChange={(e) => setSpeakerSlotsTotal(Math.max(1, Math.min(10, Number(e.target.value))))}
+                          className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs">
+                        <span className="text-[var(--brand-text-muted)]">{tx("必要プラン", "Required plan")}</span>
+                        <select
+                          value={speakerRequiredPlan}
+                          onChange={(e) => setSpeakerRequiredPlan(e.target.value as "free" | "supporter" | "premium")}
+                          className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
+                        >
+                          <option value="free">{tx("なし", "None (free)")}</option>
+                          <option value="supporter">Supporter</option>
+                          <option value="premium">Premium</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+
+                  <label className="grid gap-1 text-sm lg:col-span-2">
+                    <span className="text-[var(--brand-text-muted)]">{tx("概要", "Description")}</span>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={4}
+                      className="min-h-[120px] resize-none rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
+                    />
+                  </label>
                 </div>
               </div>
-
-              <label className="grid gap-1 text-sm">
-                <span className="text-[var(--brand-text-muted)]">{tx("概要", "Description")}</span>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none" />
-              </label>
             </div>
           </section>
         </section>
@@ -555,32 +548,28 @@ export default function StudioPreLivePage() {
         <aside className="flex min-h-0 flex-col overflow-hidden">
           <section className="flex h-full min-h-[220px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
             <div className="border-b border-black/20 px-3 py-2">
-              <p className="text-sm font-semibold">{tx("配信者チャット", "Host Chat")}</p>
+              <p className="text-sm font-semibold">{tx("ライブチャット", "Live Chat")}</p>
             </div>
-            <div className="relative min-h-0 flex-1">
-              <div ref={chatListRef} onScroll={handleChatScroll} className="h-full space-y-2 overflow-y-auto px-3 py-3">
-                {chat.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`rounded-lg px-3 py-2 ${m.mine ? "ml-6 bg-[var(--brand-primary)]/20" : "mr-6 bg-[var(--brand-bg-900)]"}`}
-                  >
-                    <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{m.user}</p>
-                    <p className="text-sm text-[var(--brand-text)]">{m.text}</p>
-                  </div>
-                ))}
-              </div>
-              {showScrollToBottom && (
-                <button
-                  type="button"
-                  onClick={() => scrollChatToBottom("smooth")}
-                  aria-label={tx("最新コメントへ移動", "Jump to latest comments")}
-                  className="absolute bottom-3 right-3 z-10 rounded-full bg-[var(--brand-primary)] px-3 py-2 text-sm font-bold text-white shadow-lg shadow-black/25"
-                >
-                  <ArrowDownCircleIcon className="h-5 w-5" aria-hidden />
-                </button>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+              {notices.length === 0 ? (
+                <div className="flex h-full min-h-[240px] w-full flex-col items-center justify-center rounded-xl bg-[var(--brand-bg-900)] px-6 text-center">
+                  <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("事前連絡を送れます", "You can send pre-live notices")}</p>
+                  <p className="mt-2 text-xs text-[var(--brand-text-muted)]">
+                    {tx("視聴者からのコメントはまだ届きません。配信前の案内だけここに残せます。", "Viewer messages do not arrive yet. You can leave pre-live announcements here.")}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {notices.map((notice) => (
+                    <div key={notice.id} className="ml-6 rounded-lg bg-[var(--brand-primary)]/20 px-3 py-2">
+                      <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">host</p>
+                      <p className="text-sm text-[var(--brand-text)]">{notice.text}</p>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            <div className="border-t border-black/20 p-3">
+            <div className="border-t border-black/20 px-3 py-3">
               <div className="flex gap-2">
                 <input
                   value={chatInput}
@@ -588,12 +577,12 @@ export default function StudioPreLivePage() {
                   onKeyDown={(e) => {
                     if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return;
                     e.preventDefault();
-                    sendChat();
+                    sendNotice();
                   }}
-                  placeholder={tx("告知・案内を入力", "Type announcement")}
+                  placeholder={tx("事前連絡を入力", "Type a pre-live notice")}
                   className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
                 />
-                <button onClick={sendChat} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white">
+                <button onClick={sendNotice} className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white">
                   {tx("送信", "Send")}
                 </button>
               </div>
