@@ -1,13 +1,13 @@
 "use client";
 
-import { LiveSession, ModalSession } from "../types";
+import { LiveSession } from "../types";
 import { getTypeInfo } from "../utils";
 import { useI18n } from "../../../lib/i18n";
 import { EyeIcon, UsersIcon } from "@heroicons/react/24/outline";
 
 type NowLiveSectionProps = {
  sessions: LiveSession[];
- onOpenSession: (session: ModalSession) => void;
+ onOpenSession: (sessionId: string) => void;
  onOpenChannel: (hostUserId: string) => void;
 };
 
@@ -40,24 +40,7 @@ export function NowLiveSection({ sessions, onOpenSession, onOpenChannel }: NowLi
             return (
               <div
                 key={session.id}
-                className="group cursor-pointer overflow-hidden rounded-xl bg-[var(--brand-surface)] shadow-lg shadow-black/25 transition-all hover:-translate-y-0.5 hover:shadow-xl"
-                onClick={() =>
-                  onOpenSession({
-                    id: session.id,
-                    vtuber: session.vtuber,
-                    title: session.title,
-                    thumbnail: session.thumbnail,
-                    startsIn: "LIVE配信中",
-                    slotsLeft: session.slotsLeft,
-                    description: session.description,
-                    duration: session.duration,
-                    participationType: session.participationType,
-                    isSubscribed: session.isSubscribed,
-                    streamStatus: "live",
-                    reservationRequired: session.reservationRequired,
-                    userHistory: session.userHistory,
-                  })
-                }
+                className="group overflow-hidden rounded-xl bg-[var(--brand-surface)] shadow-lg shadow-black/25 transition-all hover:-translate-y-0.5 hover:shadow-xl"
               >
                 <div className="overflow-hidden" style={{ aspectRatio: "16/9" }}>
                   <img
@@ -113,7 +96,7 @@ export function NowLiveSection({ sessions, onOpenSession, onOpenChannel }: NowLi
                     <div className="mb-3 rounded-lg bg-[var(--brand-primary)]/15 px-3 py-2">
                       <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--brand-primary)]">
                         <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand-primary)]" />
-                        {session.slotsLeft}枠 空きあり - 今すぐ参加可能
+                        {session.slotsLeft}枠 空きあり - 詳細で参加方法を確認
                       </p>
                     </div>
                   ) : (
@@ -142,6 +125,14 @@ export function NowLiveSection({ sessions, onOpenSession, onOpenChannel }: NowLi
                       <span className="text-xs font-bold text-[var(--brand-primary)]">{session.userHistory.totalParticipations}{tx("回", "")}</span>
                     </div>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenSession(session.id)}
+                    className="mt-3 w-full rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-primary-light)]"
+                  >
+                    {tx("詳細を見る", "View details")}
+                  </button>
                 </div>
               </div>
             );

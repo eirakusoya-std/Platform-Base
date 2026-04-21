@@ -1,15 +1,15 @@
 "use client";
 
 import { SlotBar } from "../SlotBar";
-import { ModalSession, StartingSoonSession } from "../types";
-import { formatCountdown, formatCountdownLabel, getTypeInfo } from "../utils";
+import { StartingSoonSession } from "../types";
+import { formatCountdown, getTypeInfo } from "../utils";
 import { useI18n } from "../../../lib/i18n";
 import { ClockIcon, UsersIcon } from "@heroicons/react/24/outline";
 
 type StartingSoonSectionProps = {
  sessions: StartingSoonSession[];
  countdown: Record<string, number>;
- onOpenSession: (session: ModalSession) => void;
+ onOpenSession: (sessionId: string) => void;
  onOpenChannel: (hostUserId: string) => void;
 };
 
@@ -40,29 +40,10 @@ export function StartingSoonSection({
             const seconds = countdown[session.id] ?? session.startsInSeconds;
             const typeInfo = getTypeInfo(session.participationType);
             const urgent = seconds < 20 * 60;
-            const reserved = false;
-
             return (
               <div
                 key={session.id}
-                className="group cursor-pointer overflow-hidden rounded-xl bg-[var(--brand-surface)] shadow-lg shadow-black/25 transition-all hover:-translate-y-0.5 hover:shadow-xl"
-                onClick={() =>
-                  onOpenSession({
-                    id: session.id,
-                    vtuber: session.vtuber,
-                    title: session.title,
-                    thumbnail: session.thumbnail,
-                    startsIn: formatCountdownLabel(seconds),
-                    slotsLeft: session.slotsLeft,
-                    description: session.description,
-                    duration: session.duration,
-                    participationType: session.participationType === "Members-only" ? "Lottery" : session.participationType,
-                    isSubscribed: session.isSubscribed,
-                    streamStatus: "prelive",
-                    reservationRequired: session.reservationRequired,
-                    reserved,
-                  })
-                }
+                className="group overflow-hidden rounded-xl bg-[var(--brand-surface)] shadow-lg shadow-black/25 transition-all hover:-translate-y-0.5 hover:shadow-xl"
               >
                 <div className="aspect-video overflow-hidden">
                   <img
@@ -127,6 +108,14 @@ export function StartingSoonSection({
                       {session.slotsLeft}/{session.slotsTotal}
                     </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenSession(session.id)}
+                    className="mt-3 w-full rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-primary-light)]"
+                  >
+                    {tx("詳細を見る", "View details")}
+                  </button>
                 </div>
               </div>
             );
