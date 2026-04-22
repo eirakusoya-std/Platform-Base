@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
 :root {
+  --font-latin: "Afacad Flux", "Afacad", "Public Sans", "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-jp: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴシック", "Yu Gothic", "YuGothic", "Noto Sans JP", "Meiryo", sans-serif;
+  --font-ui: var(--font-jp);
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
   --bg: #1a1d25;
   --surface: color-mix(in srgb, var(--bg) 88%, #ffffff 12%);
   --primary: #7c6ae6;
@@ -38,7 +46,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Public Sans", sans-serif;
+  --font-sans: var(--font-ui);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -52,7 +60,38 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Public Sans", "Yu Gothic", "YuGothic", "Noto Sans JP", sans-serif;
+  font-family: var(--font-ui);
+  font-weight: var(--font-weight-semibold);
+}
+
+html:lang(ja) {
+  --font-ui: var(--font-jp);
+}
+
+html:lang(en) {
+  --font-ui: var(--font-latin);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* Enforce baseline typography: W6(SemiBold)+ across UI text */
+.font-thin,
+.font-extralight,
+.font-light,
+.font-normal,
+.font-medium {
+  font-weight: var(--font-weight-semibold) !important;
+}
+
+/* Keep input prompts lightweight for readability */
+input::placeholder,
+textarea::placeholder {
+  font-weight: var(--font-weight-regular);
 }
 
 .ui-card {
