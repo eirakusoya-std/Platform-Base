@@ -4,13 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Footer } from "./components/home/Footer";
 import { SearchFilterBar } from "./components/home/SearchFilterBar";
-import { SessionDetailModal } from "./components/home/SessionDetailModal";
 import { TopNav } from "./components/home/TopNav";
 import { TAGS } from "./components/home/data";
 import { NowLiveSection } from "./components/home/sections/NowLiveSection";
 import { StartingSoonSection } from "./components/home/sections/StartingSoonSection";
 import { UpcomingTicker } from "./components/home/UpcomingTicker";
-import { LiveSession, ModalSession, StartingSoonSession } from "./components/home/types";
+import { LiveSession, StartingSoonSession } from "./components/home/types";
 import { matchesFilter } from "./components/home/utils";
 import { listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "./lib/streamSessions";
 
@@ -24,7 +23,6 @@ export default function HomePage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [selectedSession, setSelectedSession] = useState<ModalSession | null>(null);
   const [dynamicSessions, setDynamicSessions] = useState<StreamSession[]>([]);
   const [countdown, setCountdown] = useState<Record<string, number>>({});
 
@@ -162,20 +160,18 @@ export default function HomePage() {
         <StartingSoonSection
           sessions={filteredStartingSoon}
           countdown={mergedCountdown}
-          onOpenSession={setSelectedSession}
+          onOpenSession={goPreJoin}
           onOpenChannel={goChannel}
         />
 
         <NowLiveSection
           sessions={filteredLive}
-          onOpenSession={setSelectedSession}
+          onOpenSession={goPreJoin}
           onOpenChannel={goChannel}
         />
       </div>
 
       <Footer />
-
-      {selectedSession && <SessionDetailModal session={selectedSession} onClose={() => setSelectedSession(null)} onParticipate={(s) => goPreJoin(s.id)} />}
     </div>
   );
 }

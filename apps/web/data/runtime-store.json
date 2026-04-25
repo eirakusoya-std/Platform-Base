@@ -1,6 +1,20 @@
 {
   "users": [
     {
+      "id": "vtuber-mnqypyhl-7a7c97",
+      "name": "バナージ8",
+      "role": "vtuber",
+      "email": "soredemo@banaji8",
+      "authProvider": "password",
+      "createdAt": "2026-04-09T04:14:02.454Z",
+      "lastLoginAt": "2026-04-09T05:38:59.308Z",
+      "phoneNumber": "309183041",
+      "phoneVerifiedAt": "2026-04-09T04:14:02.555Z",
+      "termsAcceptedAt": "2026-04-09T04:14:02.454Z",
+      "privacyAcceptedAt": "2026-04-09T04:14:02.454Z",
+      "passwordHash": "db708e00829445940936c44bae37ad6be0904e5952433805d3a840932d080efc"
+    },
+    {
       "id": "vtuber-mnpdukzl-d34a75",
       "name": "バナージ７",
       "role": "vtuber",
@@ -184,6 +198,28 @@
   ],
   "streamSessions": [
     {
+      "sessionId": "session-mnr1ricf-ab1d95",
+      "hostUserId": "vtuber-mnqypyhl-7a7c97",
+      "title": "ああああ",
+      "status": "prelive",
+      "createdAt": "2026-04-09T05:39:13.695Z",
+      "startsAt": "2026-04-09T05:39:13.683Z",
+      "description": "",
+      "category": "英語",
+      "thumbnail": "/image/thumbnail/thumbnail_5.png",
+      "hostName": "バナージ8",
+      "participationType": "First-come",
+      "requiredPlan": "free",
+      "reservationRequired": false,
+      "slotsTotal": 50,
+      "slotsLeft": 50,
+      "speakerSlotsTotal": 5,
+      "speakerSlotsLeft": 3,
+      "speakerRequiredPlan": "free",
+      "preferredVideoDeviceId": "bb06557f346cd0462930da652bde38d7ac7621181689bfbebe83cd319b58d08b",
+      "preferredVideoLabel": "OBS Virtual Camera"
+    },
+    {
       "sessionId": "session-mmn54q08-34afe1",
       "hostUserId": "vtuber-mmn4eq2p-0f8483",
       "title": "【英会話参加型】推しと距離を縮めるリアルトーク",
@@ -273,6 +309,24 @@
     }
   ],
   "reservations": [
+    {
+      "reservationId": "reservation-mnremhy5-9063b7",
+      "sessionId": "session-mnr1ricf-ab1d95",
+      "userId": "vtuber-mn7b1fp7-8bf720",
+      "userName": "バナージ2",
+      "createdAt": "2026-04-09T11:39:14.909Z",
+      "status": "reserved",
+      "type": "speaker"
+    },
+    {
+      "reservationId": "reservation-mnrbu7dq-9d62db",
+      "sessionId": "session-mnr1ricf-ab1d95",
+      "userId": "vtuber-mnqypyhl-7a7c97",
+      "userName": "バナージ8",
+      "createdAt": "2026-04-09T10:21:15.614Z",
+      "status": "reserved",
+      "type": "speaker"
+    },
     {
       "reservationId": "reservation-mn7g75wy-f57ece",
       "sessionId": "session-mn7b1v93-bb397b",

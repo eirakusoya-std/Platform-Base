@@ -7,7 +7,6 @@ import {
   ArrowDownCircleIcon,
   ChatBubbleLeftRightIcon,
   ChevronDownIcon,
-  LinkIcon,
   MicrophoneIcon,
   PaperAirplaneIcon,
   PlayIcon,
@@ -114,7 +113,6 @@ export default function StudioLiveSessionPage() {
   const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState(() => searchParams.get("micDeviceId") ?? "");
   const [showMicMenu, setShowMicMenu] = useState(false);
   const [showCamMenu, setShowCamMenu] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
@@ -124,6 +122,17 @@ export default function StudioLiveSessionPage() {
   const roomRef = useRef<Room | null>(null);
   const autoStartDoneRef = useRef(false);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
+
+  const clearResolvedWarnings = useCallback((next: { micOn?: boolean; camOn?: boolean; hasVideoDevice?: boolean }) => {
+    setStartWarnings((prev) =>
+      prev.filter((warning) => {
+        if ((warning.includes("マイク") || warning.includes("MIC")) && next.micOn) return false;
+        if ((warning.includes("カメラ") || warning.includes("CAM")) && next.camOn) return false;
+        if ((warning.includes("カメラソース") || warning.includes("camera source")) && next.hasVideoDevice) return false;
+        return true;
+      }),
+    );
+  }, []);
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -247,11 +256,6 @@ export default function StudioLiveSessionPage() {
     [audioDevices, selectedAudioDeviceId, tx],
   );
 
-  const participantLink = useMemo(() => {
-    if (!session || typeof window === "undefined") return "";
-    return `${window.location.origin}/join/${encodeURIComponent(session.sessionId)}`;
-  }, [session]);
-
   useEffect(() => {
     if (!session || !selectedVideoDeviceId) return;
     if (
@@ -350,6 +354,7 @@ export default function StudioLiveSessionPage() {
   const handleMicToggle = () => {
     const next = !micOn;
     setMicOn(next);
+    clearResolvedWarnings({ micOn: next });
     if (roomRef.current && connectionStatus === "live") {
       void roomRef.current.localParticipant.setMicrophoneEnabled(next);
     }
@@ -358,6 +363,7 @@ export default function StudioLiveSessionPage() {
   const handleCamToggle = () => {
     const next = !camOn;
     setCamOn(next);
+    clearResolvedWarnings({ camOn: next });
     if (roomRef.current && connectionStatus === "live") {
       void roomRef.current.localParticipant.setCameraEnabled(next);
     }
@@ -367,9 +373,7 @@ export default function StudioLiveSessionPage() {
     if (!session) return;
 
     const warnings: string[] = [];
-    if (!micOn) warnings.push(tx("マイクをONにしてください。", "Turn MIC ON before starting."));
-    if (!camOn) warnings.push(tx("カメラをONにしてください。", "Turn CAM ON before starting."));
-    if (!selectedVideoDeviceId) warnings.push(tx("カメラソースを選択してください。", "Choose a camera source."));
+    if (camOn && !selectedVideoDeviceId) warnings.push(tx("カメラソースを選択してください。", "Choose a camera source."));
     setStartWarnings(warnings);
     if (warnings.length > 0) return;
 
@@ -517,13 +521,6 @@ export default function StudioLiveSessionPage() {
     void setStreamSessionStatus(session.sessionId, "ended");
   };
 
-  const copyParticipantLink = async () => {
-    if (!participantLink) return;
-    await navigator.clipboard.writeText(participantLink);
-    setLinkCopied(true);
-    window.setTimeout(() => setLinkCopied(false), 1500);
-  };
-
   useEffect(() => {
     return () => {
       cleanupConnection();
@@ -536,7 +533,8 @@ export default function StudioLiveSessionPage() {
     if (!shouldAutoStart || autoStartDoneRef.current) return;
     if (notFound || !session) return;
     if (connectionStatus !== "idle") return;
-    if (!streamRef.current || !selectedVideoDeviceId || !micOn || !camOn) return;
+    if (!streamRef.current) return;
+    if (camOn && !selectedVideoDeviceId) return;
 
     autoStartDoneRef.current = true;
     const timer = window.setTimeout(() => {
@@ -580,23 +578,9 @@ export default function StudioLiveSessionPage() {
               <p className="line-clamp-1 text-xs text-[var(--brand-text-muted)]">{session.title}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={
-                  isLive
-                    ? stopBroadcast
-                    : () => {
-                        void startBroadcast();
-                      }
-                }
-                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-extrabold ${
-                  isLive
-                    ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
-                    : "bg-[var(--brand-primary)] text-white shadow-[0_10px_24px_rgba(124,106,230,0.4)]"
-                }`}
-              >
-                {isLive ? <StopIcon className="h-4 w-4" aria-hidden /> : <PlayIcon className="h-4 w-4" aria-hidden />}
-                {isLive ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
-              </button>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isLive ? "bg-[var(--brand-primary)]/15 text-[var(--brand-primary)]" : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)]"}`}>
+                {isLive ? tx("配信中", "Live now") : tx("待機中", "Standby")}
+              </span>
               <button
                 onClick={() => {
                   stopBroadcast();
@@ -626,80 +610,114 @@ export default function StudioLiveSessionPage() {
             {!camOn && <p className="mt-2 text-xs text-[var(--brand-text-muted)]">{tx("カメラOFF", "Camera OFF")}</p>}
             {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
 
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-                <CircleControl label="MIC" icon={MicrophoneIcon} slashedWhenOff on={micOn} onToggle={handleMicToggle} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowMicMenu((v) => !v);
-                    setShowCamMenu(false);
-                  }}
-                  className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-                >
-                  <ChevronDownIcon className="h-4 w-4" aria-hidden />
-                </button>
-                {showMicMenu && (
-                  <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                    {audioDevices.map((device, index) => (
-                      <button
-                        key={device.deviceId}
-                        type="button"
-                        onClick={() => {
-                          setSelectedAudioDeviceId(device.deviceId);
-                          setShowMicMenu(false);
-                          if (roomRef.current && micOn) {
-                            void roomRef.current.localParticipant.setMicrophoneEnabled(true, { deviceId: device.deviceId });
-                          }
-                        }}
-                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                          selectedAudioDeviceId === device.deviceId
-                            ? "bg-[var(--brand-primary)] text-white font-bold"
-                            : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                        }`}
-                      >
-                        {device.label || `Microphone ${index + 1}`}
-                      </button>
-                    ))}
+            <div className="mt-3 rounded-[24px] bg-[var(--brand-bg-900)] px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-[180px]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-text-muted)]">
+                    {tx("配信コントロール", "Stream controls")}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
+                    {isLive
+                      ? tx("このバーでマイクとカメラを即時制御できます。", "Use this bar to control mic and camera instantly.")
+                      : tx("必要なデバイスだけONにして配信開始できます。", "Turn on only the devices you want to use before going live.")}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <div className="relative inline-flex items-center rounded-full bg-[var(--brand-surface)]">
+                    <CircleControl label="MIC" icon={MicrophoneIcon} slashedWhenOff on={micOn} onToggle={handleMicToggle} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMicMenu((v) => !v);
+                        setShowCamMenu(false);
+                      }}
+                      className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+                    >
+                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                    </button>
+                    {showMicMenu && (
+                      <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                        {audioDevices.map((device, index) => (
+                          <button
+                            key={device.deviceId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAudioDeviceId(device.deviceId);
+                              setShowMicMenu(false);
+                              if (roomRef.current && micOn) {
+                                void roomRef.current.localParticipant.setMicrophoneEnabled(true, { deviceId: device.deviceId });
+                              }
+                            }}
+                            className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                              selectedAudioDeviceId === device.deviceId
+                                ? "bg-[var(--brand-primary)] text-white font-bold"
+                                : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                            }`}
+                          >
+                            {device.label || `Microphone ${index + 1}`}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-                <CircleControl label="CAM" icon={VideoCameraIcon} offIcon={VideoCameraSlashIcon} on={camOn} onToggle={handleCamToggle} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCamMenu((v) => !v);
-                    setShowMicMenu(false);
-                  }}
-                  className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-                >
-                  <ChevronDownIcon className="h-4 w-4" aria-hidden />
-                </button>
-                {showCamMenu && (
-                  <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                    {videoDevices.map((device, index) => (
-                      <button
-                        key={device.deviceId}
-                        type="button"
-                        onClick={() => {
-                          setSelectedVideoDeviceId(device.deviceId);
-                          setShowCamMenu(false);
-                          if (roomRef.current && camOn) {
-                            void roomRef.current.localParticipant.setCameraEnabled(true, { deviceId: device.deviceId });
-                          }
-                        }}
-                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                          selectedVideoDeviceId === device.deviceId
-                            ? "bg-[var(--brand-primary)] text-white font-bold"
-                            : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                        }`}
-                      >
-                        {device.label || `Camera ${index + 1}`}
-                      </button>
-                    ))}
+                  <div className="relative inline-flex items-center rounded-full bg-[var(--brand-surface)]">
+                    <CircleControl label="CAM" icon={VideoCameraIcon} offIcon={VideoCameraSlashIcon} on={camOn} onToggle={handleCamToggle} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCamMenu((v) => !v);
+                        setShowMicMenu(false);
+                      }}
+                      className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+                    >
+                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                    </button>
+                    {showCamMenu && (
+                      <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                        {videoDevices.map((device, index) => (
+                          <button
+                            key={device.deviceId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedVideoDeviceId(device.deviceId);
+                              clearResolvedWarnings({ hasVideoDevice: true });
+                              setShowCamMenu(false);
+                              if (roomRef.current && camOn) {
+                                void roomRef.current.localParticipant.setCameraEnabled(true, { deviceId: device.deviceId });
+                              }
+                            }}
+                            className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                              selectedVideoDeviceId === device.deviceId
+                                ? "bg-[var(--brand-primary)] text-white font-bold"
+                                : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                            }`}
+                          >
+                            {device.label || `Camera ${index + 1}`}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+
+                <button
+                  onClick={
+                    isLive
+                      ? stopBroadcast
+                      : () => {
+                          void startBroadcast();
+                        }
+                  }
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-extrabold ${
+                    isLive
+                      ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
+                      : "bg-[var(--brand-primary)] text-white shadow-[0_10px_24px_rgba(124,106,230,0.4)]"
+                  }`}
+                >
+                  {isLive ? <StopIcon className="h-4 w-4" aria-hidden /> : <PlayIcon className="h-4 w-4" aria-hidden />}
+                  {isLive ? tx("配信終了", "Stop Stream") : tx("配信開始", "Start Stream")}
+                </button>
               </div>
             </div>
           </section>
@@ -797,16 +815,6 @@ export default function StudioLiveSessionPage() {
                   )}
                 </div>
               </div>
-
-              <button
-                onClick={() => {
-                  void copyParticipantLink();
-                }}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--brand-primary)] px-3 py-2 text-xs font-semibold text-white"
-              >
-                <LinkIcon className="h-4 w-4" aria-hidden />
-                {linkCopied ? tx("コピー済み", "Copied") : tx("参加リンクをコピー", "Copy Invite Link")}
-              </button>
             </div>
           </section>
         </section>

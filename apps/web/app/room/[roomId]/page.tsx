@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDownCircleIcon, ChevronDownIcon, MicrophoneIcon, SpeakerWaveIcon, VideoCameraIcon, VideoCameraSlashIcon } from "@heroicons/react/24/solid";
+import {
+  ArrowDownCircleIcon,
+  ChevronDownIcon,
+  Cog6ToothIcon,
+  MicrophoneIcon,
+  PhoneXMarkIcon,
+  VideoCameraIcon,
+  VideoCameraSlashIcon,
+} from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
 import { useI18n } from "../../lib/i18n";
 
@@ -43,7 +51,6 @@ export default function RoomPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [failureReason, setFailureReason] = useState<string | null>(null);
   const [assignedRole, setAssignedRole] = useState<Role>("unknown");
-  const [copied, setCopied] = useState(false);
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT);
   const [chatInput, setChatInput] = useState("");
@@ -51,13 +58,13 @@ export default function RoomPage() {
 
   const [micOn, setMicOn] = useState(requestedRole !== "listener" && searchParams.get("mic") !== "0");
   const [camOn, setCamOn] = useState(requestedRole === "host" && searchParams.get("cam") !== "0");
-  const [speakerOn, setSpeakerOn] = useState(searchParams.get("speaker") !== "0");
   const [selectedMicDeviceId, setSelectedMicDeviceId] = useState(searchParams.get("micDeviceId") ?? "");
   const [selectedCamDeviceId, setSelectedCamDeviceId] = useState(searchParams.get("camDeviceId") ?? "");
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [showMicMenu, setShowMicMenu] = useState(false);
   const [showCamMenu, setShowCamMenu] = useState(false);
+  const [showDevicePanel, setShowDevicePanel] = useState(false);
 
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
@@ -107,27 +114,6 @@ export default function RoomPage() {
     },
     [canSendCam, selectedCamDeviceId],
   );
-
-  const applySpeaker = useCallback((enabled: boolean) => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.muted = !enabled;
-    }
-    if (remoteAudioContainerRef.current) {
-      const audioEls = remoteAudioContainerRef.current.querySelectorAll("audio");
-      audioEls.forEach((el) => {
-        el.muted = !enabled;
-      });
-    }
-    setSpeakerOn(enabled);
-  }, []);
-
-  const copyRoomLink = useCallback(async () => {
-    if (!roomId) return;
-    const url = `${location.origin}/room/${encodeURIComponent(roomId)}?role=listener&speaker=1`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  }, [roomId]);
 
   const sendChat = useCallback(() => {
     const value = chatInput.trim();
@@ -210,27 +196,25 @@ export default function RoomPage() {
         if (!mounted) return;
         if (track.kind === Track.Kind.Video && remoteVideoRef.current) {
           track.attach(remoteVideoRef.current);
-          remoteVideoRef.current.muted = !speakerOn;
+          remoteVideoRef.current.muted = true;
           remoteVideoRef.current.play().catch(() => {
             if (!remoteVideoRef.current) return;
             remoteVideoRef.current.muted = true;
             void remoteVideoRef.current.play().catch(() => {
               // no-op
             });
-            setSpeakerOn(false);
           });
           setRemoteConnected(true);
         }
         if (track.kind === Track.Kind.Audio && remoteAudioContainerRef.current) {
           const audioEl = track.attach() as HTMLAudioElement;
           audioEl.autoplay = true;
-          audioEl.muted = !speakerOn;
+          audioEl.muted = false;
           audioEl.dataset.lkTrackSid = track.sid;
           remoteAudioContainerRef.current.appendChild(audioEl);
           void audioEl.play().catch(() => {
             if (!audioEl) return;
             audioEl.muted = true;
-            setSpeakerOn(false);
           });
         }
       });
@@ -296,18 +280,6 @@ export default function RoomPage() {
       cleanup();
     };
   }, [cleanup, requestedRole, roomId, selectedMicDeviceId, selectedCamDeviceId]);
-
-  useEffect(() => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.muted = !speakerOn;
-    }
-    if (remoteAudioContainerRef.current) {
-      const audioEls = remoteAudioContainerRef.current.querySelectorAll("audio");
-      audioEls.forEach((el) => {
-        el.muted = !speakerOn;
-      });
-    }
-  }, [speakerOn]);
 
   useEffect(() => {
     let mounted = true;
@@ -405,7 +377,7 @@ export default function RoomPage() {
         </div>
       </header>
 
-      <main className="mx-auto h-[calc(100vh-76px)] w-full max-w-[1600px] overflow-hidden px-4 py-4 lg:px-8">
+      <main className="mx-auto h-[calc(100vh-76px-96px)] w-full max-w-[1600px] overflow-hidden px-4 py-4 lg:px-8">
         <div className="grid h-full grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
           <section className="min-h-0 min-w-0 space-y-4 overflow-y-auto pr-1">
             <div className="overflow-hidden rounded-2xl bg-[var(--brand-bg-900)] shadow-xl">
@@ -460,134 +432,6 @@ export default function RoomPage() {
               </div>
             </div>
 
-            <section className="rounded-2xl bg-[var(--brand-bg-800)] p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-                  <button
-                    onClick={() => applyMic(!micOn)}
-                    disabled={!canSendMic}
-                    className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
-                      canSendMic
-                        ? micOn
-                          ? "bg-[var(--brand-primary)] text-white"
-                          : "bg-transparent text-[var(--brand-text-muted)]"
-                        : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
-                    }`}
-                  >
-                    {micOn ? (
-                      <MicrophoneIcon className="h-5 w-5" aria-hidden />
-                    ) : (
-                      <span className="relative flex h-5 w-5 items-center justify-center">
-                        <MicrophoneIcon className="h-5 w-5" aria-hidden />
-                        <span className="pointer-events-none absolute h-6 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
-                        <span className="pointer-events-none absolute h-6 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!canSendMic}
-                    onClick={() => {
-                      setShowMicMenu((v) => !v);
-                      setShowCamMenu(false);
-                    }}
-                    className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-                  >
-                    <ChevronDownIcon className="h-4 w-4" aria-hidden />
-                  </button>
-                  {showMicMenu && canSendMic && (
-                    <div className="absolute left-0 top-14 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                      {audioDevices.map((device, index) => (
-                        <button
-                          key={device.deviceId}
-                          type="button"
-                          onClick={() => {
-                            setSelectedMicDeviceId(device.deviceId);
-                            setShowMicMenu(false);
-                            if (roomRef.current && micOn) {
-                              void roomRef.current.localParticipant.setMicrophoneEnabled(true, { deviceId: device.deviceId });
-                            }
-                          }}
-                          className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                            selectedMicDeviceId === device.deviceId
-                              ? "bg-[var(--brand-primary)] text-white font-bold"
-                              : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                          }`}
-                        >
-                          {device.label || `Microphone ${index + 1}`}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {canSendCam && (
-                  <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-                    <button
-                      onClick={() => applyCam(!camOn)}
-                      className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
-                        camOn ? "bg-[var(--brand-primary)] text-white" : "bg-transparent text-[var(--brand-text-muted)]"
-                      }`}
-                    >
-                      {camOn ? <VideoCameraIcon className="h-5 w-5" aria-hidden /> : <VideoCameraSlashIcon className="h-5 w-5" aria-hidden />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCamMenu((v) => !v);
-                        setShowMicMenu(false);
-                      }}
-                      className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-                    >
-                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
-                    </button>
-                    {showCamMenu && (
-                      <div className="absolute left-0 top-14 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                        {videoDevices.map((device, index) => (
-                          <button
-                            key={device.deviceId}
-                            type="button"
-                            onClick={() => {
-                              setSelectedCamDeviceId(device.deviceId);
-                              setShowCamMenu(false);
-                              if (roomRef.current && camOn) {
-                                void roomRef.current.localParticipant.setCameraEnabled(true, { deviceId: device.deviceId });
-                              }
-                            }}
-                            className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                              selectedCamDeviceId === device.deviceId
-                                ? "bg-[var(--brand-primary)] text-white font-bold"
-                                : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                            }`}
-                          >
-                            {device.label || `Camera ${index + 1}`}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <button
-                  onClick={() => applySpeaker(!speakerOn)}
-                  className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
-                    speakerOn ? "bg-[var(--brand-primary)] text-white" : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
-                  }`}
-                >
-                  <SpeakerWaveIcon className="h-5 w-5" aria-hidden />
-                </button>
-                <button onClick={() => { void copyRoomLink(); }} className="rounded-lg px-3 py-2 text-xs font-medium text-[var(--brand-text)] transition-colors">
-                  {copied ? tx("COPY OK", "COPY OK") : tx("LINK COPY", "LINK COPY")}
-                </button>
-                <button
-                  onClick={() => {
-                    cleanup();
-                    router.push("/");
-                  }}
-                  className="ml-auto rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs font-medium text-[var(--brand-accent)] transition-colors hover:bg-[var(--brand-accent)]/25"
-                >
-                  {tx("退出", "Leave")}
-                </button>
-              </div>
-            </section>
           </section>
 
           <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
@@ -646,6 +490,165 @@ export default function RoomPage() {
           </aside>
         </div>
       </main>
+
+      <div className="pointer-events-none fixed bottom-4 left-1/2 z-30 w-[calc(100%-24px)] max-w-[720px] -translate-x-1/2">
+        <div className="pointer-events-auto rounded-[28px] bg-[var(--brand-bg-800)]/95 px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.38)] backdrop-blur">
+          <div className="flex items-center justify-center gap-2 md:gap-3">
+            <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+              <button
+                onClick={() => applyMic(!micOn)}
+                disabled={!canSendMic}
+                className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+                  canSendMic
+                    ? micOn
+                      ? "bg-[var(--brand-primary)] text-white"
+                      : "bg-transparent text-[var(--brand-text-muted)]"
+                    : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
+                }`}
+              >
+                {micOn ? (
+                  <MicrophoneIcon className="h-5 w-5" aria-hidden />
+                ) : (
+                  <span className="relative flex h-5 w-5 items-center justify-center">
+                    <MicrophoneIcon className="h-5 w-5" aria-hidden />
+                    <span className="pointer-events-none absolute h-6 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
+                    <span className="pointer-events-none absolute h-6 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                disabled={!canSendMic}
+                onClick={() => {
+                  setShowMicMenu((v) => !v);
+                  setShowCamMenu(false);
+                }}
+                className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+              >
+                <ChevronDownIcon className="h-4 w-4" aria-hidden />
+              </button>
+              {showMicMenu && canSendMic && (
+                <div className="absolute bottom-14 left-0 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                  {audioDevices.map((device, index) => (
+                    <button
+                      key={device.deviceId}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMicDeviceId(device.deviceId);
+                        setShowMicMenu(false);
+                        if (roomRef.current && micOn) {
+                          void roomRef.current.localParticipant.setMicrophoneEnabled(true, { deviceId: device.deviceId });
+                        }
+                      }}
+                      className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                        selectedMicDeviceId === device.deviceId
+                          ? "bg-[var(--brand-primary)] text-white font-bold"
+                          : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                      }`}
+                    >
+                      {device.label || `Microphone ${index + 1}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {canSendCam && (
+              <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+                <button
+                  onClick={() => applyCam(!camOn)}
+                  className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+                    camOn ? "bg-[var(--brand-primary)] text-white" : "bg-transparent text-[var(--brand-text-muted)]"
+                  }`}
+                >
+                  {camOn ? <VideoCameraIcon className="h-5 w-5" aria-hidden /> : <VideoCameraSlashIcon className="h-5 w-5" aria-hidden />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCamMenu((v) => !v);
+                    setShowMicMenu(false);
+                  }}
+                  className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+                >
+                  <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                </button>
+                {showCamMenu && (
+                  <div className="absolute bottom-14 left-0 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                    {videoDevices.map((device, index) => (
+                      <button
+                        key={device.deviceId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCamDeviceId(device.deviceId);
+                          setShowCamMenu(false);
+                          if (roomRef.current && camOn) {
+                            void roomRef.current.localParticipant.setCameraEnabled(true, { deviceId: device.deviceId });
+                          }
+                        }}
+                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                          selectedCamDeviceId === device.deviceId
+                            ? "bg-[var(--brand-primary)] text-white font-bold"
+                            : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                        }`}
+                      >
+                        {device.label || `Camera ${index + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+              <button
+                onClick={() => {
+                  setShowDevicePanel((v) => !v);
+                  setShowMicMenu(false);
+                  setShowCamMenu(false);
+                }}
+                className="flex h-12 w-12 items-center justify-center rounded-full text-[var(--brand-text-muted)] transition-colors hover:text-[var(--brand-text)]"
+              >
+                <Cog6ToothIcon className="h-5 w-5" aria-hidden />
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                cleanup();
+                router.push("/");
+              }}
+              className="inline-flex h-12 items-center gap-2 rounded-full bg-[var(--brand-accent)] px-4 text-sm font-semibold text-white"
+            >
+              <PhoneXMarkIcon className="h-5 w-5" aria-hidden />
+              {tx("退出", "Leave")}
+            </button>
+          </div>
+
+          {showDevicePanel && (
+            <div className="mt-3 rounded-2xl bg-[var(--brand-surface)] p-3 text-sm text-[var(--brand-text)] shadow-lg shadow-black/25">
+              <div className="grid gap-2 md:grid-cols-3">
+                <div className="rounded-xl bg-[var(--brand-bg-900)] px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--brand-text-muted)]">{tx("役割", "Role")}</p>
+                  <p className="mt-1 font-semibold">{assignedRole}</p>
+                </div>
+                <div className="rounded-xl bg-[var(--brand-bg-900)] px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--brand-text-muted)]">{tx("マイク", "Microphone")}</p>
+                  <p className="mt-1 line-clamp-1 font-semibold">
+                    {audioDevices.find((device) => device.deviceId === selectedMicDeviceId)?.label ?? tx("デフォルト", "Default")}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-[var(--brand-bg-900)] px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--brand-text-muted)]">{tx("カメラ", "Camera")}</p>
+                  <p className="mt-1 line-clamp-1 font-semibold">
+                    {videoDevices.find((device) => device.deviceId === selectedCamDeviceId)?.label ?? tx("未使用", "Unused")}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
