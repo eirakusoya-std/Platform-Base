@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isPaidPlan(plan: SubscriptionPlan): plan is Exclude<SubscriptionPlan, "free"> {
-  return plan === "supporter" || plan === "premium";
+  return plan === "aimer";
 }
 
 export async function GET() {

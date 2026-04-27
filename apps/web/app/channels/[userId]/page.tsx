@@ -7,6 +7,7 @@ import { TopNav } from "../../components/home/TopNav";
 import { useI18n } from "../../lib/i18n";
 import type { StreamSession } from "../../lib/streamSessions";
 import { ChannelHero } from "../components/ChannelHero";
+import { ChannelTicketPanel } from "../components/ChannelTicketPanel";
 
 type ChannelInfo = {
   userId: string;
@@ -154,6 +155,11 @@ export default function PublicChannelPage() {
         }}
       />
       <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
+        <ChannelTicketPanel
+          targetUserId={channel.userId}
+          channelName={channel.channelName}
+          targetRole={channel.role}
+        />
 
         <section className="mt-8">
           <h2 className="mb-3 text-lg font-bold text-[var(--brand-accent)]">{tx("配信中", "Live Now")}</h2>

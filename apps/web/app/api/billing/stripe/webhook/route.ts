@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/app/lib/apiTypes";
-import { logPaymentEvent, markSubscriptionStatusByProviderId } from "@/app/lib/server/billingStore";
+import { activateTicketPurchase, logPaymentEvent, markSubscriptionStatusByProviderId } from "@/app/lib/server/billingStore";
 import { recordMonitoringEvent } from "@/app/lib/server/opsStore";
 import { getStripeClient } from "@/app/lib/server/stripe";
 
@@ -15,7 +15,7 @@ function getPeriodEnd(value: unknown) {
 }
 
 function parsePlan(value: unknown): SubscriptionPlan | undefined {
-  return value === "premium" ? "premium" : value === "supporter" ? "supporter" : value === "free" ? "free" : undefined;
+  return value === "aimer" || value === "premium" || value === "supporter" ? "aimer" : value === "free" ? "free" : undefined;
 }
 
 async function processEvent(event: { id: string; type: string; data: { object: Record<string, unknown> } }) {
@@ -23,6 +23,7 @@ async function processEvent(event: { id: string; type: string; data: { object: R
   const metadata = (object.metadata as Record<string, unknown> | undefined) ?? {};
   const status = typeof object.status === "string" ? object.status : undefined;
   const userId = typeof metadata.userId === "string" ? metadata.userId : undefined;
+  const targetUserId = typeof metadata.targetUserId === "string" ? metadata.targetUserId : undefined;
   const plan = parsePlan(metadata.plan);
   const providerSubscriptionId = event.type.startsWith("customer.subscription")
     ? (typeof object.id === "string" ? object.id : undefined)
@@ -32,6 +33,25 @@ async function processEvent(event: { id: string; type: string; data: { object: R
     typeof object.customer === "string"
       ? object.customer
       : undefined;
+
+  if (event.type === "checkout.session.completed") {
+    const sessionMode = typeof object.mode === "string" ? object.mode : undefined;
+    if (sessionMode === "payment") {
+      const paymentIntentId = typeof object.payment_intent === "string" ? object.payment_intent : undefined;
+      if (checkoutSessionId) {
+        await activateTicketPurchase({ checkoutSessionId, providerPaymentIntentId: paymentIntentId });
+      }
+      await logPaymentEvent({
+        provider: "stripe",
+        providerEventId: event.id,
+        type: "checkout.session.completed",
+        status: "processed",
+        summary: targetUserId ? `Ticket purchase completed for ${targetUserId}` : "Ticket purchase completed",
+        relatedUserId: userId,
+      });
+      return;
+    }
+  }
 
   let nextStatus: SubscriptionStatus | undefined;
 

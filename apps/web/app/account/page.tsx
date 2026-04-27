@@ -10,9 +10,13 @@ import {
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { TopNav } from "../components/home/TopNav";
-import { createCheckout, cancelBillingSubscription, listBillingSubscriptions } from "../lib/billing";
+import {
+  createCheckout,
+  cancelBillingSubscription,
+  listBillingSubscriptions,
+  listTicketPurchases,
+} from "../lib/billing";
 import { getMonitoringSummary } from "../lib/monitoring";
-import { planLabel } from "../lib/planAccess";
 import { createUserReport, listReports } from "../lib/reports";
 import { useUserSession } from "../lib/userSession";
 import type {
@@ -23,6 +27,7 @@ import type {
   ReportRecord,
   ReportTargetType,
   SessionUser,
+  TicketPurchase,
 } from "../lib/apiTypes";
 
 const SETTINGS_STORAGE_KEY_PREFIX = "aiment.account-settings.ui.v1";
@@ -144,6 +149,7 @@ export default function AccountPage() {
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [subscriptions, setSubscriptions] = useState<BillingSubscription[]>([]);
+  const [ticketPurchases, setTicketPurchases] = useState<TicketPurchase[]>([]);
   const [billingLoading, setBillingLoading] = useState(false);
   const [monitoringSummary, setMonitoringSummary] = useState<MonitoringSummary | null>(null);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
@@ -200,14 +206,16 @@ export default function AccountPage() {
     if (!isAuthenticated) return;
 
     const sync = async () => {
-      const [billing, monitoring, consentPayload, reportPayload] = await Promise.all([
+      const [billing, tickets, monitoring, consentPayload, reportPayload] = await Promise.all([
         listBillingSubscriptions().catch(() => ({ subscriptions: [], paymentEvents: [] })),
+        listTicketPurchases().catch(() => ({ purchases: [] })),
         getMonitoringSummary().catch(() => ({ summary: null })),
         request<{ consents: ConsentRecord[] }>("/api/account/consents").catch(() => ({ consents: [] })),
         listReports().catch(() => ({ reports: [] })),
       ]);
 
       setSubscriptions(billing.subscriptions);
+      setTicketPurchases(tickets.purchases);
       setMonitoringSummary(monitoring.summary);
       setConsents(consentPayload.consents);
       setReports(reportPayload.reports);
@@ -273,12 +281,12 @@ export default function AccountPage() {
     setError(null);
   };
 
-  const startCheckout = async (plan: "supporter" | "premium") => {
+  const startCheckout = async () => {
     setBillingLoading(true);
     setMessage(null);
     setError(null);
     try {
-      const result = await createCheckout({ plan });
+      const result = await createCheckout({ plan: "aimer" });
       if (result.checkoutUrl) {
         window.location.href = result.checkoutUrl;
         return;
@@ -286,7 +294,7 @@ export default function AccountPage() {
       const billing = await listBillingSubscriptions();
       setSubscriptions(billing.subscriptions);
       await refreshSession();
-      setMessage(`${planLabel(plan)} プランを有効化しました。`);
+      setMessage("Aimer プランを有効化しました。");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "課金処理に失敗しました。");
     } finally {
@@ -333,6 +341,10 @@ export default function AccountPage() {
   };
 
   const currentSubscription = subscriptions.find((entry) => entry.status !== "canceled") ?? null;
+  const activeTicketPurchases = ticketPurchases.filter((entry) => entry.status === "active");
+  const currentPlanLabel = draft.plan === "aimer" ? "Aimer" : "free";
+  const isAimerPlan = draft.plan === "aimer";
+  const subscriptionRenewsAt = draft.subscriptionRenewsAt ?? currentSubscription?.currentPeriodEnd;
 
   const handleAvatarFileChange = (file: File | null) => {
     if (!file) return;
@@ -791,42 +803,60 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "billing" ? (
-            <SectionCard title="Billing" subtitle="Stripe サブスク作成、解約、現在プラン">
+            <SectionCard title="Billing" subtitle="Aimer サブスクと購入済み 1on1 チケット">
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Current Plan</p>
-              <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{planLabel(draft.plan)}</p>
-              <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
-                Status: {draft.subscriptionStatus ?? "inactive"} {draft.subscriptionRenewsAt ? `/ Renew: ${new Date(draft.subscriptionRenewsAt).toLocaleDateString("ja-JP")}` : ""}
-              </p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Subscription</p>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm text-[var(--brand-text-muted)]">現在のプラン</p>
+                  <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{currentPlanLabel}</p>
+                  {isAimerPlan ? (
+                    <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
+                      次回更新日: {subscriptionRenewsAt ? new Date(subscriptionRenewsAt).toLocaleDateString("ja-JP") : "未定"}
+                    </p>
+                  ) : null}
+                </div>
+                {!isAimerPlan ? (
+                  <button
+                    type="button"
+                    onClick={() => void startCheckout()}
+                    disabled={billingLoading}
+                    className="h-11 rounded-lg bg-[var(--brand-secondary)] px-4 text-sm font-semibold text-[var(--brand-bg-900)] disabled:opacity-60"
+                  >
+                    Aimerプランに登録 PHP 1,098/月
+                  </button>
+                ) : currentSubscription ? (
+                  <button
+                    type="button"
+                    onClick={() => void cancelCurrentSubscription(currentSubscription.subscriptionId)}
+                    disabled={billingLoading}
+                    className="h-11 rounded-lg bg-[var(--brand-surface-soft)] px-4 text-sm font-medium text-[var(--brand-text)] disabled:opacity-60"
+                  >
+                    解約する
+                  </button>
+                ) : null}
+              </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => void startCheckout("supporter")}
-                disabled={billingLoading}
-                className="h-11 rounded-lg bg-[var(--brand-secondary)] px-4 text-sm font-semibold text-[var(--brand-bg-900)] disabled:opacity-60"
-              >
-                Supporter を開始
-              </button>
-              <button
-                type="button"
-                onClick={() => void startCheckout("premium")}
-                disabled={billingLoading}
-                className="h-11 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                Premium を開始
-              </button>
+
+            <div className="rounded-lg bg-[var(--brand-surface)] p-4">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">1on1 Tickets</p>
+              <div className="mt-4 space-y-2">
+                {activeTicketPurchases.length === 0 ? (
+                  <p className="rounded-lg bg-[var(--brand-surface-soft)] p-3 text-sm text-[var(--brand-text-muted)]">有効なチケットはありません。</p>
+                ) : (
+                  activeTicketPurchases.map((purchase) => (
+                    <div key={purchase.purchaseId} className="rounded-lg bg-[var(--brand-surface-soft)] p-3 text-sm">
+                      <p className="font-semibold text-[var(--brand-text)]">
+                        {purchase.ticketType === "1on1_10min" ? "10分チケット" : "30分チケット"}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
+                        対象: @{purchase.targetUserId} / 購入日: {new Date(purchase.createdAt).toLocaleDateString("ja-JP")} / status: {purchase.status}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-            {currentSubscription ? (
-              <button
-                type="button"
-                onClick={() => void cancelCurrentSubscription(currentSubscription.subscriptionId)}
-                disabled={billingLoading}
-                className="h-11 w-full rounded-lg bg-[var(--brand-surface)] text-sm font-medium text-[var(--brand-text)] disabled:opacity-60"
-              >
-                現在のサブスクを解約
-              </button>
-            ) : null}
             </SectionCard>
           ) : null}
 

@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeftIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../../../components/home/TopNav";
+import type { SubscriptionPlan } from "../../../../lib/apiTypes";
 import { useI18n } from "../../../../lib/i18n";
 import { useUserSession } from "../../../../lib/userSession";
 import { getStreamSession, updateStreamSession, type StreamSession } from "../../../../lib/streamSessions";
@@ -29,8 +30,8 @@ export default function SessionEditPage() {
   const [category, setCategory] = useState<string>("雑談");
   const [slotsTotal, setSlotsTotal] = useState(50);
   const [speakerSlotsTotal, setSpeakerSlotsTotal] = useState(5);
-  const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<"free" | "supporter" | "premium">("free");
-  const [requiredPlan, setRequiredPlan] = useState<"free" | "supporter" | "premium">("free");
+  const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<SubscriptionPlan>("free");
+  const [requiredPlan, setRequiredPlan] = useState<SubscriptionPlan>("free");
   const [reservationRequired, setReservationRequired] = useState(false);
 
   async function load() {
@@ -52,8 +53,8 @@ export default function SessionEditPage() {
     setCategory(data.category ?? "雑談");
     setSlotsTotal(data.slotsTotal);
     setSpeakerSlotsTotal(data.speakerSlotsTotal);
-    setSpeakerRequiredPlan((data.speakerRequiredPlan as "free" | "supporter" | "premium") ?? "free");
-    setRequiredPlan((data.requiredPlan as "free" | "supporter" | "premium") ?? "free");
+    setSpeakerRequiredPlan(data.speakerRequiredPlan ?? "free");
+    setRequiredPlan(data.requiredPlan ?? "free");
     setReservationRequired(data.reservationRequired ?? false);
     setLoading(false);
   }
@@ -183,12 +184,11 @@ export default function SessionEditPage() {
                 <span className="text-[var(--brand-text-muted)]">{tx("必要プラン", "Required Plan")}</span>
                 <select
                   value={requiredPlan}
-                  onChange={(e) => setRequiredPlan(e.target.value as "free" | "supporter" | "premium")}
+                  onChange={(e) => setRequiredPlan(e.target.value as SubscriptionPlan)}
                   className="rounded-xl bg-[var(--brand-surface)] px-4 py-2.5 text-[var(--brand-text)] outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
                 >
                   <option value="free">{tx("なし", "None (free)")}</option>
-                  <option value="supporter">Supporter</option>
-                  <option value="premium">Premium</option>
+                  <option value="aimer">Aimer</option>
                 </select>
               </label>
             </div>
@@ -210,12 +210,11 @@ export default function SessionEditPage() {
                 <span className="text-[var(--brand-text-muted)]">{tx("スピーカー必要プラン", "Speaker Plan")}</span>
                 <select
                   value={speakerRequiredPlan}
-                  onChange={(e) => setSpeakerRequiredPlan(e.target.value as "free" | "supporter" | "premium")}
+                  onChange={(e) => setSpeakerRequiredPlan(e.target.value as SubscriptionPlan)}
                   className="rounded-xl bg-[var(--brand-surface)] px-4 py-2.5 text-[var(--brand-text)] outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
                 >
                   <option value="free">{tx("なし", "None (free)")}</option>
-                  <option value="supporter">Supporter</option>
-                  <option value="premium">Premium</option>
+                  <option value="aimer">Aimer</option>
                 </select>
               </label>
             </div>
