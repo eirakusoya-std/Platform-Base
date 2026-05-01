@@ -10,11 +10,8 @@ export function Footer() {
  <div className="mx-auto max-w-[1400px] px-8 py-12 lg:px-12">
  <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4 md:gap-12">
  <div>
- <div className="mb-4 flex items-center gap-2">
- <div className="h-6 w-6 overflow-hidden rounded">
- <Image src="/logo/aiment_logo_rounded.svg" alt="aiment logo" width={24} height={24} className="h-full w-full object-contain" />
- </div>
- <span className="font-medium text-[var(--brand-text)]">aiment</span>
+ <div className="mb-4 flex items-center">
+ <Image src="/logo/aiment_logotype.svg" alt="aiment" width={120} height={40} className="h-8 w-auto object-contain" />
  </div>
  <p className="text-sm leading-relaxed text-[var(--brand-text-muted)]">Beyond Chat. Unlock Distance.</p>
  </div>

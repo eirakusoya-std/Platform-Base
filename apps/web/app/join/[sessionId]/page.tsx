@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronDownIcon, MicrophoneIcon } from "@heroicons/react/24/solid";
 import { useI18n } from "../../lib/i18n";
@@ -296,9 +297,8 @@ export default function PreJoinPage() {
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <header className="bg-[var(--brand-bg-900)]">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-5 lg:px-12">
-          <button onClick={() => router.push("/")} className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-white">A</div>
-            <span className="text-lg font-medium tracking-wide text-[var(--brand-text)]">aiment</span>
+          <button onClick={() => router.push("/")} className="flex items-center">
+            <Image src="/logo/aiment_logotype.svg" alt="aiment" width={120} height={40} className="h-8 w-auto object-contain" />
           </button>
           <p className="text-sm text-[var(--brand-text-muted)]">{tx("視聴・参加の案内", "Viewing & participation")}</p>
         </div>

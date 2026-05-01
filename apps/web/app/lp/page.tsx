@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 const cell = (name: string) => `/lp/cells/${name}.png`;
+const edited = (name: string) => `/lp/edited/${name}`;
 
 const navItems = ["Concept", "How it Works", "Contents", "FAQ"];
 
@@ -44,6 +45,60 @@ function JoinButton({ light = false }: { light?: boolean }) {
   );
 }
 
+function SpeechBubble({
+  className,
+  text,
+  fill,
+  color,
+  width,
+}: {
+  className: string;
+  text: string;
+  fill: string;
+  color: string;
+  width: number;
+}) {
+  const bodyRight = width - 4;
+  const tailTipX = width - 10;
+  const tailTipY = 82;
+  const tailBaseRight = width - 26;
+  const tailBaseLeft = width - 58;
+  const bubblePath = [
+    `M32 4H${width - 36}`,
+    `C${width - 18} 4 ${bodyRight} 18 ${bodyRight} 34`,
+    `C${bodyRight} 49 ${width - 18} 60 ${tailBaseRight} 62`,
+    `L${tailTipX} ${tailTipY}`,
+    `L${tailBaseLeft} 61`,
+    "H32",
+    "C15 61 4 49 4 33",
+    "C4 17 15 4 32 4Z",
+  ].join(" ");
+
+  return (
+    <svg className={`hero-bubble-svg ${className}`} viewBox={`0 0 ${width} 88`} aria-hidden>
+      <path
+        d={bubblePath}
+        fill={fill}
+        stroke={color}
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <text
+        x={width / 2}
+        y="33"
+        dominantBaseline="middle"
+        textAnchor="middle"
+        fill={color}
+        fontFamily="var(--font-latin)"
+        fontSize="17"
+        fontWeight="600"
+      >
+        {text}
+      </text>
+    </svg>
+  );
+}
+
 function DecorativeDots() {
   return (
     <>
@@ -62,15 +117,8 @@ export default function LandingPage() {
       <DecorativeDots />
 
       <header className="lp-header">
-        <a className="brand" href="#top" aria-label="beyond chat home">
-          <span className="brand-mark">
-            <span />
-            <span />
-          </span>
-          <span className="brand-copy">
-            <strong>beyond chat</strong>
-            <small>talk more, be more.</small>
-          </span>
+        <a className="brand" href="#top" aria-label="aiment home">
+          <Image src="/logo/aiment_logotype.svg" alt="aiment" width={150} height={50} priority />
         </a>
         <nav className="nav-links" aria-label="Main navigation">
           {navItems.map((item) => (
@@ -87,7 +135,7 @@ export default function LandingPage() {
           <p className="eyebrow">VTUBER × REALTIME TALK</p>
           <h1>
             <b className="beyond-word">
-              bey<i className="chat-o">o</i>nd
+              bey<i className="chat-o" aria-hidden />nd
             </b>
             <br />
             chat.
@@ -102,28 +150,18 @@ export default function LandingPage() {
           </p>
           <div className="hero-actions">
             <JoinButton />
-            <div className="fans">
-              <div className="avatar-row">
-                {fanAvatars.map((avatar) => (
-                  <Image key={avatar} src={cell(avatar)} alt="" width={52} height={52} />
-                ))}
-              </div>
-              <strong>10,000+</strong>
-              <span>Global Fans are here!</span>
-            </div>
           </div>
         </div>
 
         <div className="hero-art" aria-label="VTuber and fan messages">
-          <Image className="hero-blob" src={cell("cell_03")} alt="" width={166} height={156} priority />
-          <Image className="chat chat-blue" src={cell("cell_08")} alt="" width={166} height={95} />
-          <Image className="chat chat-yellow" src={cell("cell_09")} alt="" width={161} height={95} />
-          <Image className="chat chat-dark" src={cell("cell_10")} alt="" width={164} height={95} />
-          <Image className="chat chat-thanks" src={cell("cell_13")} alt="" width={149} height={95} />
-          <div className="mascot">
-            <Image src={cell("cell_32")} alt="beyond chat VTuber" width={164} height={109} priority />
+          <div className="hero-character">
+            <Image className="hero-character-mask" src={edited("LPchara.svg")} alt="" width={669} height={746} priority aria-hidden />
+            <Image className="hero-character-image" src={edited("aiment_LPchara.png")} alt="beyond chat VTuber" width={604} height={881} priority />
           </div>
-          <Image className="heart-bubble" src={cell("cell_14")} alt="" width={333} height={95} />
+          <SpeechBubble className="bubble-blue" text="Hi!" fill="#eaf2ff" color="#376df4" width={112} />
+          <SpeechBubble className="bubble-yellow" text="Can I join?" fill="#ffe680" color="#062a63" width={178} />
+          <SpeechBubble className="bubble-dark" text="Nice to meet you!" fill="#062a63" color="#ffffff" width={226} />
+          <SpeechBubble className="bubble-pink" text="Thank you!" fill="#ffffff" color="#ff5b7d" width={166} />
           <div className="vtuber-row">
             {vtuberAvatars.map((avatar) => (
               <Image key={avatar} src={cell(avatar)} alt="" width={52} height={52} />
@@ -161,6 +199,7 @@ export default function LandingPage() {
         <h2>3ステップで、推しともっと近くに。</h2>
         <div className="step-grid">
           <article>
+            <span className="step-number">01</span>
             <Image src={cell("cell_27")} alt="" width={149} height={123} />
             <p>簡単登録で、すぐに参加の準備ができます。</p>
           </article>
@@ -177,15 +216,19 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="contents" id="contents">
+      <section className="lp-contents" id="contents">
         <p className="section-kicker">CONTENTS EXAMPLES</p>
         <h2>いろんな形で、特別な時間を。</h2>
         <div className="content-grid">
           {contentExamples.map((item) => (
             <article key={item.title}>
-              <Image src={cell(item.image)} alt="" width={166} height={156} />
-              <h3>{item.title}</h3>
-              <p>{item.body}</p>
+              <div className="content-figure" aria-hidden>
+                <Image src={cell(item.image)} alt="" width={166} height={156} />
+              </div>
+              <div className="content-text">
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </div>
             </article>
           ))}
         </div>
@@ -212,15 +255,8 @@ export default function LandingPage() {
       </section>
 
       <footer className="lp-footer" id="faq">
-        <a className="brand brand-footer" href="#top" aria-label="beyond chat home">
-          <span className="brand-mark">
-            <span />
-            <span />
-          </span>
-          <span className="brand-copy">
-            <strong>beyond chat</strong>
-            <small>talk more, be more.</small>
-          </span>
+        <a className="brand brand-footer" href="#top" aria-label="aiment home">
+          <Image src="/logo/aiment_logotype.svg" alt="aiment" width={150} height={50} />
         </a>
         <nav aria-label="Footer navigation">
           {navItems.map((item) => (

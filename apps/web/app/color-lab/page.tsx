@@ -1,6 +1,7 @@
 "use client";
 
 import { CSSProperties, useMemo, useState } from "react";
+import Image from "next/image";
 
 type Mode = "dark" | "light";
 type ThemeKey = "primary" | "secondary" | "accent" | "background" | "surface" | "text";
@@ -333,9 +334,8 @@ export default function ColorLabPage() {
           <section className="overflow-hidden rounded-2xl" style={previewVars}>
             <div className="bg-[var(--brand-bg-900)] p-4 text-[var(--brand-text)]">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--brand-primary)] text-xs font-bold text-white">A</div>
-                  <span className="text-lg font-medium">aiment</span>
+                <div className="flex items-center">
+                  <Image src="/logo/aiment_logotype.svg" alt="aiment" width={120} height={40} className="h-8 w-auto object-contain" />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-[var(--brand-surface)] px-3 py-1 text-xs font-medium text-[var(--brand-text-muted)]">Room: color-lab</span>
