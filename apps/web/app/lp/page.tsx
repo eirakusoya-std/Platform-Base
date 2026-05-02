@@ -1,48 +1,64 @@
 import Image from "next/image";
+import type { ReactNode } from "react";
+import { MicrophoneIcon, SpeakerWaveIcon } from "@heroicons/react/24/outline";
+import { ArrowRightCircleIcon } from "@heroicons/react/24/solid";
 
 const cell = (name: string) => `/lp/cells/${name}.png`;
 const edited = (name: string) => `/lp/edited/${name}`;
 
 const navItems = ["Concept", "How it Works", "Contents", "FAQ"];
 
+const ctaLinks = {
+  watch: "/schedule",
+  speaker: "/auth/signup",
+};
+
 const contentExamples = [
   {
-    image: "cell_22",
-    title: "リアルタイムトーク",
-    body: "テキストや音声で、その場で会話を楽しめます。",
+    image: edited("ex_remembered.png"),
+    title: "Be Remembered",
+    body: "Not just another viewer — someone they recognize.",
   },
   {
-    image: "cell_23",
-    title: "ギフト&リアクション",
-    body: "ギフトやリアクションで、想いをカタチに伝えよう。",
+    image: edited("ex_talk.png"),
+    title: "Talk, Don’t Just Watch",
+    body: "Go beyond watching Japanese VTubers.\nActually speak with them.",
   },
   {
-    image: "cell_24",
-    title: "特別に名前を呼ばれる",
-    body: "あなたの名前が呼ばれるかも!? 一生の思い出になる瞬間を。",
+    image: edited("ex_effort.png"),
+    title: "Show Your Effort",
+    body: "Stand out through how you connect — not how much you spend.",
   },
   {
-    image: "cell_25",
-    title: "イベント&コラボ",
-    body: "限定イベントやコラボ配信など、特別な体験が盛りだくさん。",
-  },
-  {
-    image: "cell_26",
-    title: "コミュニティ",
-    body: "同じ推しを応援する仲間とつながれる!",
+    image: edited("ex_conversation.png"),
+    title: "Real Conversations",
+    body: "No textbooks, no scripts.\nJust natural, live communication.",
   },
 ];
 
-const fanAvatars = ["cell_30", "cell_31", "cell_34"];
 const vtuberAvatars = ["cell_32", "cell_33", "cell_35"];
 
-function JoinButton({ light = false }: { light?: boolean }) {
+function CtaButton({
+  children,
+  href,
+  variant = "primary",
+}: {
+  children: string;
+  href: string;
+  variant?: "primary" | "secondary" | "light" | "speaker";
+}) {
   return (
-    <a className={light ? "join-button join-button-light" : "join-button"} href="/auth/signup">
-      <span>Join Now</span>
-      <span className="join-arrow">→</span>
+    <a className={`lp-cta-button lp-cta-button-${variant}`} href={href}>
+      <span>{children}</span>
+      <span className="join-arrow" aria-hidden>
+        <ArrowRightCircleIcon />
+      </span>
     </a>
   );
+}
+
+function CtaGroup({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`lp-cta-group ${className}`.trim()}>{children}</div>;
 }
 
 function SpeechBubble({
@@ -51,12 +67,14 @@ function SpeechBubble({
   fill,
   color,
   width,
+  direction = "right",
 }: {
   className: string;
   text: string;
   fill: string;
   color: string;
   width: number;
+  direction?: "left" | "right";
 }) {
   const bodyRight = width - 4;
   const tailTipX = width - 10;
@@ -80,8 +98,9 @@ function SpeechBubble({
         d={bubblePath}
         fill={fill}
         stroke={color}
-        strokeWidth="3"
+        strokeWidth="0"
         strokeLinejoin="round"
+        transform={direction === "left" ? `translate(${width}, 0) scale(-1, 1)` : undefined}
       />
       <text
         x={width / 2}
@@ -116,18 +135,20 @@ export default function LandingPage() {
     <main className="lp-page">
       <DecorativeDots />
 
-      <header className="lp-header">
-        <a className="brand" href="#top" aria-label="aiment home">
-          <Image src="/logo/aiment_logotype.svg" alt="aiment" width={150} height={50} priority />
-        </a>
-        <nav className="nav-links" aria-label="Main navigation">
-          {navItems.map((item) => (
-            <a key={item} href={`#${item.toLowerCase().replaceAll(" ", "-")}`}>
-              {item}
-            </a>
-          ))}
-        </nav>
-        <JoinButton />
+      <header className="lp-header-shell">
+        <div className="lp-header">
+          <a className="brand" href="#top" aria-label="aiment home">
+            <Image src="/logo/aiment_logotype.svg" alt="aiment" width={150} height={50} priority />
+          </a>
+          <nav className="nav-links" aria-label="Main navigation">
+            {navItems.map((item) => (
+              <a key={item} href={`#${item.toLowerCase().replaceAll(" ", "-")}`}>
+                {item}
+              </a>
+            ))}
+          </nav>
+          <CtaButton href={ctaLinks.watch}>Start Watching Free</CtaButton>
+        </div>
       </header>
 
       <section className="hero" id="top">
@@ -140,28 +161,31 @@ export default function LandingPage() {
             <br />
             chat.
           </h1>
-          <h2>推しと、もっと先の関係へ。</h2>
+          <h2>Go beyond just being a fan.</h2>
           <p className="lead">
-            海外ファンと日本のVTuberが
-            <br />
-            リアルタイムでつながるプラットフォーム。
-            <br />
-            ただ見るだけじゃない、あなたが主役の時間。
+            A platform where global fans and Japanese VTubers connect in real time.
+            Not just a place to watch — a place where you become part of the moment.
           </p>
-          <div className="hero-actions">
-            <JoinButton />
-          </div>
+          <CtaGroup className="hero-actions">
+            <CtaButton href={ctaLinks.watch} variant="secondary">
+              Start Watching Free
+            </CtaButton>
+            <CtaButton href={ctaLinks.speaker} variant="speaker">
+              Become a Speaker
+            </CtaButton>
+          </CtaGroup>
+          <p className="cta-helper">Watch for free. Speak when you&apos;re ready.</p>
         </div>
 
         <div className="hero-art" aria-label="VTuber and fan messages">
           <div className="hero-character">
             <Image className="hero-character-mask" src={edited("LPchara.svg")} alt="" width={669} height={746} priority aria-hidden />
-            <Image className="hero-character-image" src={edited("aiment_LPchara.png")} alt="beyond chat VTuber" width={604} height={881} priority />
+            <Image className="hero-character-image" src={edited("aiment_LPchara_v2.PNG")} alt="beyond chat VTuber" width={604} height={881} priority />
           </div>
-          <SpeechBubble className="bubble-blue" text="Hi!" fill="#eaf2ff" color="#376df4" width={112} />
-          <SpeechBubble className="bubble-yellow" text="Can I join?" fill="#ffe680" color="#062a63" width={178} />
-          <SpeechBubble className="bubble-dark" text="Nice to meet you!" fill="#062a63" color="#ffffff" width={226} />
-          <SpeechBubble className="bubble-pink" text="Thank you!" fill="#ffffff" color="#ff5b7d" width={166} />
+          <SpeechBubble className="bubble-blue" text="I love your stream! You're the best!" fill="#eaf2ff" color="#376df4" width={260} />
+          <SpeechBubble className="bubble-yellow" text="Can you say &quot;ありがとう&quot;?" fill="#ffe680" color="#062a63" width={260} />
+          <SpeechBubble className="bubble-dark" text="Nice to meet you!" fill="#062a63" color="#ffffff" width={260} />
+          <SpeechBubble className="bubble-pink" text="You noticed me! Thank you!😭" fill="#ffffff" color="#ff5b7d" width={270} direction="left" />
           <div className="vtuber-row">
             {vtuberAvatars.map((avatar) => (
               <Image key={avatar} src={cell(avatar)} alt="" width={52} height={52} />
@@ -175,82 +199,141 @@ export default function LandingPage() {
           <div className="section-copy">
             <p className="section-kicker">CONCEPT</p>
             <h2>
-              ここは、視聴を超えた
+              A place where watching
               <br />
-              特別なつながりが生まれる場所。
+              turns into something more.
             </h2>
             <p>
-              リアルタイムで会話して、想いを伝えて、認知される。
+              Talk in real time, share what you feel, and be recognized.
               <br />
-              あなたの一言が、配信の流れを変えるかもしれない。
+              A single word from you can change the moment.
               <br />
-              推しとの距離がぐっと縮まる、かけがえのない体験を。
+              An unforgettable experience that brings you closer to your favorite VTuber.
             </p>
-            <Image className="concept-map" src={cell("cell_07")} alt="You and VTuber connection map" width={333} height={156} />
           </div>
           <div className="concept-visual">
-            <Image src={cell("cell_04")} alt="Fan and VTuber talking" width={164} height={156} />
+            <Image src={edited("concept.png")} alt="Fan and VTuber connection concept" width={1457} height={1079} />
           </div>
         </div>
       </section>
 
       <section className="steps" id="how-it-works">
         <p className="section-kicker">HOW IT WORKS</p>
-        <h2>3ステップで、推しともっと近くに。</h2>
+        <h2>3 steps to be more than just a viewer.</h2>
         <div className="step-grid">
           <article>
             <span className="step-number">01</span>
-            <Image src={cell("cell_27")} alt="" width={149} height={123} />
-            <p>簡単登録で、すぐに参加の準備ができます。</p>
+            <p className="step-title">Join the stream</p>
+            <Image src={edited("join_stream.png")} alt="" width={140} height={100} />
+            <p>Watch for free and feel the moment.</p>
           </article>
           <article>
             <span className="step-number">02</span>
-            <Image src={cell("cell_28")} alt="" width={333} height={123} />
-            <p>リアルタイムで会話に参加! コメントや音声で想いを届けよう。</p>
+            <p className="step-title">Step in</p>
+            <Image src={edited("step_in.png")} alt="" width={140} height={100} />
+            <p>Start interacting and make your presence known.</p>
           </article>
           <article>
             <span className="step-number">03</span>
-            <Image src={cell("cell_29")} alt="" width={166} height={109} />
-            <p>名前を呼ばれたり、反応がもらえたり。あなたが特別な存在に。</p>
+            <p className="step-title">Be recognized</p>
+            <Image src={edited("recognized.png")} alt="" width={140} height={100} />
+            <p>Close enough to be seen and heard.</p>
+          </article>
+        </div>
+        <div className="section-cta">
+          <p>Ready to step in?</p>
+          <CtaButton href={ctaLinks.watch}>Find a Live Session</CtaButton>
+        </div>
+      </section>
+
+      <section className="role-bridge" aria-labelledby="role-bridge-title">
+        <p className="section-kicker">LISTENER / SPEAKER</p>
+        <h2 id="role-bridge-title">From watching to participating.</h2>
+        <div className="role-bridge-grid">
+          <article className="role-card role-card-listener" tabIndex={0}>
+            <div className="role-card-head">
+              <SpeakerWaveIcon className="role-icon" aria-hidden />
+              <p className="role-label">Listener</p>
+            </div>
+            <div className="role-visual-slot" aria-hidden>
+              <Image src={edited("listener_image.png")} alt="" width={604} height={881} />
+            </div>
+            <div className="role-copy">
+              <h3>Just watching is where it starts.</h3>
+              <p>
+                Join live streams for free and experience the moment.
+                <br />
+                You can listen, react, and feel the connection.
+              </p>
+              <p className="role-note">But you&apos;re still on the audience side.</p>
+              <CtaButton href={ctaLinks.watch} variant="secondary">
+                Watch for Free
+              </CtaButton>
+            </div>
+          </article>
+          <article className="role-card role-card-speaker" tabIndex={0}>
+            <div className="role-card-head">
+              <MicrophoneIcon className="role-icon" aria-hidden />
+              <p className="role-label">Speaker</p>
+            </div>
+            <div className="role-visual-slot" aria-hidden>
+              <Image src={edited("speaker_image.png")} alt="" width={604} height={881} />
+            </div>
+            <div className="role-copy">
+              <h3>Step beyond watching.</h3>
+              <p>
+                As a Speaker, you don&apos;t just watch —
+                <br />
+                you talk, interact, and become part of the stream.
+              </p>
+              <p className="role-note">
+                They hear you. They respond to you.
+                <br />
+                You&apos;re no longer just a viewer.
+              </p>
+              <CtaButton href={ctaLinks.speaker} variant="speaker">
+                Join as a Speaker
+              </CtaButton>
+            </div>
           </article>
         </div>
       </section>
 
       <section className="lp-contents" id="contents">
         <p className="section-kicker">CONTENTS EXAMPLES</p>
-        <h2>いろんな形で、特別な時間を。</h2>
+        <h2>
+          More than a stream.
+          <br />
+          Moments that stay with you.
+        </h2>
         <div className="content-grid">
           {contentExamples.map((item) => (
             <article key={item.title}>
               <div className="content-figure" aria-hidden>
-                <Image src={cell(item.image)} alt="" width={166} height={156} />
+                <Image src={item.image} alt="" width={166} height={156} />
               </div>
               <div className="content-text">
                 <h3>{item.title}</h3>
-                <p>{item.body}</p>
+                <p>
+                  {item.body.split("\n").map((line, index, lines) => (
+                    <span key={`${item.title}-${line}`}>
+                      {line}
+                      {index < lines.length - 1 ? <br /> : null}
+                    </span>
+                  ))}
+                </p>
               </div>
             </article>
           ))}
         </div>
-      </section>
-
-      <section className="cta">
-        <div className="cta-copy">
-          <h2>
-            推しとの未来は、
-            <br />
-            ここから始まる。
-          </h2>
-          <p>さあ、あなたも特別な体験を。</p>
-          <JoinButton light />
-        </div>
-        <div className="cta-people" aria-hidden>
-          <Image className="bubble-amazing" src={cell("cell_11")} alt="" width={159} height={95} />
-          <Image className="bubble-see" src={cell("cell_12")} alt="" width={138} height={95} />
-          <Image className="bubble-you" src={cell("cell_13")} alt="" width={149} height={95} />
-          {[...fanAvatars, "cell_32", "cell_35"].map((avatar) => (
-            <Image key={avatar} src={cell(avatar)} alt="" width={110} height={110} />
-          ))}
+        <div className="section-cta section-cta-speaker">
+          <p>Your voice can be part of the stream.</p>
+          <CtaGroup>
+            <CtaButton href={ctaLinks.watch}>Start Watching Free</CtaButton>
+            <CtaButton href={ctaLinks.speaker} variant="speaker">
+              Join as a Speaker
+            </CtaButton>
+          </CtaGroup>
         </div>
       </section>
 
