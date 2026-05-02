@@ -45,18 +45,15 @@ export function TopNav({ mode = "default" }: TopNavProps) {
       <nav className="sticky top-0 z-40 bg-[var(--brand-surface)]/95 shadow-lg shadow-black/20 backdrop-blur">
         <div className="mx-auto max-w-[1400px] px-4 py-3 lg:px-8">
           <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-              <div className="h-8 w-8 overflow-hidden rounded">
-                <Image
-                  src="/logo/aiment_logo_rounded.svg"
-                  alt="aiment logo"
-                  width={32}
-                  height={32}
-                  className="h-full w-full object-contain"
-                  priority
-                />
-              </div>
-              <span className="text-lg font-semibold tracking-wide text-[var(--brand-text)]">aiment</span>
+            <Link href="/" className="flex items-center rounded-lg px-2 py-1.5">
+              <Image
+                src="/logo/aiment_logotype.svg"
+                alt="aiment"
+                width={120}
+                height={40}
+                className="h-8 w-auto object-contain"
+                priority
+              />
             </Link>
 
             {!isStudioMode && (
