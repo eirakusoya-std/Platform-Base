@@ -7,6 +7,7 @@ import { TopNav } from "../../../components/home/TopNav";
 import { useI18n } from "../../../lib/i18n";
 import type { StreamSession } from "../../../lib/streamSessions";
 import { ChannelHero } from "../../components/ChannelHero";
+import { ChannelTicketPanel } from "../../components/ChannelTicketPanel";
 import { MultiDayScheduleGrid, type MultiDayEvent } from "../../components/MultiDayScheduleGrid";
 
 type ChannelInfo = {
@@ -206,6 +207,13 @@ export default function ChannelSchedulePage() {
         }}
       />
       <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
+        <div className="mb-5">
+          <ChannelTicketPanel
+            targetUserId={channel.userId}
+            channelName={channel.channelName}
+            targetRole={channel.role}
+          />
+        </div>
 
         <section className="mb-5 rounded-2xl bg-[var(--brand-surface)] p-4 shadow-lg shadow-black/20">
           <div className="flex flex-wrap items-center justify-between gap-3">

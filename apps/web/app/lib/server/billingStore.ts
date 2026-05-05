@@ -9,11 +9,14 @@ import type {
   SessionUser,
   SubscriptionPlan,
   SubscriptionStatus,
+  TicketPurchase,
+  TicketType,
 } from "../apiTypes";
 
 type BillingStoreFile = {
   subscriptions: BillingSubscription[];
   paymentEvents: PaymentEvent[];
+  ticketPurchases: TicketPurchase[];
 };
 
 const DATA_DIR = process.env.VERCEL
@@ -23,7 +26,7 @@ const STORE_FILE = path.join(DATA_DIR, "billing-store.json");
 const SEED_FILE = process.env.VERCEL
   ? path.join(process.cwd(), "data", "billing-store.json")
   : null;
-const DEFAULT_STORE: BillingStoreFile = { subscriptions: [], paymentEvents: [] };
+const DEFAULT_STORE: BillingStoreFile = { subscriptions: [], paymentEvents: [], ticketPurchases: [] };
 
 let writeQueue: Promise<unknown> = Promise.resolve();
 
@@ -31,6 +34,7 @@ function cloneStore(store: BillingStoreFile): BillingStoreFile {
   return {
     subscriptions: [...store.subscriptions],
     paymentEvents: [...store.paymentEvents],
+    ticketPurchases: [...store.ticketPurchases],
   };
 }
 
@@ -40,6 +44,10 @@ function makeSubscriptionId() {
 
 function makePaymentEventId() {
   return `payevt_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
+}
+
+function makeTicketPurchaseId() {
+  return `ticket_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
 }
 
 function normalizeSubscription(entry: Partial<BillingSubscription>): BillingSubscription | null {
@@ -57,8 +65,9 @@ function normalizeSubscription(entry: Partial<BillingSubscription>): BillingSubs
   }
 
   const provider: BillingProvider = entry.provider === "stripe" ? "stripe" : "mock";
+  const rawPlan = entry.plan as unknown;
   const plan: SubscriptionPlan =
-    entry.plan === "premium" ? "premium" : entry.plan === "supporter" ? "supporter" : "free";
+    rawPlan === "aimer" || rawPlan === "premium" || rawPlan === "supporter" ? "aimer" : "free";
   const status: SubscriptionStatus =
     entry.status === "trialing" || entry.status === "active" || entry.status === "past_due" || entry.status === "canceled"
       ? entry.status
@@ -78,6 +87,42 @@ function normalizeSubscription(entry: Partial<BillingSubscription>): BillingSubs
     providerCustomerId: typeof entry.providerCustomerId === "string" ? entry.providerCustomerId : undefined,
     providerSubscriptionId: typeof entry.providerSubscriptionId === "string" ? entry.providerSubscriptionId : undefined,
     checkoutSessionId: typeof entry.checkoutSessionId === "string" ? entry.checkoutSessionId : undefined,
+  };
+}
+
+function normalizeTicketPurchase(entry: Partial<TicketPurchase>): TicketPurchase | null {
+  if (
+    typeof entry.purchaseId !== "string" ||
+    typeof entry.userId !== "string" ||
+    typeof entry.ticketType !== "string" ||
+    typeof entry.status !== "string" ||
+    typeof entry.provider !== "string" ||
+    typeof entry.createdAt !== "string"
+  ) {
+    return null;
+  }
+
+  if (entry.ticketType !== "1on1_10min" && entry.ticketType !== "1on1_30min") {
+    return null;
+  }
+  const ticketType: TicketType = entry.ticketType;
+  const targetUserId = typeof entry.targetUserId === "string" ? entry.targetUserId : entry.userId;
+  const status: TicketPurchase["status"] =
+    entry.status === "active" || entry.status === "used" || entry.status === "expired" ? entry.status : "pending";
+  const provider: BillingProvider = entry.provider === "stripe" ? "stripe" : "mock";
+
+  return {
+    purchaseId: entry.purchaseId,
+    userId: entry.userId,
+    targetUserId,
+    ticketType,
+    status,
+    provider,
+    checkoutSessionId: typeof entry.checkoutSessionId === "string" ? entry.checkoutSessionId : undefined,
+    checkoutUrl: typeof entry.checkoutUrl === "string" ? entry.checkoutUrl : undefined,
+    providerPaymentIntentId: typeof entry.providerPaymentIntentId === "string" ? entry.providerPaymentIntentId : undefined,
+    createdAt: entry.createdAt,
+    expiresAt: typeof entry.expiresAt === "string" ? entry.expiresAt : undefined,
   };
 }
 
@@ -120,6 +165,9 @@ function parseStoreFile(raw: string): BillingStoreFile {
       : [],
     paymentEvents: Array.isArray(parsed.paymentEvents)
       ? parsed.paymentEvents.map((entry) => normalizePaymentEvent(entry as Partial<PaymentEvent>)).filter((entry): entry is PaymentEvent => entry != null)
+      : [],
+    ticketPurchases: Array.isArray(parsed.ticketPurchases)
+      ? parsed.ticketPurchases.map((entry) => normalizeTicketPurchase(entry as Partial<TicketPurchase>)).filter((entry): entry is TicketPurchase => entry != null)
       : [],
   };
 }
@@ -165,8 +213,7 @@ async function mutateStore<T>(mutator: (store: BillingStoreFile) => Promise<T> |
 }
 
 export function getPlanRank(plan: SubscriptionPlan) {
-  if (plan === "premium") return 2;
-  if (plan === "supporter") return 1;
+  if (plan === "aimer") return 1;
   return 0;
 }
 
@@ -268,6 +315,76 @@ export async function activateMockSubscription(userId: string, plan: Exclude<Sub
       summary: `Mock subscription activated for ${plan}`,
       relatedUserId: userId,
       relatedSubscriptionId: next.subscriptionId,
+    });
+    return next;
+  });
+}
+
+export async function createPendingTicketPurchase(input: {
+  userId: string;
+  targetUserId: string;
+  ticketType: TicketType;
+  checkoutSessionId?: string;
+  checkoutUrl?: string;
+}) {
+  return mutateStore((store) => {
+    const now = new Date().toISOString();
+    const next: TicketPurchase = {
+      purchaseId: makeTicketPurchaseId(),
+      userId: input.userId,
+      targetUserId: input.targetUserId,
+      ticketType: input.ticketType,
+      status: "pending",
+      provider: "stripe",
+      checkoutSessionId: input.checkoutSessionId,
+      checkoutUrl: input.checkoutUrl,
+      createdAt: now,
+    };
+    store.ticketPurchases.unshift(next);
+    return next;
+  });
+}
+
+export async function activateTicketPurchase(input: {
+  checkoutSessionId: string;
+  providerPaymentIntentId?: string;
+}) {
+  return mutateStore((store) => {
+    const purchase = store.ticketPurchases.find((entry) => entry.checkoutSessionId === input.checkoutSessionId);
+    if (!purchase) return null;
+    purchase.status = "active";
+    purchase.providerPaymentIntentId = input.providerPaymentIntentId ?? purchase.providerPaymentIntentId;
+    return purchase;
+  });
+}
+
+export async function listTicketPurchasesForUser(userId: string) {
+  const store = await readStore();
+  return store.ticketPurchases.filter((entry) => entry.userId === userId).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export async function activateMockTicketPurchase(userId: string, targetUserId: string, ticketType: TicketType) {
+  return mutateStore((store) => {
+    const now = new Date().toISOString();
+    const next: TicketPurchase = {
+      purchaseId: makeTicketPurchaseId(),
+      userId,
+      targetUserId,
+      ticketType,
+      status: "active",
+      provider: "mock",
+      createdAt: now,
+    };
+    store.ticketPurchases.unshift(next);
+    store.paymentEvents.unshift({
+      eventId: makePaymentEventId(),
+      provider: "mock",
+      providerEventId: `mock_ticket_${next.purchaseId}`,
+      type: "checkout.session.completed",
+      status: "processed",
+      createdAt: now,
+      summary: `Mock ticket purchase activated for ${ticketType} to ${targetUserId}`,
+      relatedUserId: userId,
     });
     return next;
   });

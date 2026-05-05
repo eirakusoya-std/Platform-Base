@@ -1,6 +1,12 @@
 "use client";
 
-import type { BillingSubscription, CreateCheckoutInput, PaymentEvent } from "./apiTypes";
+import type {
+  BillingSubscription,
+  CreateCheckoutInput,
+  CreateTicketCheckoutInput,
+  PaymentEvent,
+  TicketPurchase,
+} from "./apiTypes";
 
 async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -37,4 +43,15 @@ export async function cancelBillingSubscription(subscriptionId: string) {
   return requestJson<{ subscription: BillingSubscription | null }>(`/api/billing/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, {
     method: "POST",
   });
+}
+
+export async function createTicketCheckout(input: CreateTicketCheckoutInput) {
+  return requestJson<{ purchase: TicketPurchase; checkoutUrl?: string; mode: "stripe" | "mock" }>("/api/billing/tickets", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listTicketPurchases() {
+  return requestJson<{ purchases: TicketPurchase[] }>("/api/billing/tickets");
 }

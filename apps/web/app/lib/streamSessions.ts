@@ -1,6 +1,6 @@
 "use client";
 
-import type { StreamSession, StreamSessionStatus } from "./apiTypes";
+import type { StreamSession, StreamSessionStatus, SubscriptionPlan } from "./apiTypes";
 
 export type { StreamSession, StreamSessionStatus };
 
@@ -14,7 +14,8 @@ type CreateStreamSessionInput = {
   participationType?: "First-come" | "Lottery";
   slotsTotal?: number;
   speakerSlotsTotal?: number;
-  speakerRequiredPlan?: "free" | "supporter" | "premium";
+  requiredPlan?: SubscriptionPlan;
+  speakerRequiredPlan?: SubscriptionPlan;
   preferredVideoDeviceId?: string;
   preferredVideoLabel?: string;
 };

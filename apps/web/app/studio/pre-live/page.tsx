@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChatBubbleLeftRightIcon, ChevronDownIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../components/home/TopNav";
 import { StudioProgress } from "../../components/ui/StudioProgress";
+import type { SubscriptionPlan } from "../../lib/apiTypes";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../lib/cameraDevices";
 import { useI18n } from "../../lib/i18n";
 import { createStreamSession } from "../../lib/streamSessions";
@@ -73,7 +74,7 @@ export default function StudioPreLivePage() {
   const [startWarnings, setStartWarnings] = useState<string[]>([]);
 
   const [speakerSlotsTotal, setSpeakerSlotsTotal] = useState(5);
-  const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<"free" | "supporter" | "premium">("free");
+  const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<SubscriptionPlan>("free");
   const [chatInput, setChatInput] = useState("");
   const [notices, setNotices] = useState<NoticeItem[]>([]);
 
@@ -519,12 +520,11 @@ export default function StudioPreLivePage() {
                         <span className="text-[var(--brand-text-muted)]">{tx("必要プラン", "Required plan")}</span>
                         <select
                           value={speakerRequiredPlan}
-                          onChange={(e) => setSpeakerRequiredPlan(e.target.value as "free" | "supporter" | "premium")}
+                          onChange={(e) => setSpeakerRequiredPlan(e.target.value as SubscriptionPlan)}
                           className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
                         >
                           <option value="free">{tx("なし", "None (free)")}</option>
-                          <option value="supporter">Supporter</option>
-                          <option value="premium">Premium</option>
+                          <option value="aimer">Aimer</option>
                         </select>
                       </label>
                     </div>

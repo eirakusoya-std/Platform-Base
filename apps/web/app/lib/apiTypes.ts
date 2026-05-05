@@ -1,8 +1,9 @@
 export type UserRole = "listener" | "vtuber";
 export type AuthProvider = "password" | "google" | "google_demo";
-export type SubscriptionPlan = "free" | "supporter" | "premium";
+export type SubscriptionPlan = "free" | "aimer";
 export type SubscriptionStatus = "inactive" | "trialing" | "active" | "past_due" | "canceled";
 export type BillingProvider = "stripe" | "mock";
+export type TicketType = "1on1_10min" | "1on1_30min";
 export type PaymentEventStatus = "received" | "processed" | "failed";
 export type ReportCategory = "abuse" | "harassment" | "impersonation" | "billing" | "other";
 export type ReportTargetType = "session" | "user" | "message" | "billing";
@@ -160,6 +161,20 @@ export type BillingSubscription = {
   checkoutSessionId?: string;
 };
 
+export type TicketPurchase = {
+  purchaseId: string;
+  userId: string;
+  targetUserId: string;
+  ticketType: TicketType;
+  status: "pending" | "active" | "used" | "expired";
+  provider: BillingProvider;
+  checkoutSessionId?: string;
+  checkoutUrl?: string;
+  providerPaymentIntentId?: string;
+  createdAt: string;
+  expiresAt?: string;
+};
+
 export type PaymentEvent = {
   eventId: string;
   provider: BillingProvider;
@@ -175,6 +190,11 @@ export type PaymentEvent = {
 
 export type CreateCheckoutInput = {
   plan: Exclude<SubscriptionPlan, "free">;
+};
+
+export type CreateTicketCheckoutInput = {
+  ticketType: TicketType;
+  targetUserId: string;
 };
 
 export type ConsentRecord = {

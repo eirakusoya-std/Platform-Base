@@ -14,6 +14,7 @@ import type {
   SignupInput,
   StreamSession,
   StreamSessionStatus,
+  SubscriptionPlan,
   UpdateStreamSessionInput,
 } from "../apiTypes";
 import { canAccessPlan, getEffectivePlanForUser } from "./billingStore";
@@ -94,6 +95,10 @@ function sanitizeUser(user: StoredUser): SessionUser {
   return safeUser;
 }
 
+function normalizePlanValue(value: unknown): SubscriptionPlan {
+  return value === "aimer" || value === "premium" || value === "supporter" ? "aimer" : "free";
+}
+
 function normalizeReservation(entry: Partial<Reservation>): Reservation | null {
   if (
     typeof entry.reservationId !== "string" ||
@@ -169,23 +174,13 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
     thumbnail: entry.thumbnail,
     hostName: entry.hostName,
     participationType,
-    requiredPlan:
-      entry.requiredPlan === "premium"
-        ? "premium"
-        : entry.requiredPlan === "supporter"
-          ? "supporter"
-          : "free",
+    requiredPlan: normalizePlanValue(entry.requiredPlan),
     reservationRequired: entry.reservationRequired === true,
     slotsTotal,
     slotsLeft,
     speakerSlotsTotal,
     speakerSlotsLeft,
-    speakerRequiredPlan:
-      entry.speakerRequiredPlan === "premium"
-        ? "premium"
-        : entry.speakerRequiredPlan === "supporter"
-          ? "supporter"
-          : "free",
+    speakerRequiredPlan: normalizePlanValue(entry.speakerRequiredPlan),
     preferredVideoDeviceId:
       typeof entry.preferredVideoDeviceId === "string" ? entry.preferredVideoDeviceId : undefined,
     preferredVideoLabel:
@@ -424,13 +419,13 @@ function rowToStreamSession(row: any): StreamSession {
     thumbnail: row.thumbnail as string,
     hostName: row.host_name as string,
     participationType: row.participation_type as "First-come" | "Lottery",
-    requiredPlan: row.required_plan as "free" | "supporter" | "premium",
+    requiredPlan: normalizePlanValue(row.required_plan),
     reservationRequired: Boolean(row.reservation_required),
     slotsTotal: Number(row.slots_total),
     slotsLeft: Number(row.slots_left),
     speakerSlotsTotal: Number(row.speaker_slots_total),
     speakerSlotsLeft: Number(row.speaker_slots_left),
-    speakerRequiredPlan: row.speaker_required_plan as "free" | "supporter" | "premium",
+    speakerRequiredPlan: normalizePlanValue(row.speaker_required_plan),
     preferredVideoDeviceId: row.preferred_video_device_id ?? undefined,
     preferredVideoLabel: row.preferred_video_label ?? undefined,
   };
