@@ -10,12 +10,14 @@ import {
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { TopNav } from "../components/home/TopNav";
+import { PaymentModal } from "../components/billing/PaymentModal";
 import {
   createCheckout,
   cancelBillingSubscription,
   listBillingSubscriptions,
   listTicketPurchases,
 } from "../lib/billing";
+// SOLID: S（決済UIの制御をPaymentModalに委譲し、ページの責任をアカウント管理に絞る）
 import { getMonitoringSummary } from "../lib/monitoring";
 import { createUserReport, listReports } from "../lib/reports";
 import { useUserSession } from "../lib/userSession";
@@ -151,6 +153,7 @@ export default function AccountPage() {
   const [subscriptions, setSubscriptions] = useState<BillingSubscription[]>([]);
   const [ticketPurchases, setTicketPurchases] = useState<TicketPurchase[]>([]);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [paymentModal, setPaymentModal] = useState<{ clientSecret: string; title: string; onSuccess: () => Promise<void> } | null>(null);
   const [monitoringSummary, setMonitoringSummary] = useState<MonitoringSummary | null>(null);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
@@ -287,10 +290,21 @@ export default function AccountPage() {
     setError(null);
     try {
       const result = await createCheckout({ plan: "aimer" });
-      if (result.checkoutUrl) {
-        window.location.href = result.checkoutUrl;
+      if (result.clientSecret) {
+        setPaymentModal({
+          clientSecret: result.clientSecret,
+          title: "Aimerプランに登録",
+          onSuccess: async () => {
+            setPaymentModal(null);
+            const billing = await listBillingSubscriptions();
+            setSubscriptions(billing.subscriptions);
+            await refreshSession();
+            setMessage("Aimer プランを有効化しました。");
+          },
+        });
         return;
       }
+      // モックモード: clientSecretなしで即時反映
       const billing = await listBillingSubscriptions();
       setSubscriptions(billing.subscriptions);
       await refreshSession();
@@ -980,6 +994,18 @@ export default function AccountPage() {
           </div>
         </section>
       </main>
+
+      {paymentModal ? (
+        <PaymentModal
+          clientSecret={paymentModal.clientSecret}
+          title={paymentModal.title}
+          onSuccess={() => void paymentModal.onSuccess()}
+          onClose={() => {
+            setPaymentModal(null);
+            setBillingLoading(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

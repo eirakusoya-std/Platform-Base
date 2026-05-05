@@ -192,9 +192,23 @@ export type CreateCheckoutInput = {
   plan: Exclude<SubscriptionPlan, "free">;
 };
 
+// SOLID: I（クライアントが必要なフィールドだけ依存できるよう戻り値型を明示）
+export type CreateCheckoutResponse = {
+  subscription: BillingSubscription;
+  clientSecret?: string;
+  mode: "stripe" | "mock";
+};
+
 export type CreateTicketCheckoutInput = {
   ticketType: TicketType;
   targetUserId: string;
+};
+
+export type CreateTicketCheckoutResponse = {
+  purchase: TicketPurchase;
+  clientSecret?: string;
+  paymentIntentId?: string;
+  mode: "stripe" | "mock";
 };
 
 export type ConsentRecord = {

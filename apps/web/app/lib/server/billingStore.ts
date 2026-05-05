@@ -320,12 +320,14 @@ export async function activateMockSubscription(userId: string, plan: Exclude<Sub
   });
 }
 
+// SOLID: O（チケット識別子をcheckoutSessionId/providerPaymentIntentIdのどちらでも受け入れられるよう拡張）
 export async function createPendingTicketPurchase(input: {
   userId: string;
   targetUserId: string;
   ticketType: TicketType;
   checkoutSessionId?: string;
   checkoutUrl?: string;
+  providerPaymentIntentId?: string;
 }) {
   return mutateStore((store) => {
     const now = new Date().toISOString();
@@ -338,6 +340,7 @@ export async function createPendingTicketPurchase(input: {
       provider: "stripe",
       checkoutSessionId: input.checkoutSessionId,
       checkoutUrl: input.checkoutUrl,
+      providerPaymentIntentId: input.providerPaymentIntentId,
       createdAt: now,
     };
     store.ticketPurchases.unshift(next);
@@ -346,12 +349,17 @@ export async function createPendingTicketPurchase(input: {
 }
 
 export async function activateTicketPurchase(input: {
-  checkoutSessionId: string;
+  checkoutSessionId?: string;
   providerPaymentIntentId?: string;
 }) {
   return mutateStore((store) => {
-    const purchase = store.ticketPurchases.find((entry) => entry.checkoutSessionId === input.checkoutSessionId);
+    const purchase = store.ticketPurchases.find(
+      (entry) =>
+        (input.checkoutSessionId && entry.checkoutSessionId === input.checkoutSessionId) ||
+        (input.providerPaymentIntentId && entry.providerPaymentIntentId === input.providerPaymentIntentId),
+    );
     if (!purchase) return null;
+    if (purchase.status === "active") return purchase;
     purchase.status = "active";
     purchase.providerPaymentIntentId = input.providerPaymentIntentId ?? purchase.providerPaymentIntentId;
     return purchase;

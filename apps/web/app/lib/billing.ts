@@ -1,9 +1,12 @@
 "use client";
 
+// SOLID: I（クライアントが必要なフィールドだけ依存できるよう戻り値型を明示）
 import type {
   BillingSubscription,
   CreateCheckoutInput,
+  CreateCheckoutResponse,
   CreateTicketCheckoutInput,
+  CreateTicketCheckoutResponse,
   PaymentEvent,
   TicketPurchase,
 } from "./apiTypes";
@@ -33,7 +36,7 @@ export async function listBillingSubscriptions() {
 }
 
 export async function createCheckout(input: CreateCheckoutInput) {
-  return requestJson<{ subscription: BillingSubscription; checkoutUrl?: string; mode: "stripe" | "mock" }>("/api/billing/subscriptions", {
+  return requestJson<CreateCheckoutResponse>("/api/billing/subscriptions", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -46,7 +49,7 @@ export async function cancelBillingSubscription(subscriptionId: string) {
 }
 
 export async function createTicketCheckout(input: CreateTicketCheckoutInput) {
-  return requestJson<{ purchase: TicketPurchase; checkoutUrl?: string; mode: "stripe" | "mock" }>("/api/billing/tickets", {
+  return requestJson<CreateTicketCheckoutResponse>("/api/billing/tickets", {
     method: "POST",
     body: JSON.stringify(input),
   });

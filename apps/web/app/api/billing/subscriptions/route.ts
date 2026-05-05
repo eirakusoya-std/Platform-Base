@@ -1,4 +1,6 @@
+// SOLID: S（サブスク作成ロジックをAPIに集約し、決済UIはフロントのElements側に委譲）
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import type { CreateCheckoutInput, SubscriptionPlan } from "@/app/lib/apiTypes";
 import { requireSessionUser } from "@/app/lib/server/auth";
 import {
@@ -9,7 +11,7 @@ import {
   logPaymentEvent,
 } from "@/app/lib/server/billingStore";
 import { recordMonitoringEvent } from "@/app/lib/server/opsStore";
-import { getBillingCancelUrl, getBillingSuccessUrl, getStripeClient, getStripePriceId } from "@/app/lib/server/stripe";
+import { getStripeClient, getStripePriceId } from "@/app/lib/server/stripe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,45 +61,61 @@ export async function POST(request: Request) {
       return NextResponse.json({ subscription, mode: "mock" }, { status: 201 });
     }
 
-    const checkoutSession = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      success_url: getBillingSuccessUrl(),
-      cancel_url: getBillingCancelUrl(),
-      customer_email: user.email,
-      line_items: [{ price: priceId, quantity: 1 }],
-      metadata: {
-        userId: user.id,
-        plan: body.plan,
-      },
-      subscription_data: {
-        metadata: {
-          userId: user.id,
-          plan: body.plan,
-        },
-      },
+    // Stripe Customer を取得または作成
+    const existingCustomers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customerId =
+      existingCustomers.data[0]?.id ??
+      (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
+
+    // Subscription を作成（payment_behavior: default_incomplete でclientSecretを取得）
+    const stripeSubscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{ price: priceId, quantity: 1 }],
+      payment_behavior: "default_incomplete",
+      payment_settings: { save_default_payment_method: "on_subscription" },
+      expand: ["latest_invoice.payment_intent"],
+      metadata: { userId: user.id, plan: body.plan },
     });
+
+    // expand使用時はSDKの型がunionのまま。runtime型を明示するためキャストする
+    type ExpandedInvoice = Stripe.Invoice & { payment_intent: Stripe.PaymentIntent | null };
+    type ExpandedSubscription = Stripe.Subscription & { latest_invoice: ExpandedInvoice | null };
+
+    const expandedSub = stripeSubscription as ExpandedSubscription;
+    const invoice = expandedSub.latest_invoice;
+    if (!invoice) {
+      throw new Error("Failed to expand latest_invoice");
+    }
+    const paymentIntent = invoice.payment_intent;
+    if (!paymentIntent) {
+      throw new Error("Failed to expand payment_intent");
+    }
+    if (!paymentIntent.client_secret) {
+      throw new Error("PaymentIntent client_secret is null");
+    }
 
     const subscription = await createPendingSubscription({
       userId: user.id,
       provider: "stripe",
       plan: body.plan,
-      checkoutUrl: checkoutSession.url ?? undefined,
-      providerCustomerId: typeof checkoutSession.customer === "string" ? checkoutSession.customer : undefined,
-      providerSubscriptionId: typeof checkoutSession.subscription === "string" ? checkoutSession.subscription : undefined,
-      checkoutSessionId: checkoutSession.id,
+      providerCustomerId: customerId,
+      providerSubscriptionId: stripeSubscription.id,
     });
 
     await logPaymentEvent({
       provider: "stripe",
-      providerEventId: checkoutSession.id,
-      type: "checkout.session.created",
+      providerEventId: stripeSubscription.id,
+      type: "subscription.created",
       status: "received",
-      summary: `Checkout session created for ${body.plan}`,
+      summary: `Subscription created for ${body.plan}`,
       relatedUserId: user.id,
       relatedSubscriptionId: subscription.subscriptionId,
     });
 
-    return NextResponse.json({ subscription, checkoutUrl: checkoutSession.url, mode: "stripe" }, { status: 201 });
+    return NextResponse.json(
+      { subscription, clientSecret: paymentIntent.client_secret, subscriptionId: stripeSubscription.id, mode: "stripe" },
+      { status: 201 },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create subscription";
     await recordMonitoringEvent({
