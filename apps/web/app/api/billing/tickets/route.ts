@@ -1,3 +1,4 @@
+// SOLID: S（チケット決済の意図作成をAPIに限定し、UI表示はクライアントのElementsに分離）
 import { NextResponse } from "next/server";
 import type { CreateTicketCheckoutInput, TicketType } from "@/app/lib/apiTypes";
 import { requireSessionUser } from "@/app/lib/server/auth";
@@ -9,7 +10,7 @@ import {
   logPaymentEvent,
 } from "@/app/lib/server/billingStore";
 import { recordMonitoringEvent } from "@/app/lib/server/opsStore";
-import { getBillingCancelUrl, getBillingSuccessUrl, getStripeClient, getStripePriceId } from "@/app/lib/server/stripe";
+import { getStripeClient, getStripePriceId } from "@/app/lib/server/stripe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,7 +62,6 @@ export async function POST(request: Request) {
 
     const stripe = await getStripeClient();
     const priceId = getStripePriceId(body.ticketType);
-    const channelReturnPath = `/channels/${encodeURIComponent(targetUser.id)}`;
 
     if (!stripe || !priceId) {
       const purchase = await activateMockTicketPurchase(user.id, targetUser.id, body.ticketType);
@@ -75,44 +75,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ purchase, mode: "mock" }, { status: 201 });
     }
 
-    const checkoutSession = await stripe.checkout.sessions.create({
-      mode: "payment",
-      success_url: getBillingSuccessUrl(channelReturnPath),
-      cancel_url: getBillingCancelUrl(channelReturnPath),
-      customer_email: user.email,
-      line_items: [{ price: priceId, quantity: 1 }],
+    // 金額をPriceから取得してPaymentIntentを直接作成
+    const price = await stripe.prices.retrieve(priceId);
+    if (!price.unit_amount) {
+      throw new Error("Price unit_amount is not available");
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: price.unit_amount,
+      currency: price.currency,
+      receipt_email: user.email,
       metadata: {
         userId: user.id,
         targetUserId: targetUser.id,
         ticketType: body.ticketType,
       },
-      payment_intent_data: {
-        metadata: {
-          userId: user.id,
-          targetUserId: targetUser.id,
-          ticketType: body.ticketType,
-        },
-      },
     });
+
+    if (!paymentIntent.client_secret) {
+      throw new Error("PaymentIntent client_secret is null");
+    }
 
     const purchase = await createPendingTicketPurchase({
       userId: user.id,
       targetUserId: targetUser.id,
       ticketType: body.ticketType,
-      checkoutSessionId: checkoutSession.id,
-      checkoutUrl: checkoutSession.url ?? undefined,
+      providerPaymentIntentId: paymentIntent.id,
     });
 
     await logPaymentEvent({
       provider: "stripe",
-      providerEventId: checkoutSession.id,
-      type: "checkout.session.created",
+      providerEventId: paymentIntent.id,
+      type: "payment_intent.created",
       status: "received",
-      summary: `Checkout session created for ${body.ticketType} to ${targetUser.id}`,
+      summary: `PaymentIntent created for ${body.ticketType} to ${targetUser.id}`,
       relatedUserId: user.id,
     });
 
-    return NextResponse.json({ purchase, checkoutUrl: checkoutSession.url, mode: "stripe" }, { status: 201 });
+    return NextResponse.json(
+      { purchase, clientSecret: paymentIntent.client_secret, paymentIntentId: paymentIntent.id, mode: "stripe" },
+      { status: 201 },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create ticket checkout";
     await recordMonitoringEvent({
