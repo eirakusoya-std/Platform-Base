@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createVtuberToken, createSpeakerToken } from "@repo/livekit";
+import { createVtuberToken, createSpeakerToken, createListenerToken } from "@repo/livekit";
 import { resolveSessionUser } from "@/app/lib/server/auth";
 import { hasActiveSpeakerReservation } from "@/app/lib/server/aimentStore";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const { sessionId, role } = (await request.json()) as { sessionId: string; role: "vtuber" | "speaker" };
+    const { sessionId, role } = (await request.json()) as { sessionId: string; role: "vtuber" | "speaker" | "listener" };
 
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
@@ -41,7 +41,9 @@ export async function POST(request: Request) {
     const token =
       role === "vtuber"
         ? await createVtuberToken(params)
-        : await createSpeakerToken(params);
+        : role === "speaker"
+          ? await createSpeakerToken(params)
+          : await createListenerToken(params);
 
     return NextResponse.json({ token, livekitUrl, roomName });
   } catch (error) {

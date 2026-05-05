@@ -165,7 +165,7 @@ export function SmartPhraseAssist({ sessionState, onSendPhrase, onInsertPhrase, 
   return (
     <div className={`relative ${className}`.trim()}>
       {expanded ? (
-        <div className="mb-2 max-h-[280px] overflow-y-auto rounded-2xl border border-white/10 bg-[linear-gradient(145deg,color-mix(in_srgb,var(--brand-bg-800)_90%,#ffffff_10%),color-mix(in_srgb,var(--brand-primary)_18%,var(--brand-bg-900)_82%))] p-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
+        <div className="mb-2 max-h-[280px] overflow-y-auto rounded-2xl border border-white/10 bg-[var(--brand-bg-900)] p-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-bold text-[var(--brand-text)]">日本語フレーズ</p>
@@ -223,11 +223,11 @@ export function SmartPhraseAssist({ sessionState, onSendPhrase, onInsertPhrase, 
                           onPointerUp={clearLongPressTimer}
                           onPointerCancel={clearLongPressTimer}
                           onPointerLeave={clearLongPressTimer}
-                          className="group relative min-h-[74px] cursor-pointer rounded-xl border border-white/10 bg-white/[0.075] px-3 py-2 text-left shadow-[0_10px_24px_rgba(0,0,0,0.16)] transition duration-150 hover:scale-[1.018] hover:border-[var(--brand-secondary)]/45 hover:bg-white/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-secondary)]/70"
+                          className="group relative min-h-[74px] cursor-pointer rounded-xl bg-[var(--brand-surface)] px-3 py-2 text-left shadow-[0_10px_24px_rgba(0,0,0,0.16)] transition duration-150 hover:scale-[1.018] hover:bg-[var(--brand-surface-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-secondary)]/70"
                         >
                           <span className="absolute right-2 top-2 flex items-center gap-1">
                             {sent ? (
-                              <span className="rounded-full bg-[var(--brand-secondary)] px-2 py-0.5 text-[10px] font-bold text-black shadow-lg shadow-[var(--brand-secondary)]/20">
+                              <span className="rounded-full bg-black px-2 py-0.5 text-[10px] font-bold text-[var(--brand-secondary)] shadow-lg shadow-black/15">
                                 Sent
                               </span>
                             ) : null}
@@ -245,15 +245,14 @@ export function SmartPhraseAssist({ sessionState, onSendPhrase, onInsertPhrase, 
                                 event.stopPropagation();
                                 togglePinned(phrase.id);
                               }}
-                              className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition ${
-                                pinned ? "bg-[var(--brand-secondary)] text-black" : "bg-black/20 text-white/55 hover:text-white"
-                              }`}
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition ${pinned ? "bg-black text-[var(--brand-secondary)]" : "bg-black/15 text-black/55 hover:text-black"
+                                }`}
                             >
                               <StarIcon className="h-3.5 w-3.5" aria-hidden />
                             </span>
                           </span>
-                          <span className="block pr-16 text-base font-bold leading-snug text-[var(--brand-text)]">{phrase.ja}</span>
-                          <span className="mt-1 block text-xs leading-snug text-[var(--brand-secondary)]">{phrase.romaji}</span>
+                          <span className="block pr-16 text-base font-bold leading-snug text-[var(--brand-secondary)]">{phrase.ja}</span>
+                          <span className="mt-1 block text-xs leading-snug text-[var(--brand-text)]">{phrase.romaji}</span>
                           <span className="mt-0.5 block text-[11px] leading-snug text-[var(--brand-text-muted)]">{phrase.en}</span>
                         </div>
                       );
@@ -269,14 +268,14 @@ export function SmartPhraseAssist({ sessionState, onSendPhrase, onInsertPhrase, 
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--brand-primary)_28%,var(--brand-bg-900)_72%),color-mix(in_srgb,var(--brand-secondary)_16%,var(--brand-bg-900)_84%))] px-3 py-2 text-sm font-bold text-[var(--brand-text)] shadow-[0_12px_28px_rgba(0,0,0,0.22)] transition hover:scale-[1.01] hover:border-white/20"
+        className="flex w-full items-center justify-between rounded-xl bg-[var(--brand-secondary)] px-3 py-2 text-sm font-bold text-black shadow-[0_12px_28px_rgba(0,229,255,0.16)] transition hover:scale-[1.01] hover:brightness-95"
         aria-expanded={expanded}
       >
         <span className="inline-flex items-center gap-2">
-          <ChatBubbleLeftRightIcon className="h-4 w-4 text-[var(--brand-secondary)]" aria-hidden />
-          日本語でコメント
+          <ChatBubbleLeftRightIcon className="h-4 w-4 text-black" aria-hidden />
+          comment in Japanese
         </span>
-        <span className={`text-[11px] text-[var(--brand-text-muted)] transition ${expanded ? "rotate-180" : ""}`}>↑</span>
+        <span className={`text-[11px] text-black/70 transition ${expanded ? "rotate-180" : ""}`}>↑</span>
       </button>
     </div>
   );

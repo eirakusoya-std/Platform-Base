@@ -49,7 +49,29 @@ export async function createSpeakerToken(
     roomJoin: true,
     canPublish: true,
     canSubscribe: true,
+    canPublishData: true,
     canPublishSources: [TrackSource.MICROPHONE],
+  };
+  at.addGrant(grant);
+  return at.toJwt();
+}
+
+/**
+ * Listener token: subscribe + data messages only.
+ */
+export async function createListenerToken(params: TokenParams): Promise<string> {
+  const at = new AccessToken(params.apiKey, params.apiSecret, {
+    identity: params.userId,
+    name: params.userName,
+    ttl: "4h",
+  });
+
+  const grant: VideoGrant = {
+    room: params.roomName,
+    roomJoin: true,
+    canPublish: false,
+    canSubscribe: true,
+    canPublishData: true,
   };
   at.addGrant(grant);
   return at.toJwt();
