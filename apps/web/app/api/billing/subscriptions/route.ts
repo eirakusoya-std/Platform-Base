@@ -1,5 +1,6 @@
 // SOLID: S（サブスク作成ロジックをAPIに集約し、決済UIはフロントのElements側に委譲）
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import type { CreateCheckoutInput, SubscriptionPlan } from "@/app/lib/apiTypes";
 import { requireSessionUser } from "@/app/lib/server/auth";
 import {
@@ -76,12 +77,17 @@ export async function POST(request: Request) {
       metadata: { userId: user.id, plan: body.plan },
     });
 
-    const invoice = stripeSubscription.latest_invoice;
-    if (!invoice || typeof invoice === "string") {
+    // expand使用時はSDKの型がunionのまま。runtime型を明示するためキャストする
+    type ExpandedInvoice = Stripe.Invoice & { payment_intent: Stripe.PaymentIntent | null };
+    type ExpandedSubscription = Stripe.Subscription & { latest_invoice: ExpandedInvoice | null };
+
+    const expandedSub = stripeSubscription as ExpandedSubscription;
+    const invoice = expandedSub.latest_invoice;
+    if (!invoice) {
       throw new Error("Failed to expand latest_invoice");
     }
     const paymentIntent = invoice.payment_intent;
-    if (!paymentIntent || typeof paymentIntent === "string") {
+    if (!paymentIntent) {
       throw new Error("Failed to expand payment_intent");
     }
     if (!paymentIntent.client_secret) {
