@@ -1,2 +1,14 @@
 node_modules
 .vercel
+
+# 環境変数
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# ローカルデータストア（コミット不要）
+apps/web/data/*.json
