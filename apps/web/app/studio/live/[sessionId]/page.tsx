@@ -16,6 +16,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
+import { OpenCueMiniPanelButton, sendCue, type CueEvent } from "../../../components/cue/CueMiniPanel";
 import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
@@ -283,8 +284,8 @@ export default function StudioLiveSessionPage() {
     [connectionStatus, connectedViewers, participants, tx],
   );
 
-  const sendChat = () => {
-    const text = chatInput.trim();
+  const sendChatText = useCallback((phrase: string) => {
+    const text = phrase.trim();
     if (!text) return;
     const msg = { type: "chat", id: crypto.randomUUID(), user: "host", text };
     seenChatIdsRef.current.add(msg.id);
@@ -296,7 +297,21 @@ export default function StudioLiveSessionPage() {
         { reliable: true },
       );
     }
-  };
+  }, [connectionStatus]);
+
+  const sendChat = useCallback(() => {
+    sendChatText(chatInput);
+  }, [chatInput, sendChatText]);
+
+  const sendCueEvent = useCallback((cueEvent: CueEvent) => {
+    sendCue(cueEvent);
+    if (roomRef.current && connectionStatus === "live") {
+      void roomRef.current.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify({ type: "cue", ...cueEvent })),
+        { reliable: true },
+      );
+    }
+  }, [connectionStatus]);
 
   useEffect(() => {
     const el = chatListRef.current;
@@ -868,6 +883,7 @@ export default function StudioLiveSessionPage() {
                   {tx("送信", "Send")}
                 </button>
               </div>
+              <OpenCueMiniPanelButton sessionId={sessionId} onSendCue={sendCueEvent} className="mt-2" />
             </div>
           </section>
         </aside>

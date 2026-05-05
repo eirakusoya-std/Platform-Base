@@ -7,7 +7,7 @@
       "email": "soredemo@banaji8",
       "authProvider": "password",
       "createdAt": "2026-04-09T04:14:02.454Z",
-      "lastLoginAt": "2026-04-09T05:38:59.308Z",
+      "lastLoginAt": "2026-05-05T08:06:13.276Z",
       "phoneNumber": "309183041",
       "phoneVerifiedAt": "2026-04-09T04:14:02.555Z",
       "termsAcceptedAt": "2026-04-09T04:14:02.454Z",
@@ -197,6 +197,28 @@
     }
   ],
   "streamSessions": [
+    {
+      "sessionId": "session-mosch11e-ca59e6",
+      "hostUserId": "vtuber-mnqypyhl-7a7c97",
+      "title": "cue",
+      "status": "prelive",
+      "createdAt": "2026-05-05T08:06:28.994Z",
+      "startsAt": "2026-05-05T08:06:28.960Z",
+      "description": "",
+      "category": "英語",
+      "thumbnail": "/image/thumbnail/thumbnail_5.png",
+      "hostName": "バナージ8",
+      "participationType": "First-come",
+      "requiredPlan": "free",
+      "reservationRequired": false,
+      "slotsTotal": 50,
+      "slotsLeft": 50,
+      "speakerSlotsTotal": 5,
+      "speakerSlotsLeft": 5,
+      "speakerRequiredPlan": "free",
+      "preferredVideoDeviceId": "24cc7b66aacbdddcbdd3ecff83b4658327f21f6de0a2424860cde935a16db8bf",
+      "preferredVideoLabel": "OBS Virtual Camera"
+    },
     {
       "sessionId": "session-mnr1ricf-ab1d95",
       "hostUserId": "vtuber-mnqypyhl-7a7c97",

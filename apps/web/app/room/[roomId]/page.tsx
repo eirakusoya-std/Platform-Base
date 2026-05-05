@@ -13,6 +13,8 @@ import {
   VideoCameraSlashIcon,
 } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
+import type { CueCategory, CueEvent } from "../../components/cue/CueMiniPanel";
+import { SmartPhraseAssist, type SmartPhraseSessionState } from "../../components/chat/SmartPhraseAssist";
 import { useI18n } from "../../lib/i18n";
 
 type Role = "host" | "listener" | "speaker" | "unknown";
@@ -24,6 +26,11 @@ type ChatMessage = {
   user: string;
   text: string;
   mine?: boolean;
+  kind?: "chat" | "cue";
+};
+
+type CueMessage = Partial<CueEvent> & {
+  type?: string;
 };
 
 const MAX_CHAT_MESSAGES = 200;
@@ -38,6 +45,37 @@ const INITIAL_CHAT: ChatMessage[] = [
 function parseRequestedRole(value: string | null): RequestedRole {
   if (value === "host" || value === "speaker" || value === "listener") return value;
   return "listener";
+}
+
+function isCueCategory(value: unknown): value is CueCategory {
+  return value === "movement" || value === "flow" || value === "reaction" || value === "help";
+}
+
+function parseCueMessage(message: unknown): CueEvent | null {
+  if (!message || typeof message !== "object") return null;
+  const cueMessage = message as CueMessage;
+  if (
+    cueMessage.type !== "cue" ||
+    typeof cueMessage.sessionId !== "string" ||
+    typeof cueMessage.cueId !== "string" ||
+    typeof cueMessage.english !== "string" ||
+    typeof cueMessage.japanese !== "string" ||
+    typeof cueMessage.icon !== "string" ||
+    typeof cueMessage.createdAt !== "string" ||
+    !isCueCategory(cueMessage.category)
+  ) {
+    return null;
+  }
+
+  return {
+    sessionId: cueMessage.sessionId,
+    cueId: cueMessage.cueId,
+    english: cueMessage.english,
+    japanese: cueMessage.japanese,
+    icon: cueMessage.icon,
+    category: cueMessage.category,
+    createdAt: cueMessage.createdAt,
+  };
 }
 
 export default function RoomPage() {
@@ -55,6 +93,7 @@ export default function RoomPage() {
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT);
   const [chatInput, setChatInput] = useState("");
+  const [latestCue, setLatestCue] = useState<CueEvent | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const [micOn, setMicOn] = useState(requestedRole !== "listener" && searchParams.get("mic") !== "0");
@@ -70,9 +109,11 @@ export default function RoomPage() {
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const roomRef = useRef<Room | null>(null);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
+  const seenCueIdsRef = useRef<Set<string>>(new Set());
 
   const canSendMic = assignedRole === "host" || assignedRole === "speaker";
   const canSendCam = assignedRole === "host";
@@ -116,8 +157,8 @@ export default function RoomPage() {
     [canSendCam, selectedCamDeviceId],
   );
 
-  const sendChat = useCallback(() => {
-    const value = chatInput.trim();
+  const sendChatText = useCallback((text: string) => {
+    const value = text.trim();
     if (!value) return;
     const displayName = roomRef.current?.localParticipant.name ?? "you";
     const msg = { type: "chat", id: crypto.randomUUID(), user: displayName, text: value };
@@ -130,10 +171,30 @@ export default function RoomPage() {
         { reliable: true },
       );
     }
-  }, [chatInput, status]);
+  }, [status]);
+
+  const sendChat = useCallback(() => {
+    sendChatText(chatInput);
+  }, [chatInput, sendChatText]);
+
+  const insertChatPhrase = useCallback((phrase: string) => {
+    setChatInput((current) => (current.trim() ? `${current.trimEnd()} ${phrase}` : phrase));
+    window.requestAnimationFrame(() => chatInputRef.current?.focus());
+  }, []);
+
+  const phraseSessionState = useMemo<SmartPhraseSessionState>(() => {
+    if (status !== "connected") return "waiting";
+    return "game";
+  }, [status]);
 
   useEffect(() => {
-    if (!roomId || requestedRole === "listener") return;
+    if (!latestCue) return;
+    const timeout = window.setTimeout(() => setLatestCue(null), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [latestCue]);
+
+  useEffect(() => {
+    if (!roomId) return;
 
     let mounted = true;
 
@@ -146,7 +207,7 @@ export default function RoomPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: roomId,
-          role: requestedRole === "host" ? "vtuber" : "speaker",
+          role: requestedRole === "host" ? "vtuber" : requestedRole,
         }),
       });
 
@@ -170,13 +231,14 @@ export default function RoomPage() {
       room.on(RoomEvent.Connected, () => {
         if (!mounted) return;
         setStatus("connected");
-        setAssignedRole(requestedRole === "host" ? "host" : "speaker");
+        setAssignedRole(requestedRole === "host" ? "host" : requestedRole);
 
-        // Publish mic (always true here since listener exits early above)
-        void room.localParticipant.setMicrophoneEnabled(
-          micOn,
-          micOn && selectedMicDeviceId ? { deviceId: selectedMicDeviceId } : undefined,
-        );
+        if (requestedRole !== "listener") {
+          void room.localParticipant.setMicrophoneEnabled(
+            micOn,
+            micOn && selectedMicDeviceId ? { deviceId: selectedMicDeviceId } : undefined,
+          );
+        }
         // Publish camera for host only
         if (requestedRole === "host") {
           void room.localParticipant.setCameraEnabled(
@@ -243,6 +305,13 @@ export default function RoomPage() {
             id?: string;
             user?: string;
             text?: string;
+            sessionId?: string;
+            cueId?: string;
+            english?: string;
+            japanese?: string;
+            icon?: string;
+            category?: CueCategory;
+            createdAt?: string;
           };
           const id = msg.id;
           const user = msg.user;
@@ -253,6 +322,23 @@ export default function RoomPage() {
               ...prev,
               { id, user, text },
             ].slice(-MAX_CHAT_MESSAGES));
+          }
+          const cue = parseCueMessage(msg);
+          if (cue) {
+            const cueKey = `${cue.sessionId}:${cue.cueId}:${cue.createdAt}`;
+            if (!seenCueIdsRef.current.has(cueKey)) {
+              seenCueIdsRef.current.add(cueKey);
+              setLatestCue(cue);
+              setChatMessages((prev) => [
+                ...prev,
+                {
+                  id: `cue-${cueKey}`,
+                  user: "Live cue",
+                  text: `${cue.icon} ${cue.english} / ${cue.japanese}`,
+                  kind: "cue" as const,
+                },
+              ].slice(-MAX_CHAT_MESSAGES));
+            }
           }
         } catch {
           // no-op
@@ -447,10 +533,20 @@ export default function RoomPage() {
                 {chatMessages.map((message) => (
                   <div
                     key={message.id}
-                    className={`rounded-lg px-3 py-2 ${message.mine ? "ml-6 bg-[var(--brand-primary)]/20" : "mr-6 bg-[var(--brand-surface)]"}`}
+                    className={`rounded-lg px-3 py-2 ${
+                      message.kind === "cue"
+                        ? "bg-[var(--brand-bg-900)] ring-1 ring-[var(--brand-secondary)]/35"
+                        : message.mine
+                          ? "ml-6 bg-[var(--brand-primary)]/20"
+                          : "mr-6 bg-[var(--brand-surface)]"
+                    }`}
                   >
-                    <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{message.user}</p>
-                    <p className="text-sm leading-relaxed text-[var(--brand-text)]">{message.text}</p>
+                    <p className={`mb-1 text-[11px] font-semibold ${message.kind === "cue" ? "text-[var(--brand-secondary)]" : "text-[var(--brand-primary)]"}`}>
+                      {message.user}
+                    </p>
+                    <p className={`text-sm leading-relaxed ${message.kind === "cue" ? "font-bold text-[var(--brand-secondary)]" : "text-[var(--brand-text)]"}`}>
+                      {message.text}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -467,8 +563,21 @@ export default function RoomPage() {
             </div>
 
             <div className="p-3">
+              {latestCue ? (
+                <div className="mb-2 rounded-xl bg-[var(--brand-surface)] px-3 py-2 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--brand-text-muted)]">Live cue</span>
+                    <span className="text-[10px] font-bold text-[var(--brand-text-muted)]">{latestCue.category}</span>
+                  </div>
+                  <p className="mt-1 text-sm font-extrabold text-[var(--brand-secondary)]">
+                    <span aria-hidden>{latestCue.icon}</span> {latestCue.english}
+                    <span className="ml-2 text-xs text-[var(--brand-text)]">{latestCue.japanese}</span>
+                  </p>
+                </div>
+              ) : null}
               <div className="flex gap-2">
                 <input
+                  ref={chatInputRef}
                   value={chatInput}
                   onChange={(event) => setChatInput(event.target.value)}
                   onKeyDown={(event) => {
@@ -486,6 +595,12 @@ export default function RoomPage() {
                   {tx("送信", "Send")}
                 </button>
               </div>
+              <SmartPhraseAssist
+                sessionState={phraseSessionState}
+                onSendPhrase={sendChatText}
+                onInsertPhrase={insertChatPhrase}
+                className="mt-2"
+              />
             </div>
           </aside>
         </div>

@@ -1,4 +1,4 @@
-export { createVtuberToken, createSpeakerToken } from "./tokens";
+export { createVtuberToken, createSpeakerToken, createListenerToken } from "./tokens";
 export type { TokenParams } from "./tokens";
 
 export { ensureRoomExists } from "./rooms";
