@@ -1,6 +1,5 @@
 // SOLID: S（サブスク作成ロジックをAPIに集約し、決済UIはフロントのElements側に委譲）
 import { NextResponse } from "next/server";
-import type Stripe from "stripe";
 import type { CreateCheckoutInput, SubscriptionPlan } from "@/app/lib/apiTypes";
 import { requireSessionUser } from "@/app/lib/server/auth";
 import {
@@ -67,31 +66,27 @@ export async function POST(request: Request) {
       existingCustomers.data[0]?.id ??
       (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
 
-    // Subscription を作成（payment_behavior: default_incomplete でclientSecretを取得）
+    // Subscription を作成（payment_behavior: default_incomplete）
     const stripeSubscription = await stripe.subscriptions.create({
       customer: customerId,
       items: [{ price: priceId, quantity: 1 }],
       payment_behavior: "default_incomplete",
       payment_settings: { save_default_payment_method: "on_subscription" },
-      expand: ["latest_invoice.payment_intent"],
       metadata: { userId: user.id, plan: body.plan },
     });
 
-    // expand使用時はSDKの型がunionのまま。runtime型を明示するためキャストする
-    type ExpandedInvoice = Stripe.Invoice & { payment_intent: Stripe.PaymentIntent | null };
-    type ExpandedSubscription = Stripe.Subscription & { latest_invoice: ExpandedInvoice | null };
+    // latest_invoice を取得し confirmation_secret からclientSecretを得る
+    // （Stripe SDK v18ではInvoice.payment_intentが廃止、confirmation_secretを使用）
+    const rawInvoice = stripeSubscription.latest_invoice;
+    const invoiceId = typeof rawInvoice === "string" ? rawInvoice : rawInvoice?.id;
+    if (!invoiceId) {
+      throw new Error("Subscription has no latest_invoice");
+    }
 
-    const expandedSub = stripeSubscription as ExpandedSubscription;
-    const invoice = expandedSub.latest_invoice;
-    if (!invoice) {
-      throw new Error("Failed to expand latest_invoice");
-    }
-    const paymentIntent = invoice.payment_intent;
-    if (!paymentIntent) {
-      throw new Error("Failed to expand payment_intent");
-    }
-    if (!paymentIntent.client_secret) {
-      throw new Error("PaymentIntent client_secret is null");
+    const invoice = await stripe.invoices.retrieve(invoiceId);
+    const clientSecret = invoice.confirmation_secret?.client_secret;
+    if (!clientSecret) {
+      throw new Error("Invoice has no confirmation_secret");
     }
 
     const subscription = await createPendingSubscription({
@@ -113,7 +108,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { subscription, clientSecret: paymentIntent.client_secret, subscriptionId: stripeSubscription.id, mode: "stripe" },
+      { subscription, clientSecret, subscriptionId: stripeSubscription.id, mode: "stripe" },
       { status: 201 },
     );
   } catch (error) {
