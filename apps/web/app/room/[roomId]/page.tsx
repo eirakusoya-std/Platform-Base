@@ -13,6 +13,7 @@ import {
   VideoCameraSlashIcon,
 } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
+import { SmartPhraseAssist, type SmartPhraseSessionState } from "../../components/chat/SmartPhraseAssist";
 import { useI18n } from "../../lib/i18n";
 
 type Role = "host" | "listener" | "speaker" | "unknown";
@@ -70,6 +71,7 @@ export default function RoomPage() {
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const roomRef = useRef<Room | null>(null);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
@@ -116,8 +118,8 @@ export default function RoomPage() {
     [canSendCam, selectedCamDeviceId],
   );
 
-  const sendChat = useCallback(() => {
-    const value = chatInput.trim();
+  const sendChatText = useCallback((text: string) => {
+    const value = text.trim();
     if (!value) return;
     const displayName = roomRef.current?.localParticipant.name ?? "you";
     const msg = { type: "chat", id: crypto.randomUUID(), user: displayName, text: value };
@@ -130,7 +132,21 @@ export default function RoomPage() {
         { reliable: true },
       );
     }
-  }, [chatInput, status]);
+  }, [status]);
+
+  const sendChat = useCallback(() => {
+    sendChatText(chatInput);
+  }, [chatInput, sendChatText]);
+
+  const insertChatPhrase = useCallback((phrase: string) => {
+    setChatInput((current) => (current.trim() ? `${current.trimEnd()} ${phrase}` : phrase));
+    window.requestAnimationFrame(() => chatInputRef.current?.focus());
+  }, []);
+
+  const phraseSessionState = useMemo<SmartPhraseSessionState>(() => {
+    if (status !== "connected") return "waiting";
+    return "game";
+  }, [status]);
 
   useEffect(() => {
     if (!roomId || requestedRole === "listener") return;
@@ -469,6 +485,7 @@ export default function RoomPage() {
             <div className="p-3">
               <div className="flex gap-2">
                 <input
+                  ref={chatInputRef}
                   value={chatInput}
                   onChange={(event) => setChatInput(event.target.value)}
                   onKeyDown={(event) => {
@@ -486,6 +503,12 @@ export default function RoomPage() {
                   {tx("送信", "Send")}
                 </button>
               </div>
+              <SmartPhraseAssist
+                sessionState={phraseSessionState}
+                onSendPhrase={sendChatText}
+                onInsertPhrase={insertChatPhrase}
+                className="mt-2"
+              />
             </div>
           </aside>
         </div>

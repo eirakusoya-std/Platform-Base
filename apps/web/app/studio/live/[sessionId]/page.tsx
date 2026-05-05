@@ -16,6 +16,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
+import { SmartPhraseAssist, type SmartPhraseSessionState } from "../../../components/chat/SmartPhraseAssist";
 import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
 import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
@@ -117,6 +118,7 @@ export default function StudioLiveSessionPage() {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const streamRef = useRef<MediaStream | null>(null);
   const roomRef = useRef<Room | null>(null);
@@ -283,8 +285,8 @@ export default function StudioLiveSessionPage() {
     [connectionStatus, connectedViewers, participants, tx],
   );
 
-  const sendChat = () => {
-    const text = chatInput.trim();
+  const sendChatText = useCallback((phrase: string) => {
+    const text = phrase.trim();
     if (!text) return;
     const msg = { type: "chat", id: crypto.randomUUID(), user: "host", text };
     seenChatIdsRef.current.add(msg.id);
@@ -296,7 +298,22 @@ export default function StudioLiveSessionPage() {
         { reliable: true },
       );
     }
-  };
+  }, [connectionStatus]);
+
+  const sendChat = useCallback(() => {
+    sendChatText(chatInput);
+  }, [chatInput, sendChatText]);
+
+  const insertChatPhrase = useCallback((phrase: string) => {
+    setChatInput((current) => (current.trim() ? `${current.trimEnd()} ${phrase}` : phrase));
+    window.requestAnimationFrame(() => chatInputRef.current?.focus());
+  }, []);
+
+  const phraseSessionState = useMemo<SmartPhraseSessionState>(() => {
+    if (session?.status === "ended") return "ending";
+    if (session?.status === "live") return "game";
+    return "waiting";
+  }, [session?.status]);
 
   useEffect(() => {
     const el = chatListRef.current;
@@ -853,6 +870,7 @@ export default function StudioLiveSessionPage() {
             <div className="border-t border-black/20 p-3">
               <div className="flex gap-2">
                 <input
+                  ref={chatInputRef}
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -868,6 +886,12 @@ export default function StudioLiveSessionPage() {
                   {tx("送信", "Send")}
                 </button>
               </div>
+              <SmartPhraseAssist
+                sessionState={phraseSessionState}
+                onSendPhrase={sendChatText}
+                onInsertPhrase={insertChatPhrase}
+                className="mt-2"
+              />
             </div>
           </section>
         </aside>
