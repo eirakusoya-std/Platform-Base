@@ -530,10 +530,13 @@ export default function StudioLiveSessionPage() {
     }
   };
 
-  const stopBroadcast = () => {
+  const stopBroadcast = async () => {
     if (!session) return;
     cleanupConnection();
-    void setStreamSessionStatus(session.sessionId, "ended");
+    const endedSession = await setStreamSessionStatus(session.sessionId, "ended");
+    if (endedSession) {
+      router.push(`/studio/live/${encodeURIComponent(session.sessionId)}/post`);
+    }
   };
 
   useEffect(() => {
