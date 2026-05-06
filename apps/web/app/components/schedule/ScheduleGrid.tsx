@@ -7,7 +7,7 @@ type ScheduleGridProps = {
   startHour: number;
   endHour: number;
   events: ScheduleEvent[];
-  onReserve: (sessionId: number) => void;
+  onReserve: (sessionId: string) => void;
 };
 
 type EventLayout = {
@@ -107,6 +107,15 @@ function buildLayouts(events: ScheduleEvent[]): EventLayout[] {
 }
 
 export function ScheduleGrid({ talents, selectedDate, startHour, endHour, events, onReserve }: ScheduleGridProps) {
+  if (talents.length === 0) {
+    return (
+      <section className="rounded-2xl bg-[var(--brand-surface)] px-5 py-10 text-center shadow-lg shadow-black/25">
+        <p className="text-sm font-semibold text-[var(--brand-text)]">配信スケジュールはまだありません。</p>
+        <p className="mt-1 text-xs text-[var(--brand-text-muted)]">配信枠が作成されるとここに表示されます。</p>
+      </section>
+    );
+  }
+
   const rangeStart = startHour * 60;
   const rangeEnd = endHour * 60;
   const totalMinutes = Math.max(60, rangeEnd - rangeStart);

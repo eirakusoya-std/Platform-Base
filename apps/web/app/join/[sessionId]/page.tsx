@@ -21,54 +21,6 @@ type SessionMeta = {
   thumbnail: string;
 };
 
-const SESSION_MAP: Record<string, SessionMeta> = {
-  "1": {
-    id: "1",
-    vtuber: "夜城ルミナ",
-    title: "【侵食エンド世界】リスナー参加型サバイバル建国計画",
-    description: "エンドに侵食された異変ワールドで、リスナーと協力しながら文明を再建する長期マイクラ企画。",
-    duration: "約120分",
-    participationType: "抽選制",
-    thumbnail: "/image/thumbnail/thumbnail_1.png",
-  },
-  "2": {
-    id: "2",
-    vtuber: "焔角リゼル",
-    title: "【完全初見】DARK SOULS 制覇への血路",
-    description: "死にゲー未経験の悪魔系VTuberが、視聴者の助言と悲鳴に包まれながらダクソを本気攻略。",
-    duration: "約75分",
-    participationType: "先着順",
-    thumbnail: "/image/thumbnail/thumbnail_2.png",
-  },
-  "3": {
-    id: "3",
-    vtuber: "白雪ノエルナ",
-    title: "まったり夜カフェ雑談",
-    description: "コーヒー片手に、日常の話や最近の悩み、裏話をゆるく語る定期リラックス配信。",
-    duration: "約90分",
-    participationType: "メンバー限定",
-    thumbnail: "/image/thumbnail/thumbnail_3.png",
-  },
-  "10": {
-    id: "10",
-    vtuber: "陽葵エルナ",
-    title: "【今日から話せる】初心者向け英会話ライブレッスン",
-    description: "発音・リアルな会話例・そのまま使えるテンプレをセットで学び、コメント参加型でその場アウトプットまでやる英語配信。",
-    duration: "約60分",
-    participationType: "先着順",
-    thumbnail: "/image/thumbnail/thumbnail_5.png",
-  },
-  "11": {
-    id: "11",
-    vtuber: "星宮ポラリス ＆ 桜庭メイカ",
-    title: "視聴者参加型！ガチレース耐久",
-    description: "フレンド戦で視聴者と本気レース、ポイント制で罰ゲームありの白熱コラボ配信。",
-    duration: "約90分",
-    participationType: "抽選制",
-    thumbnail: "/image/thumbnail/thumbnail_4.png",
-  },
-};
-
 export default function PreJoinPage() {
   const router = useRouter();
   const { tx } = useI18n();
@@ -158,17 +110,15 @@ export default function PreJoinPage() {
       };
     }
 
-    return (
-      SESSION_MAP[sessionId] ?? {
-        id: sessionId || "unknown",
-        vtuber: "特別セッション",
-        title: "参加準備ページ",
-        description: "このセッションに入る前に、視聴か会話参加かを選べます。",
-        duration: "約60分",
-        participationType: "先着順",
-        thumbnail: "/image/thumbnail/thumbnail_4.png",
-      }
-    );
+    return {
+      id: sessionId || "unknown",
+      vtuber: "読み込み中",
+      title: "配信枠を読み込んでいます",
+      description: "",
+      duration: "",
+      participationType: "先着順",
+      thumbnail: "",
+    };
   }, [dynamicSession, sessionId]);
 
   const streamRef = useRef<MediaStream | null>(null);
@@ -308,7 +258,11 @@ export default function PreJoinPage() {
         <section className="min-w-0 space-y-4">
           <div className="overflow-hidden rounded-2xl bg-[var(--brand-bg-900)] shadow-xl">
             <div className="relative" style={{ aspectRatio: "16/9" }}>
-              <img src={session.thumbnail} alt={session.vtuber} className="h-full w-full object-cover" />
+              {session.thumbnail ? (
+                <img src={session.thumbnail} alt={session.vtuber} className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full bg-[var(--brand-surface)]" />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--brand-bg-900)]/75 via-[var(--brand-bg-900)]/20 to-transparent" />
               <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">配信企画</div>
               <div className="absolute bottom-4 left-4 right-4">

@@ -38,12 +38,7 @@ type CueMessage = Partial<CueEvent> & {
 
 const MAX_CHAT_MESSAGES = 200;
 
-const INITIAL_CHAT: ChatMessage[] = [
-  { id: "c1", user: "mod_akira", text: "配信開始まであと少しです！音量チェックお願いします。" },
-  { id: "c2", user: "Reese", text: "映像めっちゃ綺麗 👀" },
-  { id: "c3", user: "Gela", text: "参加枠埋まるの早い！" },
-  { id: "c4", user: "host_notice", text: "質問は #Q を先頭につけて送ってください。" },
-];
+const INITIAL_CHAT: ChatMessage[] = [];
 
 function parseRequestedRole(value: string | null): RequestedRole {
   if (value === "host" || value === "speaker" || value === "listener") return value;

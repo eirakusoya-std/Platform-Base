@@ -32,27 +32,7 @@ type StoreFile = {
   reservations: Reservation[];
 };
 
-const LEGACY_USER_DEFAULTS: Record<string, Partial<StoredUser>> = {
-  "listener-demo": {
-    email: "listener-demo@aiment.local",
-    authProvider: "password",
-    createdAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-    termsAcceptedAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-    privacyAcceptedAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-    emailVerifiedAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-  },
-  "vtuber-demo": {
-    email: "vtuber-demo@aiment.local",
-    authProvider: "password",
-    createdAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-    termsAcceptedAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-    privacyAcceptedAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-    emailVerifiedAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-    phoneNumber: "09000000000",
-    phoneVerifiedAt: new Date("2026-03-10T00:00:00.000Z").toISOString(),
-    channelName: "Demo VTuber",
-  },
-};
+const LEGACY_USER_DEFAULTS: Record<string, Partial<StoredUser>> = {};
 
 // ---------------------------------------------------------------------------
 // Storage backend selection

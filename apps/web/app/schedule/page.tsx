@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Footer } from "../components/home/Footer";
 import { TopNav } from "../components/home/TopNav";
-import { SCHEDULE_DATES, SCHEDULE_EVENTS, TALENTS } from "../components/schedule/data";
 import { ScheduleFilters } from "../components/schedule/ScheduleFilters";
 import { ScheduleGrid } from "../components/schedule/ScheduleGrid";
-import { SessionCategory } from "../components/schedule/types";
+import { ScheduleEvent, SessionCategory, Talent } from "../components/schedule/types";
 import { useI18n } from "../lib/i18n";
+import { listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "../lib/streamSessions";
 
 function todayYmd() {
   const now = new Date();
@@ -18,13 +18,84 @@ function todayYmd() {
   return `${y}-${m}-${d}`;
 }
 
+function toLocalYmd(value: string) {
+  const date = new Date(value);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function toLocalHm(value: string) {
+  const date = new Date(value);
+  const h = String(date.getHours()).padStart(2, "0");
+  const m = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function toSessionCategory(value: string): SessionCategory {
+  if (value === "雑談" || value === "ゲーム" || value === "歌枠" || value === "英語") return value;
+  return "雑談";
+}
+
 export default function SchedulePage() {
   const router = useRouter();
   const { tx } = useI18n();
+  const [sessions, setSessions] = useState<StreamSession[]>([]);
   const todayDate = todayYmd();
+
+  useEffect(() => {
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const next = await listActiveStreamSessions();
+        if (!cancelled) setSessions(next);
+      } catch {
+        if (!cancelled) setSessions([]);
+      }
+    };
+    void sync();
+    const unsubscribe = subscribeStreamSessions(sync);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  const talents = useMemo<Talent[]>(() => {
+    const map = new Map<string, Talent>();
+    for (const session of sessions) {
+      if (!map.has(session.hostUserId)) {
+        map.set(session.hostUserId, {
+          id: session.hostUserId,
+          name: session.hostChannelName || session.hostName,
+          avatar: session.hostAvatarUrl || session.thumbnail,
+          specialty: toSessionCategory(session.category),
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [sessions]);
+
+  const scheduleEvents = useMemo<ScheduleEvent[]>(
+    () =>
+      sessions.map((session) => ({
+        id: session.sessionId,
+        sessionId: session.sessionId,
+        date: toLocalYmd(session.startsAt),
+        talentId: session.hostUserId,
+        title: session.title,
+        start: toLocalHm(session.startsAt),
+        durationMin: 60,
+        status: session.participationType === "Lottery" ? "lottery" : session.slotsLeft > 0 ? "available" : "booked",
+        category: toSessionCategory(session.category),
+      })),
+    [sessions],
+  );
+
   const dateOptions = useMemo(
-    () => Array.from(new Set([...SCHEDULE_DATES, todayDate])).sort(),
-    [todayDate],
+    () => Array.from(new Set([todayDate, ...scheduleEvents.map((event) => event.date)])).sort(),
+    [scheduleEvents, todayDate],
   );
 
   const [selectedDate, setSelectedDate] = useState(dateOptions.includes(todayDate) ? todayDate : dateOptions[0]);
@@ -40,17 +111,17 @@ export default function SchedulePage() {
       query.length === 0
         ? null
         : new Set(
-            TALENTS.filter((talent) => talent.name.toLowerCase().includes(query)).map((talent) => talent.id),
+            talents.filter((talent) => talent.name.toLowerCase().includes(query)).map((talent) => talent.id),
           );
 
-    return SCHEDULE_EVENTS.filter((event) => {
+    return scheduleEvents.filter((event) => {
       if (event.date !== selectedDate) return false;
       if (matchedTalentIds && !matchedTalentIds.has(event.talentId)) return false;
       if (selectedCategories.length > 0 && !selectedCategories.includes(event.category)) return false;
       if (onlyAvailable && event.status !== "available") return false;
       return true;
     });
-  }, [selectedDate, talentQuery, selectedCategories, onlyAvailable]);
+  }, [selectedDate, talentQuery, talents, scheduleEvents, selectedCategories, onlyAvailable]);
 
   const handleToggleCategory = (category: SessionCategory) => {
     setSelectedCategories((prev) =>
@@ -68,8 +139,8 @@ export default function SchedulePage() {
     if (value <= startHour) setStartHour(Math.max(0, value - 1));
   };
 
-  const handleReserve = (sessionId: number) => {
-    router.push(`/join/${encodeURIComponent(String(sessionId))}`);
+  const handleReserve = (sessionId: string) => {
+    router.push(`/join/${encodeURIComponent(sessionId)}`);
   };
 
   return (
@@ -100,7 +171,7 @@ export default function SchedulePage() {
             onBackToToday={() => setSelectedDate(todayDate)}
           />
 
-          <ScheduleGrid talents={TALENTS} selectedDate={selectedDate} startHour={startHour} endHour={endHour} events={filteredEvents} onReserve={handleReserve} />
+          <ScheduleGrid talents={talents} selectedDate={selectedDate} startHour={startHour} endHour={endHour} events={filteredEvents} onReserve={handleReserve} />
         </div>
       </main>
 

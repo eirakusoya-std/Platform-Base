@@ -46,11 +46,7 @@ type ChatItem = {
   mine?: boolean;
 };
 
-const INITIAL_CHAT: ChatItem[] = [
-  { id: "m1", user: "mod_nana", text: "参加希望は #join をつけて送ってください" },
-  { id: "m2", user: "viewer_21", text: "#join 自己紹介いけます" },
-  { id: "m3", user: "viewer_88", text: "音量ちょうどいいです！" },
-];
+const INITIAL_CHAT: ChatItem[] = [];
 
 const MAX_CHAT_MESSAGES = 200;
 
