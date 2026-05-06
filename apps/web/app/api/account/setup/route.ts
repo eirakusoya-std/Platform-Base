@@ -21,6 +21,11 @@ export async function POST(request: Request) {
       channelName?: string;
     };
 
+    // vtuber → listener へのダウングレードは禁止
+    if (currentUser.role === "vtuber" && body.role === "listener") {
+      return NextResponse.json({ error: "VTuberからリスナーへの変更はできません。" }, { status: 403 });
+    }
+
     const user = await updateAccountSetup(currentUser.id, {
       role: body.role,
       name: body.name,

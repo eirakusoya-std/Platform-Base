@@ -84,35 +84,44 @@ export default function SetupPage() {
         </p>
 
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
-          {/* ロール選択 */}
+          {/* ロール選択（vtuber はダウングレード不可のため listener 選択肢を非表示） */}
           <div>
             <p className="mb-2 text-sm font-medium text-[var(--brand-text)]">
               {tx("利用目的", "Account type")}
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              {(["listener", "vtuber"] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRole(r)}
-                  className={[
-                    "rounded-xl border-2 px-4 py-4 text-left transition",
-                    role === r
-                      ? "border-[var(--brand-primary)] bg-[var(--brand-primary)]/10"
-                      : "border-[var(--brand-surface-soft)] bg-[var(--brand-bg-900)]",
-                  ].join(" ")}
-                >
-                  <p className="font-semibold text-[var(--brand-text)]">
-                    {r === "listener" ? tx("リスナー", "Listener") : "VTuber"}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
-                    {r === "listener"
-                      ? tx("配信を楽しむ", "Enjoy streams")
-                      : tx("配信者として活動する", "Stream & interact")}
-                  </p>
-                </button>
-              ))}
-            </div>
+            {user?.role === "vtuber" ? (
+              <div className="rounded-xl border-2 border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 px-4 py-4">
+                <p className="font-semibold text-[var(--brand-text)]">VTuber</p>
+                <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
+                  {tx("配信者として活動する", "Stream & interact")}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {(["listener", "vtuber"] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRole(r)}
+                    className={[
+                      "rounded-xl border-2 px-4 py-4 text-left transition",
+                      role === r
+                        ? "border-[var(--brand-primary)] bg-[var(--brand-primary)]/10"
+                        : "border-[var(--brand-surface-soft)] bg-[var(--brand-bg-900)]",
+                    ].join(" ")}
+                  >
+                    <p className="font-semibold text-[var(--brand-text)]">
+                      {r === "listener" ? tx("リスナー", "Listener") : "VTuber"}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
+                      {r === "listener"
+                        ? tx("配信を楽しむ", "Enjoy streams")
+                        : tx("配信者として活動する", "Stream & interact")}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 表示名 */}
