@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronDownIcon, MicrophoneIcon } from "@heroicons/react/24/solid";
 import { useI18n } from "../../lib/i18n";
+import { participationLabel } from "../../lib/labels";
 import { getStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
 
@@ -17,7 +18,7 @@ type SessionMeta = {
   title: string;
   description: string;
   duration: string;
-  participationType: "先着順" | "抽選制" | "メンバー限定";
+  participationType: string;
   thumbnail: string;
 };
 
@@ -88,10 +89,10 @@ export default function PreJoinPage() {
         setReservationStatus("reserved");
       } else {
         const data = (await res.json()) as { error?: string };
-        setReserveError(data.error ?? "予約に失敗しました");
+        setReserveError(data.error ?? tx("予約に失敗しました", "Reservation failed"));
       }
     } catch {
-      setReserveError("予約に失敗しました");
+      setReserveError(tx("予約に失敗しました", "Reservation failed"));
     } finally {
       setReserving(false);
     }
@@ -104,22 +105,22 @@ export default function PreJoinPage() {
         vtuber: dynamicSession.hostName,
         title: dynamicSession.title,
         description: dynamicSession.description,
-        duration: dynamicSession.status === "live" ? "配信中" : "約60分",
-        participationType: dynamicSession.participationType === "Lottery" ? "抽選制" : "先着順",
+        duration: dynamicSession.status === "live" ? tx("配信中", "Live now") : tx("約60分", "About 60 min"),
+        participationType: participationLabel(dynamicSession.participationType, tx),
         thumbnail: dynamicSession.thumbnail,
       };
     }
 
     return {
       id: sessionId || "unknown",
-      vtuber: "読み込み中",
-      title: "配信枠を読み込んでいます",
+      vtuber: tx("読み込み中", "Loading"),
+      title: tx("配信枠を読み込んでいます", "Loading session"),
       description: "",
       duration: "",
-      participationType: "先着順",
+      participationType: participationLabel("First-come", tx),
       thumbnail: "",
     };
-  }, [dynamicSession, sessionId]);
+  }, [dynamicSession, sessionId, tx]);
 
   const streamRef = useRef<MediaStream | null>(null);
   const [micOn, setMicOn] = useState(true);
@@ -183,7 +184,7 @@ export default function PreJoinPage() {
         setReady(true);
         setErrorMessage(null);
       } catch {
-        setErrorMessage("マイクの利用が許可されていません。ブラウザ設定を確認してください。");
+        setErrorMessage(tx("マイクの利用が許可されていません。ブラウザ設定を確認してください。", "Microphone access is not allowed. Please check your browser settings."));
         setReady(false);
       }
     };
@@ -201,7 +202,7 @@ export default function PreJoinPage() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-  }, [authStatus, reservationStatus, selectedAudioDeviceId, selectedPath]);
+  }, [authStatus, reservationStatus, selectedAudioDeviceId, selectedPath, tx]);
 
   useEffect(() => {
     streamRef.current?.getAudioTracks().forEach((track) => {
@@ -264,7 +265,7 @@ export default function PreJoinPage() {
                 <div className="h-full w-full bg-[var(--brand-surface)]" />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--brand-bg-900)]/75 via-[var(--brand-bg-900)]/20 to-transparent" />
-              <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">配信企画</div>
+              <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">{tx("配信企画", "Live Event")}</div>
               <div className="absolute bottom-4 left-4 right-4">
                 <h1 className="line-clamp-2 text-2xl font-bold leading-tight text-[var(--brand-text)] lg:text-3xl">{session.title}</h1>
                 <p className="mt-2 text-sm text-[var(--brand-text-muted)]">{session.vtuber}</p>

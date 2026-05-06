@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
 import { useI18n } from "../../lib/i18n";
+import { categoryLabel, participationLabel } from "../../lib/labels";
 import type { StreamSession } from "../../lib/streamSessions";
 import { ChannelHero } from "../components/ChannelHero";
 import { ChannelTicketPanel } from "../components/ChannelTicketPanel";
@@ -27,7 +28,7 @@ type ChannelResponse = {
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ja-JP", {
+  return new Intl.DateTimeFormat(undefined, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -39,10 +40,15 @@ function SessionCard({
   session,
   actionLabel,
   href,
+  labels,
 }: {
   session: StreamSession;
   actionLabel: string;
   href: string;
+  labels: {
+    category: string;
+    participation: string;
+  };
 }) {
   return (
     <article className="overflow-hidden rounded-xl bg-[var(--brand-surface)] shadow-lg shadow-black/20">
@@ -55,7 +61,7 @@ function SessionCard({
         <p className="text-xs text-[var(--brand-text-muted)]">{formatDate(session.startsAt)}</p>
         <div className="flex items-center justify-between">
           <p className="text-[11px] text-[var(--brand-text-muted)]">
-            {session.category} / {session.participationType}
+            {labels.category} / {labels.participation}
           </p>
           <Link
             href={href}
@@ -168,7 +174,16 @@ export default function PublicChannelPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {liveSessions.map((session) => (
-                <SessionCard key={session.sessionId} session={session} actionLabel={tx("視聴", "Watch")} href={`/room/${encodeURIComponent(session.sessionId)}?role=listener`} />
+                <SessionCard
+                  key={session.sessionId}
+                  session={session}
+                  actionLabel={tx("視聴", "Watch")}
+                  href={`/room/${encodeURIComponent(session.sessionId)}?role=listener`}
+                  labels={{
+                    category: categoryLabel(session.category, tx),
+                    participation: participationLabel(session.participationType, tx),
+                  }}
+                />
               ))}
             </div>
           )}
@@ -181,7 +196,16 @@ export default function PublicChannelPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {upcomingSessions.map((session) => (
-                <SessionCard key={session.sessionId} session={session} actionLabel={tx("参加準備", "Join")} href={`/join/${encodeURIComponent(session.sessionId)}`} />
+                <SessionCard
+                  key={session.sessionId}
+                  session={session}
+                  actionLabel={tx("参加準備", "Join")}
+                  href={`/join/${encodeURIComponent(session.sessionId)}`}
+                  labels={{
+                    category: categoryLabel(session.category, tx),
+                    participation: participationLabel(session.participationType, tx),
+                  }}
+                />
               ))}
             </div>
           )}
@@ -194,7 +218,16 @@ export default function PublicChannelPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {archivedSessions.map((session) => (
-                <SessionCard key={session.sessionId} session={session} actionLabel={tx("詳細", "Details")} href={`/join/${encodeURIComponent(session.sessionId)}`} />
+                <SessionCard
+                  key={session.sessionId}
+                  session={session}
+                  actionLabel={tx("詳細", "Details")}
+                  href={`/join/${encodeURIComponent(session.sessionId)}`}
+                  labels={{
+                    category: categoryLabel(session.category, tx),
+                    participation: participationLabel(session.participationType, tx),
+                  }}
+                />
               ))}
             </div>
           )}

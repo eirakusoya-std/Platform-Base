@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TopNav } from "../components/home/TopNav";
+import { useI18n } from "../lib/i18n";
 import { useUserSession } from "../lib/userSession";
 import type { LoginInput } from "../lib/apiTypes";
 
@@ -70,6 +71,7 @@ function GoogleLogo() {
 
 export default function AuthPage() {
   const router = useRouter();
+  const { tx } = useI18n();
   const { isAuthenticated, refreshSession } = useUserSession();
 
   const [email, setEmail] = useState("");
@@ -101,7 +103,7 @@ export default function AuthPage() {
               <p className="text-[11px] uppercase tracking-[0.38em] text-[var(--brand-text-muted)]">Account Protocol</p>
               <h1 className="text-4xl font-semibold tracking-[0.05em] text-[var(--brand-secondary)]">READY</h1>
               <p className="mx-auto max-w-2xl text-sm leading-6 text-[var(--brand-text-muted)]">
-                すでにログインしています。アカウント管理からプロフィール、認証、配信権限を確認してください。
+                {tx("すでにログインしています。アカウント管理からプロフィール、認証、配信権限を確認してください。", "You are already logged in. Check your profile, verification, and streaming permissions from account settings.")}
               </p>
               <Link
                 href="/account"
@@ -131,7 +133,7 @@ export default function AuthPage() {
       await refreshSession();
       router.push(redirectTo ?? "/account");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "処理に失敗しました。");
+      setError(caughtError instanceof Error ? caughtError.message : tx("処理に失敗しました。", "The request failed."));
     } finally {
       setSubmitting(false);
     }
@@ -150,8 +152,8 @@ export default function AuthPage() {
         <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[var(--brand-surface)] p-7">
           <div className="relative z-10">
             <div className="mb-6">
-              <h1 className="text-2xl font-semibold tracking-[0.02em]">ログイン</h1>
-              <p className="mt-1 text-sm text-[var(--brand-text-muted)]">登録済みアカウントでログインします</p>
+              <h1 className="text-2xl font-semibold tracking-[0.02em]">{tx("ログイン", "Log in")}</h1>
+              <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{tx("登録済みアカウントでログインします", "Log in with an existing account")}</p>
             </div>
 
             <form onSubmit={submit} className="space-y-4">
@@ -173,7 +175,7 @@ export default function AuthPage() {
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-5 text-sm font-semibold tracking-[0.02em] text-[#202124] transition hover:bg-[#f8f9fa] disabled:opacity-50"
                 >
                   <GoogleLogo />
-                  Googleでログイン
+                  {tx("Googleでログイン", "Continue with Google")}
                 </button>
                 <button
                   type="submit"
@@ -185,9 +187,9 @@ export default function AuthPage() {
               </div>
 
               <p className="pt-1 text-sm text-[var(--brand-text-muted)]">
-                アカウントを持っていませんか？{" "}
+                {tx("アカウントを持っていませんか？", "Don't have an account?")}{" "}
                 <Link href="/auth/signup" className="font-semibold text-[var(--brand-secondary)] underline-offset-2 hover:underline">
-                  アカウントを新規作成
+                  {tx("アカウントを新規作成", "Create an account")}
                 </Link>
               </p>
             </form>

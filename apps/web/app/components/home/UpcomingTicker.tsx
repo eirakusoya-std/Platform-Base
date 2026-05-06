@@ -49,6 +49,9 @@ export function UpcomingTicker({ sessions, onParticipate }: UpcomingTickerProps)
  </div>
  </div>
  ))}
+ {sessions.length === 0 ? (
+ <span className="py-1 text-[10px] text-[var(--brand-text-muted)]">{tx("近日予定の配信はありません", "No upcoming streams")}</span>
+ ) : null}
  </div>
  </div>
  </div>

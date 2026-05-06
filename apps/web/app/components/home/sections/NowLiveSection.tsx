@@ -34,7 +34,7 @@ export function NowLiveSection({ sessions, onOpenSession, onOpenChannel }: NowLi
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sessions.map((session) => {
-            const typeInfo = getTypeInfo(session.participationType);
+            const typeInfo = getTypeInfo(session.participationType, tx);
             const slotsAvailable = session.slotsLeft > 0;
 
             return (
@@ -96,14 +96,14 @@ export function NowLiveSection({ sessions, onOpenSession, onOpenChannel }: NowLi
                     <div className="mb-3 rounded-lg bg-[var(--brand-primary)]/15 px-3 py-2">
                       <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--brand-primary)]">
                         <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand-primary)]" />
-                        {session.slotsLeft}枠 空きあり - 詳細で参加方法を確認
+                        {tx(`${session.slotsLeft}枠 空きあり - 詳細で参加方法を確認`, `${session.slotsLeft} spots left - check details to join`)}
                       </p>
                     </div>
                   ) : (
                     <div className="mb-3 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
                       <p className="flex items-center gap-1.5 text-xs text-[var(--brand-text-muted)]">
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--brand-text-muted)]" />
-                        参加枠は満員です - 空き待ち通知を設定できます
+                        {tx("参加枠は満員です - 空き待ち通知を設定できます", "All spots are full - you can set a waitlist alert")}
                       </p>
                     </div>
                   )}

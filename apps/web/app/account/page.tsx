@@ -24,6 +24,7 @@ import {
 // SOLID: S（決済UIの制御をPaymentModalに委譲し、ページの責任をアカウント管理に絞る）
 import { getMonitoringSummary } from "../lib/monitoring";
 import { createUserReport, listReports } from "../lib/reports";
+import { useI18n } from "../lib/i18n";
 import { useUserSession } from "../lib/userSession";
 import type {
   BillingSubscription,
@@ -80,14 +81,15 @@ type AccountSnapshot = {
 
 const ACCOUNT_TABS: Array<{
   key: AccountTab;
-  label: string;
+  labelJp: string;
+  labelEn: string;
   Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
 }> = [
-  { key: "profile", label: "プロフィール", Icon: UserCircleIcon },
-  { key: "security", label: "セキュリティ", Icon: ShieldCheckIcon },
-  { key: "notifications", label: "通知・データ", Icon: BellAlertIcon },
-  { key: "billing", label: "課金", Icon: CreditCardIcon },
-  { key: "ops", label: "運用", Icon: WrenchScrewdriverIcon },
+  { key: "profile", labelJp: "プロフィール", labelEn: "Profile", Icon: UserCircleIcon },
+  { key: "security", labelJp: "セキュリティ", labelEn: "Security", Icon: ShieldCheckIcon },
+  { key: "notifications", labelJp: "通知・データ", labelEn: "Notifications & Data", Icon: BellAlertIcon },
+  { key: "billing", labelJp: "課金", labelEn: "Billing", Icon: CreditCardIcon },
+  { key: "ops", labelJp: "運用", labelEn: "Operations", Icon: WrenchScrewdriverIcon },
 ];
 
 function getSettingsStorageKey(userId: string) {
@@ -164,14 +166,11 @@ function SectionCard({
 
 export default function AccountPage() {
   const router = useRouter();
+  const { tx } = useI18n();
   const { user, isAuthenticated, loading, refreshSession, logout } = useUserSession();
 
   const [draft, setDraft] = useState<SessionUser | null>(null);
   const [uiSettings, setUiSettings] = useState<AccountUiSettings | null>(null);
-  const [emailCode, setEmailCode] = useState("");
-  const [phoneCode, setPhoneCode] = useState("");
-  const [devEmailCode, setDevEmailCode] = useState<string | null>(null);
-  const [devPhoneCode, setDevPhoneCode] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -187,7 +186,6 @@ export default function AccountPage() {
   const [reportTargetId, setReportTargetId] = useState("");
   const [reportCategory, setReportCategory] = useState<ReportCategory>("other");
   const [reportDetails, setReportDetails] = useState("");
-  const [phoneCodeRequested, setPhoneCodeRequested] = useState(false);
   const [activeTab, setActiveTab] = useState<AccountTab>("profile");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -299,9 +297,9 @@ export default function AccountPage() {
       await refreshSession();
       setInitialSnapshot({ draft: { ...draft }, uiSettings: { ...uiSettings } });
       setHasChanges(false);
-      setMessage("設定を保存しました。");
+      setMessage(tx("設定を保存しました。", "Settings saved."));
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "保存に失敗しました。");
+      setError(caughtError instanceof Error ? caughtError.message : tx("保存に失敗しました。", "Failed to save settings."));
     } finally {
       setSaving(false);
     }
@@ -325,13 +323,13 @@ export default function AccountPage() {
       if (result.clientSecret) {
         setPaymentModal({
           clientSecret: result.clientSecret,
-          title: "Aimerプランに登録",
+          title: tx("Aimerプランに登録", "Subscribe to Aimer"),
           onSuccess: async () => {
             setPaymentModal(null);
             const billing = await listBillingSubscriptions();
             setSubscriptions(billing.subscriptions);
             await refreshSession();
-            setMessage("Aimer プランを有効化しました。");
+            setMessage(tx("Aimer プランを有効化しました。", "Aimer plan activated."));
           },
         });
         return;
@@ -340,9 +338,9 @@ export default function AccountPage() {
       const billing = await listBillingSubscriptions();
       setSubscriptions(billing.subscriptions);
       await refreshSession();
-      setMessage("Aimer プランを有効化しました。");
+      setMessage(tx("Aimer プランを有効化しました。", "Aimer plan activated."));
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "課金処理に失敗しました。");
+      setError(caughtError instanceof Error ? caughtError.message : tx("課金処理に失敗しました。", "Billing process failed."));
     } finally {
       setBillingLoading(false);
     }
@@ -357,9 +355,9 @@ export default function AccountPage() {
       const billing = await listBillingSubscriptions();
       setSubscriptions(billing.subscriptions);
       await refreshSession();
-      setMessage("サブスクリプション解約を受け付けました。");
+      setMessage(tx("サブスクリプション解約を受け付けました。", "Subscription cancellation received."));
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "解約に失敗しました。");
+      setError(caughtError instanceof Error ? caughtError.message : tx("解約に失敗しました。", "Failed to cancel subscription."));
     } finally {
       setBillingLoading(false);
     }
@@ -380,9 +378,9 @@ export default function AccountPage() {
       setReportTargetId("");
       setReportDetails("");
       setReportCategory("other");
-      setMessage("通報を送信しました。");
+      setMessage(tx("通報を送信しました。", "Report sent."));
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "通報に失敗しました。");
+      setError(caughtError instanceof Error ? caughtError.message : tx("通報に失敗しました。", "Failed to send report."));
     }
   };
 
@@ -395,11 +393,11 @@ export default function AccountPage() {
   const handleAvatarFileChange = (file: File | null) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setError("画像ファイルを選択してください。");
+      setError(tx("画像ファイルを選択してください。", "Please select an image file."));
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setError("画像サイズは2MB以下にしてください。");
+      setError(tx("画像サイズは2MB以下にしてください。", "Image size must be 2MB or less."));
       return;
     }
     const reader = new FileReader();
@@ -412,7 +410,7 @@ export default function AccountPage() {
       setError(null);
     };
     reader.onerror = () => {
-      setError("画像の読み込みに失敗しました。");
+      setError(tx("画像の読み込みに失敗しました。", "Failed to load image."));
     };
     reader.readAsDataURL(file);
   };
@@ -420,11 +418,11 @@ export default function AccountPage() {
   const handleHeaderFileChange = (file: File | null) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setError("画像ファイルを選択してください。");
+      setError(tx("画像ファイルを選択してください。", "Please select an image file."));
       return;
     }
     if (file.size > 4 * 1024 * 1024) {
-      setError("画像サイズは4MB以下にしてください。");
+      setError(tx("画像サイズは4MB以下にしてください。", "Image size must be 4MB or less."));
       return;
     }
     const reader = new FileReader();
@@ -437,7 +435,7 @@ export default function AccountPage() {
       setError(null);
     };
     reader.onerror = () => {
-      setError("画像の読み込みに失敗しました。");
+      setError(tx("画像の読み込みに失敗しました。", "Failed to load image."));
     };
     reader.readAsDataURL(file);
   };
@@ -453,7 +451,7 @@ export default function AccountPage() {
               ACCOUNT MENU
             </p>
             <div className="space-y-1">
-              {ACCOUNT_TABS.map(({ key, label, Icon }) => (
+              {ACCOUNT_TABS.map(({ key, labelJp, labelEn, Icon }) => (
                 <button
                   key={key}
                   type="button"
@@ -465,7 +463,7 @@ export default function AccountPage() {
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                  {label}
+                  {tx(labelJp, labelEn)}
                 </button>
               ))}
             </div>
@@ -477,9 +475,11 @@ export default function AccountPage() {
             <header className="mb-6">
               <p className="text-[11px] uppercase tracking-[0.32em] text-[var(--brand-text-muted)]">Account Settings</p>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-3xl font-semibold tracking-[0.03em] text-[var(--brand-text)]">アカウント設定</h1>
+                <h1 className="text-3xl font-semibold tracking-[0.03em] text-[var(--brand-text)]">{tx("アカウント設定", "Account Settings")}</h1>
               </div>
-              <p className="mt-2 text-sm text-[var(--brand-text-muted)]">Platform-Base の設定画面レイアウトに合わせつつ、保存と認証確認は現在の backend を利用しています。</p>
+              <p className="mt-2 text-sm text-[var(--brand-text-muted)]">
+                {tx("プロフィール、認証、通知、課金、運用連絡を管理できます。", "Manage your profile, verification, notifications, billing, and operations reports.")}
+              </p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -487,16 +487,16 @@ export default function AccountPage() {
                   className="h-10 rounded-lg bg-[var(--brand-secondary)] px-4 text-sm font-semibold text-[var(--brand-bg-900)] disabled:opacity-60"
                   disabled={saving}
                 >
-                  {saving ? "保存中..." : "変更を保存"}
+                  {saving ? tx("保存中...", "Saving...") : tx("変更を保存", "Save Changes")}
                 </button>
                 <button
                   type="button"
                   onClick={resetAll}
                   className="h-10 rounded-lg bg-[var(--brand-surface)] px-4 text-sm font-medium text-[var(--brand-text)]"
                 >
-                  リセット
+                  {tx("リセット", "Reset")}
                 </button>
-                {hasChanges ? <p className="text-sm text-[var(--brand-text-muted)]">未保存の変更があります。</p> : null}
+                {hasChanges ? <p className="text-sm text-[var(--brand-text-muted)]">{tx("未保存の変更があります。", "You have unsaved changes.")}</p> : null}
               </div>
               {message ? <p className="mt-3 text-sm text-[var(--brand-secondary)]">{message}</p> : null}
               {error ? <p className="mt-3 text-sm text-[var(--brand-accent)]">{error}</p> : null}
@@ -504,7 +504,7 @@ export default function AccountPage() {
 
             <div className="grid gap-4 lg:grid-cols-2">
           {activeTab === "profile" ? (
-            <SectionCard title="プロフィール" subtitle="表示情報と基本アカウント情報" className="lg:col-span-2">
+            <SectionCard title={tx("プロフィール", "Profile")} subtitle={tx("表示情報と基本アカウント情報", "Display details and basic account information")} className="lg:col-span-2">
               <form onSubmit={saveAll} className="space-y-4">
                 <div className="rounded-lg bg-[var(--brand-surface)] p-4">
                   <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -515,7 +515,7 @@ export default function AccountPage() {
                           <img src={draft.headerUrl} alt="Header" className="h-56 w-full object-cover" />
                         ) : (
                           <div className="grid h-56 w-full place-items-center text-sm font-semibold text-[var(--brand-text-muted)]">
-                            ヘッダー画像なし
+                            {tx("ヘッダー画像なし", "No header image")}
                           </div>
                         )}
                         <div className="absolute -bottom-10 left-6 h-20 w-20 overflow-hidden rounded-full border-2 border-[var(--brand-surface)] bg-[var(--brand-bg-800)]">
@@ -540,7 +540,7 @@ export default function AccountPage() {
                         <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Header Image</p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
-                            画像をアップロード
+                            {tx("画像をアップロード", "Upload image")}
                             <input
                               type="file"
                               accept="image/*"
@@ -556,7 +556,7 @@ export default function AccountPage() {
                             }}
                             className="ui-btn ui-btn-sm ui-btn-ghost"
                           >
-                            削除
+                            {tx("削除", "Remove")}
                           </button>
                         </div>
                       </div>
@@ -564,7 +564,7 @@ export default function AccountPage() {
                         <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Profile Image</p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <label className="ui-btn ui-btn-sm ui-btn-ghost cursor-pointer">
-                            画像をアップロード
+                            {tx("画像をアップロード", "Upload image")}
                             <input
                               type="file"
                               accept="image/*"
@@ -580,7 +580,7 @@ export default function AccountPage() {
                             }}
                             className="ui-btn ui-btn-sm ui-btn-ghost"
                           >
-                            削除
+                            {tx("削除", "Remove")}
                           </button>
                         </div>
                       </div>
@@ -629,7 +629,7 @@ export default function AccountPage() {
                 ) : null}
 
                 <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">紹介文</p>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">{tx("紹介文", "Bio")}</p>
                   <textarea
                     value={draft.bio ?? ""}
                     onChange={(event) => {
@@ -645,19 +645,19 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "security" ? (
-            <SectionCard title="セキュリティ" subtitle="ログイン方法と本人確認">
+            <SectionCard title={tx("セキュリティ", "Security")} subtitle={tx("ログイン方法と本人確認", "Login methods and identity verification")}>
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">ログイン方法</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">{tx("ログイン方法", "Login Method")}</p>
               <p className="mt-1 text-sm text-[var(--brand-text)]">{draft.authProvider}</p>
             </div>
             {/* メールアドレス */}
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[var(--brand-text)]">メールアドレス</p>
+                  <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("メールアドレス", "Email Address")}</p>
                   <div className="mt-1 flex items-center gap-1.5">
                     <p className="truncate text-sm text-[var(--brand-text)]">
-                      {draft.email ? maskEmail(draft.email, emailVisible) : "未登録"}
+                      {draft.email ? maskEmail(draft.email, emailVisible) : tx("未登録", "Not registered")}
                     </p>
                     {draft.email ? (
                       <button type="button" onClick={() => setEmailVisible((v) => !v)} className="shrink-0 text-[var(--brand-text-muted)]">
@@ -666,7 +666,7 @@ export default function AccountPage() {
                     ) : null}
                   </div>
                   <p className="mt-0.5 text-xs text-[var(--brand-text-muted)]">
-                    {draft.emailVerifiedAt ? "✓ 確認済み" : "未確認"}
+                    {draft.emailVerifiedAt ? tx("✓ 確認済み", "Verified") : tx("未確認", "Unverified")}
                   </p>
                 </div>
                 {!draft.emailVerifiedAt && draft.email ? (
@@ -675,7 +675,7 @@ export default function AccountPage() {
                     onClick={() => setShowEmailModal(true)}
                     className="shrink-0 rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
                   >
-                    認証する
+                    {tx("認証する", "Verify")}
                   </button>
                 ) : null}
               </div>
@@ -685,10 +685,10 @@ export default function AccountPage() {
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[var(--brand-text)]">電話番号</p>
+                  <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("電話番号", "Phone Number")}</p>
                   <div className="mt-1 flex items-center gap-1.5">
                     <p className="truncate text-sm text-[var(--brand-text)]">
-                      {draft.phoneNumber ? maskPhone(draft.phoneNumber, phoneVisible) : "未登録"}
+                      {draft.phoneNumber ? maskPhone(draft.phoneNumber, phoneVisible) : tx("未登録", "Not registered")}
                     </p>
                     {draft.phoneNumber ? (
                       <button type="button" onClick={() => setPhoneVisible((v) => !v)} className="shrink-0 text-[var(--brand-text-muted)]">
@@ -697,7 +697,7 @@ export default function AccountPage() {
                     ) : null}
                   </div>
                   <p className="mt-0.5 text-xs text-[var(--brand-text-muted)]">
-                    {draft.phoneVerifiedAt ? "✓ 確認済み" : draft.phoneNumber ? "未確認" : ""}
+                    {draft.phoneVerifiedAt ? tx("✓ 確認済み", "Verified") : draft.phoneNumber ? tx("未確認", "Unverified") : ""}
                   </p>
                 </div>
                 <button
@@ -705,19 +705,19 @@ export default function AccountPage() {
                   onClick={() => setShowPhoneModal(true)}
                   className="shrink-0 rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
                 >
-                  {draft.phoneVerifiedAt ? "番号を変更" : "認証する"}
+                  {draft.phoneVerifiedAt ? tx("番号を変更", "Change number") : tx("認証する", "Verify")}
                 </button>
               </div>
             </div>
             <ToggleItem
-              label="2段階認証（2FA）"
-              description="新しい端末でのログイン時に追加認証を要求します。"
+              label={tx("2段階認証（2FA）", "Two-factor authentication (2FA)")}
+              description={tx("新しい端末でのログイン時に追加認証を要求します。", "Require an extra verification step when logging in from a new device.")}
               on={uiSettings.mfaEnabled}
               onChange={(next) => updateUiSetting("mfaEnabled", next)}
             />
             <ToggleItem
-              label="パスキー有効化"
-              description="対応デバイスでパスワードレスログインを利用します。"
+              label={tx("パスキー有効化", "Enable passkeys")}
+              description={tx("対応デバイスでパスワードレスログインを利用します。", "Use passwordless login on supported devices.")}
               on={uiSettings.passkeyEnabled}
               onChange={(next) => updateUiSetting("passkeyEnabled", next)}
             />
@@ -725,41 +725,41 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "notifications" ? (
-            <SectionCard title="プライバシーとデータ" subtitle="収集・利用・エクスポート設定">
+            <SectionCard title={tx("プライバシーとデータ", "Privacy & Data")} subtitle={tx("収集・利用・エクスポート設定", "Collection, usage, and export settings")}>
             <ToggleItem
-              label="利用データをサービス改善に使用"
-              description="操作データを品質改善に使います。"
+              label={tx("利用データをサービス改善に使用", "Use usage data to improve the service")}
+              description={tx("操作データを品質改善に使います。", "Use interaction data for quality improvements.")}
               on={uiSettings.improveDataUsage}
               onChange={(next) => updateUiSetting("improveDataUsage", next)}
             />
             <ToggleItem
-              label="パーソナライズ"
-              description="おすすめ表示の最適化に利用します。"
+              label={tx("パーソナライズ", "Personalization")}
+              description={tx("おすすめ表示の最適化に利用します。", "Use this to optimize recommendations.")}
               on={uiSettings.personalization}
               onChange={(next) => updateUiSetting("personalization", next)}
             />
-            <button className="h-11 w-full rounded-lg bg-[var(--brand-surface)] text-sm font-medium text-[var(--brand-text)]">データをダウンロード</button>
-            <button className="h-11 w-full rounded-lg bg-[var(--brand-surface)] text-sm font-medium text-[var(--brand-text)]">アカウントデータの削除申請</button>
+            <button className="h-11 w-full rounded-lg bg-[var(--brand-surface)] text-sm font-medium text-[var(--brand-text)]">{tx("データをダウンロード", "Download Data")}</button>
+            <button className="h-11 w-full rounded-lg bg-[var(--brand-surface)] text-sm font-medium text-[var(--brand-text)]">{tx("アカウントデータの削除申請", "Request Account Data Deletion")}</button>
             </SectionCard>
           ) : null}
 
           {activeTab === "notifications" ? (
-            <SectionCard title="通知" subtitle="連絡手段と受信頻度">
+            <SectionCard title={tx("通知", "Notifications")} subtitle={tx("連絡手段と受信頻度", "Contact methods and frequency")}>
             <ToggleItem
-              label="メール通知"
-              description="重要なお知らせとセキュリティ通知を受け取ります。"
+              label={tx("メール通知", "Email Notifications")}
+              description={tx("重要なお知らせとセキュリティ通知を受け取ります。", "Receive important announcements and security notifications.")}
               on={uiSettings.emailNotification}
               onChange={(next) => updateUiSetting("emailNotification", next)}
             />
             <ToggleItem
-              label="配信開始通知"
-              description="予約中・フォロー中チャンネルの開始通知を受け取ります。"
+              label={tx("配信開始通知", "Live Start Notifications")}
+              description={tx("予約中・フォロー中チャンネルの開始通知を受け取ります。", "Receive start notifications for reserved and followed channels.")}
               on={uiSettings.liveNotification}
               onChange={(next) => updateUiSetting("liveNotification", next)}
             />
             <ToggleItem
-              label="マーケティング通知"
-              description="キャンペーン・特典情報を受け取ります。"
+              label={tx("マーケティング通知", "Marketing Notifications")}
+              description={tx("キャンペーン・特典情報を受け取ります。", "Receive campaign and benefit updates.")}
               on={uiSettings.marketingNotification}
               onChange={(next) => updateUiSetting("marketingNotification", next)}
             />
@@ -767,16 +767,16 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "billing" ? (
-            <SectionCard title="Billing" subtitle="Aimer サブスクと購入済み 1on1 チケット">
+            <SectionCard title="Billing" subtitle={tx("Aimer サブスクと購入済み 1on1 チケット", "Aimer subscription and purchased 1-on-1 tickets")}>
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
               <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Subscription</p>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm text-[var(--brand-text-muted)]">現在のプラン</p>
+                  <p className="text-sm text-[var(--brand-text-muted)]">{tx("現在のプラン", "Current Plan")}</p>
                   <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{currentPlanLabel}</p>
                   {isAimerPlan ? (
                     <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
-                      次回更新日: {subscriptionRenewsAt ? new Date(subscriptionRenewsAt).toLocaleDateString("ja-JP") : "未定"}
+                      {tx("次回更新日", "Next renewal")}: {subscriptionRenewsAt ? new Date(subscriptionRenewsAt).toLocaleDateString() : tx("未定", "TBD")}
                     </p>
                   ) : null}
                 </div>
@@ -787,7 +787,7 @@ export default function AccountPage() {
                     disabled={billingLoading}
                     className="h-11 rounded-lg bg-[var(--brand-secondary)] px-4 text-sm font-semibold text-[var(--brand-bg-900)] disabled:opacity-60"
                   >
-                    Aimerプランに登録 PHP 1,098/月
+                    {tx("Aimerプランに登録 PHP 1,098/月", "Subscribe to Aimer PHP 1,098/month")}
                   </button>
                 ) : currentSubscription ? (
                   <button
@@ -796,7 +796,7 @@ export default function AccountPage() {
                     disabled={billingLoading}
                     className="h-11 rounded-lg bg-[var(--brand-surface-soft)] px-4 text-sm font-medium text-[var(--brand-text)] disabled:opacity-60"
                   >
-                    解約する
+                    {tx("解約する", "Cancel")}
                   </button>
                 ) : null}
               </div>
@@ -806,15 +806,15 @@ export default function AccountPage() {
               <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">1on1 Tickets</p>
               <div className="mt-4 space-y-2">
                 {activeTicketPurchases.length === 0 ? (
-                  <p className="rounded-lg bg-[var(--brand-surface-soft)] p-3 text-sm text-[var(--brand-text-muted)]">有効なチケットはありません。</p>
+                  <p className="rounded-lg bg-[var(--brand-surface-soft)] p-3 text-sm text-[var(--brand-text-muted)]">{tx("有効なチケットはありません。", "No active tickets.")}</p>
                 ) : (
                   activeTicketPurchases.map((purchase) => (
                     <div key={purchase.purchaseId} className="rounded-lg bg-[var(--brand-surface-soft)] p-3 text-sm">
                       <p className="font-semibold text-[var(--brand-text)]">
-                        {purchase.ticketType === "1on1_10min" ? "10分チケット" : "30分チケット"}
+                        {purchase.ticketType === "1on1_10min" ? tx("10分チケット", "10-minute ticket") : tx("30分チケット", "30-minute ticket")}
                       </p>
                       <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
-                        対象: @{purchase.targetUserId} / 購入日: {new Date(purchase.createdAt).toLocaleDateString("ja-JP")} / status: {purchase.status}
+                        {tx("対象", "Target")}: @{purchase.targetUserId} / {tx("購入日", "Purchased")}: {new Date(purchase.createdAt).toLocaleDateString()} / status: {purchase.status}
                       </p>
                     </div>
                   ))
@@ -825,7 +825,7 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "ops" ? (
-            <SectionCard title="Monitoring" subtitle="接続失敗率、決済失敗、サーバーエラー">
+            <SectionCard title="Monitoring" subtitle={tx("接続失敗率、決済失敗、サーバーエラー", "Connection failure rate, payment failures, and server errors")}>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-[var(--brand-surface)] p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Connection Failure</p>
@@ -848,14 +848,14 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "security" ? (
-            <SectionCard title="Consent History" subtitle="利用規約とプライバシー同意の保存履歴">
+            <SectionCard title="Consent History" subtitle={tx("利用規約とプライバシー同意の保存履歴", "Saved history of terms and privacy consent")}>
             {consents.length === 0 ? (
-              <p className="rounded-lg bg-[var(--brand-surface)] p-4 text-sm text-[var(--brand-text-muted)]">同意履歴はまだありません。</p>
+              <p className="rounded-lg bg-[var(--brand-surface)] p-4 text-sm text-[var(--brand-text-muted)]">{tx("同意履歴はまだありません。", "No consent history yet.")}</p>
             ) : (
               consents.slice(0, 5).map((consent) => (
                 <div key={consent.consentId} className="rounded-lg bg-[var(--brand-surface)] p-4 text-sm">
                   <p className="font-semibold text-[var(--brand-text)]">{consent.version}</p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">{consent.source} / {new Date(consent.termsAcceptedAt).toLocaleString("ja-JP")}</p>
+                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">{consent.source} / {new Date(consent.termsAcceptedAt).toLocaleString()}</p>
                 </div>
               ))
             )}
@@ -863,22 +863,22 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "ops" ? (
-            <SectionCard title="Reports" subtitle="最低限の通報導線と保存">
+            <SectionCard title="Reports" subtitle={tx("最低限の通報導線と保存", "Basic reporting flow and saved reports")}>
             <div className="grid gap-3">
               <select
                 value={reportTargetType}
                 onChange={(event) => setReportTargetType(event.target.value as ReportTargetType)}
                 className="h-10 rounded-lg bg-[var(--brand-surface)] px-3 text-sm outline-none"
               >
-                <option value="session">配信枠</option>
-                <option value="user">ユーザー</option>
-                <option value="message">メッセージ</option>
-                <option value="billing">決済</option>
+                <option value="session">{tx("配信枠", "Session")}</option>
+                <option value="user">{tx("ユーザー", "User")}</option>
+                <option value="message">{tx("メッセージ", "Message")}</option>
+                <option value="billing">{tx("決済", "Billing")}</option>
               </select>
               <input
                 value={reportTargetId}
                 onChange={(event) => setReportTargetId(event.target.value)}
-                placeholder="対象ID"
+                placeholder={tx("対象ID", "Target ID")}
                 className="h-10 rounded-lg bg-[var(--brand-surface)] px-3 text-sm outline-none"
               />
               <select
@@ -896,7 +896,7 @@ export default function AccountPage() {
                 value={reportDetails}
                 onChange={(event) => setReportDetails(event.target.value)}
                 rows={4}
-                placeholder="状況を記入"
+                placeholder={tx("状況を記入", "Describe the situation")}
                 className="rounded-lg bg-[var(--brand-surface)] px-3 py-3 text-sm outline-none"
               />
               <button
@@ -904,7 +904,7 @@ export default function AccountPage() {
                 onClick={() => void submitReport()}
                 className="h-11 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white"
               >
-                通報を送信
+                {tx("通報を送信", "Send Report")}
               </button>
             </div>
             {reports.length > 0 ? (
@@ -912,7 +912,7 @@ export default function AccountPage() {
                 {reports.slice(0, 3).map((report) => (
                   <div key={report.reportId} className="rounded-lg bg-[var(--brand-surface)] p-4 text-sm">
                     <p className="font-semibold text-[var(--brand-text)]">{report.category} / {report.targetType}</p>
-                    <p className="mt-1 text-xs text-[var(--brand-text-muted)]">{report.targetId} / {new Date(report.createdAt).toLocaleString("ja-JP")}</p>
+                    <p className="mt-1 text-xs text-[var(--brand-text-muted)]">{report.targetId} / {new Date(report.createdAt).toLocaleString()}</p>
                   </div>
                 ))}
               </div>
@@ -924,7 +924,7 @@ export default function AccountPage() {
             {activeTab === "profile" ? (
               <section className="mt-4 rounded-xl bg-[var(--brand-surface-soft)] p-5 md:p-6">
                 <h2 className="text-lg font-semibold text-[var(--brand-accent)]">Danger Zone</h2>
-                <p className="mt-1 text-sm text-[var(--brand-text-muted)]">不可逆な操作です。実行前に確認してください。</p>
+                <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{tx("不可逆な操作です。実行前に確認してください。", "These actions cannot be undone. Please confirm before proceeding.")}</p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <button
                     type="button"
@@ -935,11 +935,11 @@ export default function AccountPage() {
                     }}
                     className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white"
                   >
-                    ログアウト
+                    {tx("ログアウト", "Log out")}
                   </button>
                   {deleteConfirm ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-[var(--brand-accent)]">本当に削除しますか？</span>
+                      <span className="text-sm text-[var(--brand-accent)]">{tx("本当に削除しますか？", "Are you sure you want to delete this account?")}</span>
                       <button
                         type="button"
                         disabled={deleting}
@@ -955,14 +955,14 @@ export default function AccountPage() {
                         }}
                         className="h-9 rounded-lg bg-[var(--brand-accent)] px-4 text-sm font-semibold text-white disabled:opacity-60"
                       >
-                        {deleting ? "削除中..." : "削除する"}
+                        {deleting ? tx("削除中...", "Deleting...") : tx("削除する", "Delete")}
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeleteConfirm(false)}
                         className="h-9 rounded-lg bg-[var(--brand-surface-soft)] px-4 text-sm text-[var(--brand-text)]"
                       >
-                        キャンセル
+                        {tx("キャンセル", "Cancel")}
                       </button>
                     </div>
                   ) : (
@@ -971,7 +971,7 @@ export default function AccountPage() {
                       onClick={() => setDeleteConfirm(true)}
                       className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white"
                     >
-                      アカウントを削除
+                      {tx("アカウントを削除", "Delete Account")}
                     </button>
                   )}
                 </div>
@@ -999,7 +999,7 @@ export default function AccountPage() {
           onSuccess={async () => {
             setShowPhoneModal(false);
             await refreshSession();
-            setMessage("電話番号の認証が完了しました。");
+            setMessage(tx("電話番号の認証が完了しました。", "Phone verification completed."));
           }}
           onClose={() => setShowPhoneModal(false)}
         />
@@ -1012,7 +1012,7 @@ export default function AccountPage() {
           onSuccess={async () => {
             setShowEmailModal(false);
             await refreshSession();
-            setMessage("メールアドレスの認証が完了しました。");
+            setMessage(tx("メールアドレスの認証が完了しました。", "Email verification completed."));
           }}
           onClose={() => setShowEmailModal(false)}
         />

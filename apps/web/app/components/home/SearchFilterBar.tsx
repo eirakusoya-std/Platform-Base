@@ -2,6 +2,7 @@
 
 import { FunnelIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useI18n } from "../../lib/i18n";
+import { categoryLabel } from "../../lib/labels";
 
 type SearchFilterBarProps = {
  tags: string[];
@@ -60,7 +61,7 @@ export function SearchFilterBar({
                   : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
               }`}
             >
-              {tag}
+              {categoryLabel(tag, tx)}
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useI18n } from "../../lib/i18n";
 
 type ChannelMenuProps = {
   basePath: string;
@@ -8,6 +9,8 @@ type ChannelMenuProps = {
 };
 
 export function ChannelMenu({ basePath, active }: ChannelMenuProps) {
+  const { tx } = useI18n();
+
   return (
     <nav className="mt-5 inline-flex items-center gap-1 rounded-xl bg-[var(--brand-bg-900)] p-1">
       <Link
@@ -18,7 +21,7 @@ export function ChannelMenu({ basePath, active }: ChannelMenuProps) {
             : "text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
         }`}
       >
-        概要
+        {tx("概要", "Overview")}
       </Link>
       <Link
         href={`${basePath}/schedule`}
@@ -28,9 +31,8 @@ export function ChannelMenu({ basePath, active }: ChannelMenuProps) {
             : "text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
         }`}
       >
-        スケジュール
+        {tx("スケジュール", "Schedule")}
       </Link>
     </nav>
   );
 }
-

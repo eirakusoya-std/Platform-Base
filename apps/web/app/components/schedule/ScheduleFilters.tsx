@@ -4,6 +4,7 @@ import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SessionCategory } from "./types";
 import { useI18n } from "../../lib/i18n";
+import { categoryLabel } from "../../lib/labels";
 
 type ScheduleFiltersProps = {
   dates: string[];
@@ -134,7 +135,7 @@ export function ScheduleFilters({
                   : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
               }`}
             >
-              {category}
+            {categoryLabel(category, tx)}
             </button>
           );
         })}

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { statusDot, statusLabel, statusStyle, toMinutes } from "../../components/schedule/utils";
+import { categoryLabel } from "../../lib/labels";
+import { useI18n } from "../../lib/i18n";
 
 type MultiDayBookingStatus = "available" | "booked" | "lottery";
 
@@ -48,7 +50,7 @@ function formatTime(minutes: number) {
 function formatDateLabel(ymd: string) {
   const date = new Date(`${ymd}T00:00:00`);
   if (Number.isNaN(date.getTime())) return ymd;
-  return new Intl.DateTimeFormat("ja-JP", { month: "2-digit", day: "2-digit", weekday: "short" }).format(date);
+  return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit", weekday: "short" }).format(date);
 }
 
 function getTodayKeyLocal() {
@@ -136,6 +138,7 @@ export function MultiDayScheduleGrid({
   startHour,
   endHour,
 }: MultiDayScheduleGridProps) {
+  const { tx } = useI18n();
   const rangeStart = startHour * 60;
   const rangeEnd = endHour * 60;
   const totalMinutes = Math.max(60, rangeEnd - rangeStart);
@@ -157,7 +160,7 @@ export function MultiDayScheduleGrid({
           style={{ gridTemplateColumns: `88px repeat(${dates.length}, minmax(0, 1fr))` }}
         >
           <div className="sticky left-0 top-0 z-30 border-r border-[var(--brand-text-muted)]/20 bg-[var(--brand-surface)] px-3 py-3 text-xs font-semibold text-[var(--brand-text-muted)]">
-            時間
+            {tx("時間", "Time")}
           </div>
 
           {dates.map((date, index) => {
@@ -175,7 +178,7 @@ export function MultiDayScheduleGrid({
                 <p className="text-sm font-semibold text-[var(--brand-text)]">{formatDateLabel(date)}</p>
                 {isToday && (
                   <span className="rounded-full bg-[var(--brand-primary)]/20 px-2 py-0.5 text-[10px] font-bold text-[var(--brand-primary)]">
-                    当日
+                    {tx("当日", "Today")}
                   </span>
                 )}
               </div>
@@ -258,10 +261,10 @@ export function MultiDayScheduleGrid({
                       </p>
                       <div className="flex items-center justify-between">
                         <span className="truncate text-[10px] text-[var(--brand-text-muted)]">
-                          {event.category}
+                          {categoryLabel(event.category, tx)}
                         </span>
                         <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${statusStyle(event.status)}`}>
-                          {statusLabel(event.status)}
+                          {statusLabel(event.status, tx)}
                         </span>
                       </div>
                     </Link>

@@ -225,7 +225,7 @@ export default function ChannelSchedulePage() {
                   rangeMode === "3d" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text-muted)]"
                 }`}
               >
-                3日
+                {tx("3日", "3 days")}
               </button>
               <button
                 type="button"
@@ -234,7 +234,7 @@ export default function ChannelSchedulePage() {
                   rangeMode === "week" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text-muted)]"
                 }`}
               >
-                1週間
+                {tx("1週間", "1 week")}
               </button>
             </div>
 
@@ -278,7 +278,7 @@ export default function ChannelSchedulePage() {
 
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm text-[var(--brand-text-muted)]">
-                開始
+                {tx("開始", "Start")}
                 <select
                   value={startHour}
                   onChange={(event) => {
@@ -296,7 +296,7 @@ export default function ChannelSchedulePage() {
                 </select>
               </label>
               <label className="flex items-center gap-2 text-sm text-[var(--brand-text-muted)]">
-                終了
+                {tx("終了", "End")}
                 <select
                   value={endHour}
                   onChange={(event) => {
@@ -315,7 +315,7 @@ export default function ChannelSchedulePage() {
               </label>
               <label className="flex items-center gap-2 rounded-md bg-[var(--brand-bg-900)] px-2 py-1.5 text-sm text-[var(--brand-text-muted)]">
                 <input type="checkbox" checked={onlyAvailable} onChange={(event) => setOnlyAvailable(event.target.checked)} />
-                予約可能のみ
+                {tx("予約可能のみ", "Available only")}
               </label>
             </div>
           </div>

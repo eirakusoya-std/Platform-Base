@@ -38,7 +38,7 @@ export function StartingSoonSection({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sessions.map((session) => {
             const seconds = countdown[session.id] ?? session.startsInSeconds;
-            const typeInfo = getTypeInfo(session.participationType);
+            const typeInfo = getTypeInfo(session.participationType, tx);
             const urgent = seconds < 20 * 60;
             return (
               <div
@@ -60,7 +60,7 @@ export function StartingSoonSection({
                         urgent ? "bg-[var(--brand-accent)]/20 text-[var(--brand-accent)]" : "bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]"
                       }`}
                     >
-                      {formatCountdown(seconds)}
+                      {formatCountdown(seconds, tx)}
                     </div>
                     <div className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] font-bold ${typeInfo.bg}`}>
                       <span>{typeInfo.icon}</span>
