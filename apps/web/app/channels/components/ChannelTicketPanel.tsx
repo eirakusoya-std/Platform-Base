@@ -49,6 +49,8 @@ export function ChannelTicketPanel({ targetUserId, channelName, targetRole }: Ch
 
   const isOwnChannel = user?.id === targetUserId;
 
+  const isAimer = user?.plan === "aimer" && user?.subscriptionStatus === "active";
+
   const startCheckout = async (ticketType: TicketType) => {
     if (!hydrated) return;
     if (!isAuthenticated) {
@@ -56,6 +58,13 @@ export function ChannelTicketPanel({ targetUserId, channelName, targetRole }: Ch
       return;
     }
     if (isOwnChannel) return;
+    if (!isAimer) {
+      setError(tx(
+        "1on1チケットはAimerプラン会員限定です。アカウントページからご加入ください。",
+        "1on1 tickets are for Aimer plan members only. Please subscribe from your account page.",
+      ));
+      return;
+    }
 
     setPendingTicketType(ticketType);
     setMessage(null);
@@ -125,7 +134,16 @@ export function ChannelTicketPanel({ targetUserId, channelName, targetRole }: Ch
         </div>
 
         {message ? <p className="mt-3 text-sm text-[var(--brand-secondary)]">{message}</p> : null}
-        {error ? <p className="mt-3 text-sm text-[var(--brand-accent)]">{error}</p> : null}
+        {error ? (
+          <p className="mt-3 text-sm text-[var(--brand-accent)]">
+            {error}
+            {!isAimer && isAuthenticated ? (
+              <a href="/account" className="ml-1 underline">
+                {tx("Aimerプランに登録する →", "Subscribe to Aimer →")}
+              </a>
+            ) : null}
+          </p>
+        ) : null}
       </section>
 
       {paymentModal ? (

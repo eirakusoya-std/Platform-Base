@@ -194,10 +194,6 @@ export default function SignupPage() {
 
   const handleGoogleSignup = () => {
     setError(null);
-    if (role === "vtuber") {
-      setError("VTuber登録は電話番号入力のため、メール登録を利用してください。");
-      return;
-    }
     if (!termsAccepted || !privacyAccepted) {
       setError("利用規約とプライバシーポリシーへの同意が必要です。");
       return;
