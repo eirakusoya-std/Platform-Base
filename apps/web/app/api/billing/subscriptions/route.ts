@@ -84,7 +84,11 @@ export async function POST(request: Request) {
       throw new Error("Subscription has no latest_invoice");
     }
 
-    const invoice = await stripe.invoices.retrieve(invoiceId);
+    // draft状態のInvoiceはPaymentIntentが未生成なのでfinalizeして確定させる
+    let invoice = await stripe.invoices.retrieve(invoiceId);
+    if (invoice.status === "draft") {
+      invoice = await stripe.invoices.finalizeInvoice(invoiceId);
+    }
 
     // confirmation_secret（SDK v18 新方式）が利用可能であれば優先使用
     const secretFromConfirmation = invoice.confirmation_secret?.client_secret ?? null;
