@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${appUrl}/auth?error=email_not_verified`);
     }
 
-    const user = await googleAuthUser({
+    const { user, isNew } = await googleAuthUser({
       googleSub: googleUser.sub,
       email: googleUser.email,
       name: googleUser.name,
@@ -94,7 +94,9 @@ export async function GET(request: Request) {
       role,
     });
 
-    const response = NextResponse.redirect(`${appUrl}/account`);
+    // 新規ユーザーはプロフィール設定画面へ。既存ユーザーはアカウントページへ。
+    const redirectPath = isNew ? "/setup" : "/account";
+    const response = NextResponse.redirect(`${appUrl}${redirectPath}`);
     response.cookies.set("google_oauth_state", "", { maxAge: 0, path: "/" });
     return withSessionCookie(response, user.id);
   } catch (error) {

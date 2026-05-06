@@ -809,7 +809,7 @@ export async function googleAuthUser(input: {
   name: string;
   avatarUrl?: string;
   role: SessionUser["role"];
-}) {
+}): Promise<{ user: SessionUser; isNew: boolean }> {
   const now = new Date().toISOString();
 
   if (USE_NEON) {
@@ -829,7 +829,7 @@ export async function googleAuthUser(input: {
         UPDATE users SET last_login_at = ${now}, avatar_url = ${input.avatarUrl ?? existing.avatarUrl ?? null}
         WHERE id = ${existing.id}
       `;
-      return sanitizeUser({ ...existing, lastLoginAt: now, avatarUrl: input.avatarUrl ?? existing.avatarUrl });
+      return { user: sanitizeUser({ ...existing, lastLoginAt: now, avatarUrl: input.avatarUrl ?? existing.avatarUrl }), isNew: false };
     }
 
     const id = makeUserId(input.role);
@@ -843,7 +843,7 @@ export async function googleAuthUser(input: {
       )
     `;
     const newRows = await db`SELECT * FROM users WHERE id = ${id}`;
-    return sanitizeUser(rowToStoredUser(newRows[0]));
+    return { user: sanitizeUser(rowToStoredUser(newRows[0])), isNew: true };
   }
 
   return mutateStore((store) => {
@@ -860,7 +860,7 @@ export async function googleAuthUser(input: {
       }
       existing.lastLoginAt = now;
       if (input.avatarUrl) existing.avatarUrl = input.avatarUrl;
-      return sanitizeUser(existing);
+      return { user: sanitizeUser(existing), isNew: false };
     }
 
     const nextUser: StoredUser = {
@@ -878,7 +878,7 @@ export async function googleAuthUser(input: {
     };
 
     store.users.unshift(nextUser);
-    return sanitizeUser(nextUser);
+    return { user: sanitizeUser(nextUser), isNew: true };
   });
 }
 

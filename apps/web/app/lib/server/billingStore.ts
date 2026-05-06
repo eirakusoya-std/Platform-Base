@@ -231,19 +231,24 @@ export async function getCurrentSubscriptionForUser(userId: string) {
   return subscriptions.find((entry) => entry.status !== "canceled") ?? subscriptions[0] ?? null;
 }
 
+function isSubscriptionActive(sub: { status: string; currentPeriodEnd?: string }): boolean {
+  if (sub.status !== "active" && sub.status !== "trialing") return false;
+  // currentPeriodEnd が設定されている場合は期限切れかどうか確認する
+  if (sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) < new Date()) return false;
+  return true;
+}
+
 export async function getEffectivePlanForUser(userId: string): Promise<SubscriptionPlan> {
   const subscription = await getCurrentSubscriptionForUser(userId);
   if (!subscription) return "free";
-  if (subscription.status === "active" || subscription.status === "trialing") {
-    return subscription.plan;
-  }
+  if (isSubscriptionActive(subscription)) return subscription.plan;
   return "free";
 }
 
 export async function attachBillingState<T extends SessionUser | null>(user: T): Promise<T> {
   if (!user) return user;
   const current = await getCurrentSubscriptionForUser(user.id);
-  const plan = current && (current.status === "active" || current.status === "trialing") ? current.plan : "free";
+  const plan = current && isSubscriptionActive(current) ? current.plan : "free";
   return {
     ...user,
     plan,
