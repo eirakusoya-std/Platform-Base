@@ -1,17 +1,40 @@
 // SOLID: S（メール送信責務に専念。SendGrid への依存をここに集約）
-import sgMail from "@sendgrid/mail";
 
-function getSendGridClient(): typeof sgMail | null {
+type SendGridClient = {
+  setApiKey: (apiKey: string) => void;
+  send: (message: {
+    to: string;
+    from: { email: string; name: string };
+    subject: string;
+    text: string;
+    html: string;
+  }) => Promise<unknown>;
+};
+
+type SendGridModule = SendGridClient & {
+  default?: SendGridClient;
+};
+
+async function getSendGridClient(): Promise<SendGridClient | null> {
   const apiKey = process.env.SENDGRID_API_KEY?.trim();
   if (!apiKey) return null;
-  sgMail.setApiKey(apiKey);
-  return sgMail;
+
+  try {
+    const dynamicImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<SendGridModule>;
+    const sendGridModule = await dynamicImport("@sendgrid/mail");
+    const client = sendGridModule.default ?? sendGridModule;
+    client.setApiKey(apiKey);
+    return client;
+  } catch (error) {
+    console.warn("[mailer] @sendgrid/mail is not available. Skipping email send.", error);
+    return null;
+  }
 }
 
 const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL?.trim() ?? "noreply@aiment.jp";
 
 export async function sendVerificationEmail(to: string, code: string): Promise<void> {
-  const client = getSendGridClient();
+  const client = await getSendGridClient();
   if (!client) {
     // SendGrid未設定の場合はログのみ（開発環境ではdevCodeで代替）
     console.info(`[mailer] SENDGRID_API_KEY not set. Verification code for ${to}: ${code}`);
