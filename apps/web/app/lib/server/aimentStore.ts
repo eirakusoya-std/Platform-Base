@@ -1657,3 +1657,17 @@ export async function cancelReservation(actor: SessionUser, reservationId: strin
     return reservation;
   });
 }
+
+export async function deleteUser(userId: string): Promise<void> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    await db`DELETE FROM users WHERE id = ${userId}`;
+    return;
+  }
+
+  await mutateStore((store) => {
+    store.users = store.users.filter((u) => u.id !== userId);
+    return null;
+  });
+}
