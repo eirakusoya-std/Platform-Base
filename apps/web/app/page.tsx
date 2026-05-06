@@ -11,6 +11,7 @@ import { StartingSoonSection } from "./components/home/sections/StartingSoonSect
 import { UpcomingTicker } from "./components/home/UpcomingTicker";
 import { LiveSession, StartingSoonSession } from "./components/home/types";
 import { matchesFilter } from "./components/home/utils";
+import { useI18n } from "./lib/i18n";
 import { listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "./lib/streamSessions";
 
 function toSecondsUntil(startsAt: string) {
@@ -20,6 +21,7 @@ function toSecondsUntil(startsAt: string) {
 
 export default function HomePage() {
   const router = useRouter();
+  const { tx } = useI18n();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
@@ -64,10 +66,10 @@ export default function HomePage() {
           isSubscribed: true,
           tags: [session.category, "参加型"],
           description: session.description,
-          duration: "約60分",
+          duration: tx("約60分", "About 60 min"),
           glowColor: "rgba(124,106,230,0.35)",
         })),
-    [dynamicSessions],
+    [dynamicSessions, tx],
   );
 
   const dynamicLive = useMemo<LiveSession[]>(
@@ -89,9 +91,9 @@ export default function HomePage() {
           isSubscribed: true,
           tags: [session.category, "参加型"],
           description: session.description,
-          duration: "配信中",
+          duration: tx("配信中", "Live now"),
         })),
-    [dynamicSessions],
+    [dynamicSessions, tx],
   );
 
   const allStartingSoon = useMemo(() => dynamicStartingSoon, [dynamicStartingSoon]);

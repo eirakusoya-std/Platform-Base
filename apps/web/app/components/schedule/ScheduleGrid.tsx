@@ -1,5 +1,7 @@
 import { ScheduleEvent, Talent } from "./types";
 import { statusDot, statusLabel, statusStyle, toMinutes } from "./utils";
+import { categoryLabel } from "../../lib/labels";
+import { useI18n } from "../../lib/i18n";
 
 type ScheduleGridProps = {
   talents: Talent[];
@@ -7,7 +9,7 @@ type ScheduleGridProps = {
   startHour: number;
   endHour: number;
   events: ScheduleEvent[];
-  onReserve: (sessionId: number) => void;
+  onReserve: (sessionId: string) => void;
 };
 
 type EventLayout = {
@@ -107,6 +109,16 @@ function buildLayouts(events: ScheduleEvent[]): EventLayout[] {
 }
 
 export function ScheduleGrid({ talents, selectedDate, startHour, endHour, events, onReserve }: ScheduleGridProps) {
+  const { tx } = useI18n();
+  if (talents.length === 0) {
+    return (
+      <section className="rounded-2xl bg-[var(--brand-surface)] px-5 py-10 text-center shadow-lg shadow-black/25">
+        <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信スケジュールはまだありません。", "No stream schedule yet.")}</p>
+        <p className="mt-1 text-xs text-[var(--brand-text-muted)]">{tx("配信枠が作成されるとここに表示されます。", "Created stream sessions will appear here.")}</p>
+      </section>
+    );
+  }
+
   const rangeStart = startHour * 60;
   const rangeEnd = endHour * 60;
   const totalMinutes = Math.max(60, rangeEnd - rangeStart);
@@ -124,7 +136,7 @@ export function ScheduleGrid({ talents, selectedDate, startHour, endHour, events
     <section className="overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
       <div className="overflow-auto">
         <div className="grid min-w-[980px]" style={{ gridTemplateColumns: `88px repeat(${talents.length}, minmax(200px, 1fr))` }}>
-          <div className="sticky left-0 top-0 z-20 bg-[var(--brand-surface)] px-3 py-3 text-xs font-semibold text-[var(--brand-text-muted)]">時間</div>
+          <div className="sticky left-0 top-0 z-20 bg-[var(--brand-surface)] px-3 py-3 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("時間", "Time")}</div>
 
           {talents.map((talent) => (
             <div key={talent.id} className="sticky top-0 z-10 bg-[var(--brand-surface)] px-3 py-2">
@@ -134,7 +146,7 @@ export function ScheduleGrid({ talents, selectedDate, startHour, endHour, events
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[var(--brand-text)]">{talent.name}</p>
-                  <p className="text-xs text-[var(--brand-text-muted)]">{talent.specialty}</p>
+                  <p className="text-xs text-[var(--brand-text-muted)]">{categoryLabel(talent.specialty, tx)}</p>
                 </div>
               </div>
             </div>
@@ -199,7 +211,7 @@ export function ScheduleGrid({ talents, selectedDate, startHour, endHour, events
                       </div>
                       <p className="mb-1 text-[10px] text-[var(--brand-text-muted)]">{formatTime(clampedStart)} - {formatTime(clampedEnd)}</p>
                       <div className="flex items-center justify-between">
-                        <span className="truncate text-[10px] text-[var(--brand-text-muted)]">{event.category}</span>
+                        <span className="truncate text-[10px] text-[var(--brand-text-muted)]">{categoryLabel(event.category, tx)}</span>
                         <button
                           className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${statusStyle(event.status)}`}
                           onClick={() => {
@@ -207,7 +219,7 @@ export function ScheduleGrid({ talents, selectedDate, startHour, endHour, events
                             onReserve(event.sessionId);
                           }}
                         >
-                          {statusLabel(event.status)}
+                          {statusLabel(event.status, tx)}
                         </button>
                       </div>
                     </div>

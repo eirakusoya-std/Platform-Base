@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LegacyChannelPreviewPage() {
-  redirect("/channels/test");
+  redirect("/channel");
 }
-

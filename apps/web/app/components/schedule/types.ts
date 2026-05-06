@@ -10,8 +10,8 @@ export type Talent = {
 };
 
 export type ScheduleEvent = {
-  id: number;
-  sessionId: number;
+  id: string;
+  sessionId: string;
   date: string;
   talentId: string;
   title: string;

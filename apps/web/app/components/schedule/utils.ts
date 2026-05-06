@@ -25,10 +25,10 @@ export function eventSpansSlots(event: ScheduleEvent, slotMinutes: number): bool
   return slotMinutes >= start && slotMinutes < end;
 }
 
-export function statusLabel(status: BookingStatus): string {
-  if (status === "available") return "予約可";
-  if (status === "booked") return "予約済";
-  return "抽選";
+export function statusLabel(status: BookingStatus, tx: (jp: string, en: string) => string): string {
+  if (status === "available") return tx("予約可", "Available");
+  if (status === "booked") return tx("予約済", "Reserved");
+  return tx("抽選", "Lottery");
 }
 
 export function statusStyle(status: BookingStatus): string {

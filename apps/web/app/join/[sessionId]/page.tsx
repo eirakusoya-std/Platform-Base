@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronDownIcon, MicrophoneIcon } from "@heroicons/react/24/solid";
 import { useI18n } from "../../lib/i18n";
+import { participationLabel } from "../../lib/labels";
 import { getStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
 
@@ -17,56 +18,8 @@ type SessionMeta = {
   title: string;
   description: string;
   duration: string;
-  participationType: "先着順" | "抽選制" | "メンバー限定";
+  participationType: string;
   thumbnail: string;
-};
-
-const SESSION_MAP: Record<string, SessionMeta> = {
-  "1": {
-    id: "1",
-    vtuber: "夜城ルミナ",
-    title: "【侵食エンド世界】リスナー参加型サバイバル建国計画",
-    description: "エンドに侵食された異変ワールドで、リスナーと協力しながら文明を再建する長期マイクラ企画。",
-    duration: "約120分",
-    participationType: "抽選制",
-    thumbnail: "/image/thumbnail/thumbnail_1.png",
-  },
-  "2": {
-    id: "2",
-    vtuber: "焔角リゼル",
-    title: "【完全初見】DARK SOULS 制覇への血路",
-    description: "死にゲー未経験の悪魔系VTuberが、視聴者の助言と悲鳴に包まれながらダクソを本気攻略。",
-    duration: "約75分",
-    participationType: "先着順",
-    thumbnail: "/image/thumbnail/thumbnail_2.png",
-  },
-  "3": {
-    id: "3",
-    vtuber: "白雪ノエルナ",
-    title: "まったり夜カフェ雑談",
-    description: "コーヒー片手に、日常の話や最近の悩み、裏話をゆるく語る定期リラックス配信。",
-    duration: "約90分",
-    participationType: "メンバー限定",
-    thumbnail: "/image/thumbnail/thumbnail_3.png",
-  },
-  "10": {
-    id: "10",
-    vtuber: "陽葵エルナ",
-    title: "【今日から話せる】初心者向け英会話ライブレッスン",
-    description: "発音・リアルな会話例・そのまま使えるテンプレをセットで学び、コメント参加型でその場アウトプットまでやる英語配信。",
-    duration: "約60分",
-    participationType: "先着順",
-    thumbnail: "/image/thumbnail/thumbnail_5.png",
-  },
-  "11": {
-    id: "11",
-    vtuber: "星宮ポラリス ＆ 桜庭メイカ",
-    title: "視聴者参加型！ガチレース耐久",
-    description: "フレンド戦で視聴者と本気レース、ポイント制で罰ゲームありの白熱コラボ配信。",
-    duration: "約90分",
-    participationType: "抽選制",
-    thumbnail: "/image/thumbnail/thumbnail_4.png",
-  },
 };
 
 export default function PreJoinPage() {
@@ -136,10 +89,10 @@ export default function PreJoinPage() {
         setReservationStatus("reserved");
       } else {
         const data = (await res.json()) as { error?: string };
-        setReserveError(data.error ?? "予約に失敗しました");
+        setReserveError(data.error ?? tx("予約に失敗しました", "Reservation failed"));
       }
     } catch {
-      setReserveError("予約に失敗しました");
+      setReserveError(tx("予約に失敗しました", "Reservation failed"));
     } finally {
       setReserving(false);
     }
@@ -152,24 +105,22 @@ export default function PreJoinPage() {
         vtuber: dynamicSession.hostName,
         title: dynamicSession.title,
         description: dynamicSession.description,
-        duration: dynamicSession.status === "live" ? "配信中" : "約60分",
-        participationType: dynamicSession.participationType === "Lottery" ? "抽選制" : "先着順",
+        duration: dynamicSession.status === "live" ? tx("配信中", "Live now") : tx("約60分", "About 60 min"),
+        participationType: participationLabel(dynamicSession.participationType, tx),
         thumbnail: dynamicSession.thumbnail,
       };
     }
 
-    return (
-      SESSION_MAP[sessionId] ?? {
-        id: sessionId || "unknown",
-        vtuber: "特別セッション",
-        title: "参加準備ページ",
-        description: "このセッションに入る前に、視聴か会話参加かを選べます。",
-        duration: "約60分",
-        participationType: "先着順",
-        thumbnail: "/image/thumbnail/thumbnail_4.png",
-      }
-    );
-  }, [dynamicSession, sessionId]);
+    return {
+      id: sessionId || "unknown",
+      vtuber: tx("読み込み中", "Loading"),
+      title: tx("配信枠を読み込んでいます", "Loading session"),
+      description: "",
+      duration: "",
+      participationType: participationLabel("First-come", tx),
+      thumbnail: "",
+    };
+  }, [dynamicSession, sessionId, tx]);
 
   const streamRef = useRef<MediaStream | null>(null);
   const [micOn, setMicOn] = useState(true);
@@ -233,7 +184,7 @@ export default function PreJoinPage() {
         setReady(true);
         setErrorMessage(null);
       } catch {
-        setErrorMessage("マイクの利用が許可されていません。ブラウザ設定を確認してください。");
+        setErrorMessage(tx("マイクの利用が許可されていません。ブラウザ設定を確認してください。", "Microphone access is not allowed. Please check your browser settings."));
         setReady(false);
       }
     };
@@ -251,7 +202,7 @@ export default function PreJoinPage() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-  }, [authStatus, reservationStatus, selectedAudioDeviceId, selectedPath]);
+  }, [authStatus, reservationStatus, selectedAudioDeviceId, selectedPath, tx]);
 
   useEffect(() => {
     streamRef.current?.getAudioTracks().forEach((track) => {
@@ -308,9 +259,13 @@ export default function PreJoinPage() {
         <section className="min-w-0 space-y-4">
           <div className="overflow-hidden rounded-2xl bg-[var(--brand-bg-900)] shadow-xl">
             <div className="relative" style={{ aspectRatio: "16/9" }}>
-              <img src={session.thumbnail} alt={session.vtuber} className="h-full w-full object-cover" />
+              {session.thumbnail ? (
+                <img src={session.thumbnail} alt={session.vtuber} className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full bg-[var(--brand-surface)]" />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--brand-bg-900)]/75 via-[var(--brand-bg-900)]/20 to-transparent" />
-              <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">配信企画</div>
+              <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">{tx("配信企画", "Live Event")}</div>
               <div className="absolute bottom-4 left-4 right-4">
                 <h1 className="line-clamp-2 text-2xl font-bold leading-tight text-[var(--brand-text)] lg:text-3xl">{session.title}</h1>
                 <p className="mt-2 text-sm text-[var(--brand-text-muted)]">{session.vtuber}</p>

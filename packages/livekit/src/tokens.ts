@@ -69,9 +69,10 @@ export async function createListenerToken(params: TokenParams): Promise<string> 
   const grant: VideoGrant = {
     room: params.roomName,
     roomJoin: true,
-    canPublish: false,
+    canPublish: true,
     canSubscribe: true,
     canPublishData: true,
+    canPublishSources: [],
   };
   at.addGrant(grant);
   return at.toJwt();

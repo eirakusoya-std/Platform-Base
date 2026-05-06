@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
+import { useI18n } from "../../lib/i18n";
 import { useUserSession } from "../../lib/userSession";
 import type { SignupInput, UserRole } from "../../lib/apiTypes";
 
@@ -70,6 +71,7 @@ function GoogleLogo() {
 
 export default function SignupPage() {
   const router = useRouter();
+  const { tx } = useI18n();
   const { isAuthenticated, refreshSession } = useUserSession();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -117,15 +119,15 @@ export default function SignupPage() {
   const goStep2 = () => {
     setError(null);
     if (!email.trim()) {
-      setError("メールアドレスを入力してください。");
+      setError(tx("メールアドレスを入力してください。", "Please enter your email address."));
       return;
     }
     if (!password.trim()) {
-      setError("パスワードを入力してください。");
+      setError(tx("パスワードを入力してください。", "Please enter your password."));
       return;
     }
     if (!termsAccepted || !privacyAccepted) {
-      setError("利用規約とプライバシーポリシーへの同意が必要です。");
+      setError(tx("利用規約とプライバシーポリシーへの同意が必要です。", "You need to accept the Terms and Privacy Policy."));
       return;
     }
     setStep(2);
@@ -134,15 +136,15 @@ export default function SignupPage() {
   const goStep3 = () => {
     setError(null);
     if (!role) {
-      setError("アカウント種別を選択してください。");
+      setError(tx("アカウント種別を選択してください。", "Please choose an account type."));
       return;
     }
     if (role === "vtuber" && !phoneNumber.trim()) {
-      setError("VTuber登録には電話番号の入力が必要です。");
+      setError(tx("VTuber登録には電話番号の入力が必要です。", "Phone number is required for VTuber registration."));
       return;
     }
     if (role === "vtuber" && !phoneVerifiedInSignup && !phoneVerificationSkipped) {
-      setError("電話番号を認証するか、スキップを選択してください。");
+      setError(tx("電話番号を認証するか、スキップを選択してください。", "Verify your phone number or choose skip."));
       return;
     }
     setStep(3);
@@ -163,7 +165,7 @@ export default function SignupPage() {
     }
 
     if (!displayName.trim()) {
-      setError("ディスプレイネームを入力してください。");
+      setError(tx("ディスプレイネームを入力してください。", "Please enter your display name."));
       return;
     }
 
@@ -186,7 +188,7 @@ export default function SignupPage() {
       await refreshSession();
       router.push(redirectTo ?? "/");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "処理に失敗しました。");
+      setError(caughtError instanceof Error ? caughtError.message : tx("処理に失敗しました。", "The request failed."));
     } finally {
       setSubmitting(false);
     }
@@ -195,7 +197,7 @@ export default function SignupPage() {
   const handleGoogleSignup = () => {
     setError(null);
     if (!termsAccepted || !privacyAccepted) {
-      setError("利用規約とプライバシーポリシーへの同意が必要です。");
+      setError(tx("利用規約とプライバシーポリシーへの同意が必要です。", "You need to accept the Terms and Privacy Policy."));
       return;
     }
     window.location.href = `/api/auth/google?role=${role}`;
@@ -204,7 +206,7 @@ export default function SignupPage() {
   const handleRequestPhoneCode = () => {
     setError(null);
     if (!phoneNumber.trim()) {
-      setError("先に電話番号を入力してください。");
+      setError(tx("先に電話番号を入力してください。", "Enter your phone number first."));
       return;
     }
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -217,11 +219,11 @@ export default function SignupPage() {
   const handleConfirmPhone = () => {
     setError(null);
     if (!phoneVerificationRequested) {
-      setError("先にコード送信を行ってください。");
+      setError(tx("先にコード送信を行ってください。", "Send the code first."));
       return;
     }
     if (!/^\d+$/.test(phoneCodeInput.trim())) {
-      setError("数字の確認コードを入力してください。");
+      setError(tx("数字の確認コードを入力してください。", "Enter a numeric verification code."));
       return;
     }
     setPhoneVerifiedInSignup(true);
@@ -234,13 +236,13 @@ export default function SignupPage() {
       <main className="mx-auto max-w-2xl px-5 py-8 md:px-10 md:py-12">
         <section className="rounded-[28px] border border-white/10 bg-[var(--brand-surface)] p-7">
           <div className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-[0.02em]">サインアップ</h1>
+            <h1 className="text-2xl font-semibold tracking-[0.02em]">{tx("サインアップ", "Sign up")}</h1>
             <p className="mt-1 text-sm text-[var(--brand-text-muted)]">
               {step === 1
-                ? "STEP 1/3: 認証情報と同意"
+                ? tx("STEP 1/3: 認証情報と同意", "STEP 1/3: Credentials and consent")
                 : step === 2
-                  ? "STEP 2/3: アカウント種別"
-                  : "STEP 3/3: プロフィール"}
+                  ? tx("STEP 2/3: アカウント種別", "STEP 2/3: Account type")
+                  : tx("STEP 3/3: プロフィール", "STEP 3/3: Profile")}
             </p>
           </div>
 
@@ -259,15 +261,15 @@ export default function SignupPage() {
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
                     <span>
-                      <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-secondary)] underline-offset-2 hover:underline">利用規約</Link>
-                      {" "}に同意します
+                      <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-secondary)] underline-offset-2 hover:underline">{tx("利用規約", "Terms")}</Link>
+                      {tx("に同意します", " accepted")}
                     </span>
                   </label>
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} />
                     <span>
-                      <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-secondary)] underline-offset-2 hover:underline">プライバシーポリシー</Link>
-                      {" "}に同意します
+                      <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-secondary)] underline-offset-2 hover:underline">{tx("プライバシーポリシー", "Privacy Policy")}</Link>
+                      {tx("に同意します", " accepted")}
                     </span>
                   </label>
                 </div>
@@ -284,7 +286,7 @@ export default function SignupPage() {
                   }`}
                 >
                   <p className="text-sm font-semibold text-[var(--brand-text)]">Listener</p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">視聴・予約・通知向け</p>
+                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">{tx("視聴・予約・通知向け", "For watching, reservations, and notifications")}</p>
                 </button>
                 <button
                   type="button"
@@ -296,7 +298,7 @@ export default function SignupPage() {
                   }`}
                 >
                   <p className="text-sm font-semibold text-[var(--brand-text)]">VTuber</p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">配信作成・管理</p>
+                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">{tx("配信作成・管理", "Create and manage streams")}</p>
                 </button>
                 {role === "vtuber" ? (
                   <div className="sm:col-span-2">
@@ -314,7 +316,7 @@ export default function SignupPage() {
                           onClick={handleRequestPhoneCode}
                           className="h-11 rounded-xl bg-[var(--brand-secondary)] px-4 text-xs font-semibold text-black"
                         >
-                          コード送信
+                          {tx("コード送信", "Send code")}
                         </button>
                       </div>
                     </InputLabel>
@@ -324,7 +326,7 @@ export default function SignupPage() {
                         <input
                           value={phoneCodeInput}
                           onChange={(event) => setPhoneCodeInput(event.target.value)}
-                          placeholder="確認コード"
+                          placeholder={tx("確認コード", "Verification code")}
                           className="h-9 min-w-[120px] flex-1 rounded-lg border border-[var(--brand-text-muted)]/70 bg-[var(--brand-bg-900)] px-3 text-sm text-[var(--brand-text)] outline-none focus:border-[var(--brand-secondary)]"
                         />
                         <button
@@ -332,18 +334,18 @@ export default function SignupPage() {
                           onClick={handleConfirmPhone}
                           className="h-9 rounded-lg bg-[var(--brand-bg-900)] px-3 text-xs font-semibold text-[var(--brand-text)]"
                         >
-                          認証する
+                          {tx("認証する", "Verify")}
                         </button>
                       </div>
                       {devPhoneCode ? (
-                        <p className="mt-2 text-xs text-[var(--brand-secondary)]">開発用コード: {devPhoneCode}</p>
+                        <p className="mt-2 text-xs text-[var(--brand-secondary)]">{tx("開発用コード", "Dev code")}: {devPhoneCode}</p>
                       ) : null}
                       <p className="mt-2 text-xs text-[var(--brand-text-muted)]">
                         {phoneVerifiedInSignup
-                          ? "認証済みです。"
+                          ? tx("認証済みです。", "Verified.")
                           : phoneVerificationSkipped
-                            ? "認証をスキップして進行します。"
-                            : "認証するか、下のスキップで進めます。"}
+                            ? tx("認証をスキップして進行します。", "Continuing with verification skipped.")
+                            : tx("認証するか、下のスキップで進めます。", "Verify or use the skip option below.")}
                       </p>
                     </div>
                   </div>
@@ -354,7 +356,7 @@ export default function SignupPage() {
                 <InputLabel label="Display Name">
                   <TextInput value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
                 </InputLabel>
-                <p className="text-xs text-[var(--brand-text-muted)]">この表示名は配信枠やチャットに表示されます。</p>
+                <p className="text-xs text-[var(--brand-text-muted)]">{tx("この表示名は配信枠やチャットに表示されます。", "This display name appears in stream sessions and chat.")}</p>
               </>
             )}
 
@@ -367,7 +369,7 @@ export default function SignupPage() {
                   disabled={submitting}
                   className="h-11 rounded-xl bg-[var(--brand-secondary)] px-5 text-sm font-bold tracking-[0.08em] text-black transition hover:brightness-110 disabled:opacity-60"
                 >
-                  {submitting ? "WORKING..." : "次へ"}
+                  {submitting ? "WORKING..." : tx("次へ", "Next")}
                 </button>
                 <button
                   type="button"
@@ -376,7 +378,7 @@ export default function SignupPage() {
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-5 text-sm font-semibold tracking-[0.02em] text-[#202124] transition hover:bg-[#f8f9fa] disabled:opacity-50"
                 >
                   <GoogleLogo />
-                  Googleでサインアップ
+                  {tx("Googleでサインアップ", "Sign up with Google")}
                 </button>
               </div>
             ) : step === 2 ? (
@@ -393,7 +395,7 @@ export default function SignupPage() {
                   disabled={submitting}
                   className="h-11 rounded-xl bg-[var(--brand-secondary)] px-5 text-sm font-bold tracking-[0.08em] text-black transition hover:brightness-110 disabled:opacity-60"
                 >
-                  {submitting ? "WORKING..." : "次へ"}
+                  {submitting ? "WORKING..." : tx("次へ", "Next")}
                 </button>
                 {role === "vtuber" ? (
                   <button
@@ -406,7 +408,7 @@ export default function SignupPage() {
                     }}
                     className="sm:col-span-2 h-10 rounded-lg bg-[var(--brand-surface)] px-4 text-sm font-medium text-[var(--brand-text)]"
                   >
-                    認証をスキップして次へ
+                    {tx("認証をスキップして次へ", "Skip verification and continue")}
                   </button>
                 ) : null}
               </div>
@@ -424,15 +426,15 @@ export default function SignupPage() {
                   disabled={submitting}
                   className="h-11 rounded-xl bg-[var(--brand-secondary)] px-5 text-sm font-bold tracking-[0.08em] text-black transition hover:brightness-110 disabled:opacity-60"
                 >
-                  {submitting ? "WORKING..." : "アカウント作成"}
+                  {submitting ? "WORKING..." : tx("アカウント作成", "Create account")}
                 </button>
               </div>
             )}
 
             <p className="pt-1 text-sm text-[var(--brand-text-muted)]">
-              すでにアカウントをお持ちですか？{" "}
+              {tx("すでにアカウントをお持ちですか？", "Already have an account?")}{" "}
               <Link href="/auth" className="font-semibold text-[var(--brand-secondary)] underline-offset-2 hover:underline">
-                ログインへ
+                {tx("ログインへ", "Go to login")}
               </Link>
             </p>
           </form>

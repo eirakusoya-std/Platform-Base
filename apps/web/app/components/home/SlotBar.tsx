@@ -1,4 +1,9 @@
+"use client";
+
+import { useI18n } from "../../lib/i18n";
+
 export function SlotBar({ left, total, size = "md" }: { left: number; total: number; size?: "sm" | "md" }) {
+ const { tx } = useI18n();
  const pct = (left / total) * 100;
  const urgency = pct <= 25 ? "urgent" : pct <= 50 ? "warning" : "normal";
  const barColor =
@@ -10,7 +15,7 @@ export function SlotBar({ left, total, size = "md" }: { left: number; total: num
  return (
  <div>
  <div className="mb-1 flex items-center justify-between">
- <span className="text-[10px] font-medium text-[var(--brand-text-muted)]">参加枠の残り</span>
+ <span className="text-[10px] font-medium text-[var(--brand-text-muted)]">{tx("参加枠の残り", "Spots left")}</span>
  <span className={`text-xs font-bold ${textColor} ${urgency === "urgent" ? "animate-pulse" : ""}`}>
  {left} / {total}
  </span>

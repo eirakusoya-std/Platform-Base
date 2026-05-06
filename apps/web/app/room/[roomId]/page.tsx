@@ -5,6 +5,9 @@ import Image from "next/image";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownCircleIcon,
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
+  ChatBubbleLeftRightIcon,
   ChevronDownIcon,
   Cog6ToothIcon,
   MicrophoneIcon,
@@ -35,12 +38,7 @@ type CueMessage = Partial<CueEvent> & {
 
 const MAX_CHAT_MESSAGES = 200;
 
-const INITIAL_CHAT: ChatMessage[] = [
-  { id: "c1", user: "mod_akira", text: "配信開始まであと少しです！音量チェックお願いします。" },
-  { id: "c2", user: "Reese", text: "映像めっちゃ綺麗 👀" },
-  { id: "c3", user: "Gela", text: "参加枠埋まるの早い！" },
-  { id: "c4", user: "host_notice", text: "質問は #Q を先頭につけて送ってください。" },
-];
+const INITIAL_CHAT: ChatMessage[] = [];
 
 function parseRequestedRole(value: string | null): RequestedRole {
   if (value === "host" || value === "speaker" || value === "listener") return value;
@@ -93,6 +91,10 @@ export default function RoomPage() {
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT);
   const [chatInput, setChatInput] = useState("");
+  const [chatSendError, setChatSendError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showVideoControls, setShowVideoControls] = useState(false);
   const [latestCue, setLatestCue] = useState<CueEvent | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
@@ -106,6 +108,7 @@ export default function RoomPage() {
   const [showCamMenu, setShowCamMenu] = useState(false);
   const [showDevicePanel, setShowDevicePanel] = useState(false);
 
+  const videoShellRef = useRef<HTMLDivElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
@@ -114,6 +117,7 @@ export default function RoomPage() {
   const roomRef = useRef<Room | null>(null);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
   const seenCueIdsRef = useRef<Set<string>>(new Set());
+  const videoControlsTimerRef = useRef<number | null>(null);
 
   const canSendMic = assignedRole === "host" || assignedRole === "speaker";
   const canSendCam = assignedRole === "host";
@@ -160,18 +164,27 @@ export default function RoomPage() {
   const sendChatText = useCallback((text: string) => {
     const value = text.trim();
     if (!value) return;
-    const displayName = roomRef.current?.localParticipant.name ?? "you";
+    const room = roomRef.current;
+    if (!room || status !== "connected") {
+      setChatSendError(tx("接続後に送信できます。", "You can send after the room is connected."));
+      return;
+    }
+    setChatSendError(null);
+    const displayName = room.localParticipant.name ?? "you";
     const msg = { type: "chat", id: crypto.randomUUID(), user: displayName, text: value };
     seenChatIdsRef.current.add(msg.id);
     setChatMessages((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text, mine: true }].slice(-MAX_CHAT_MESSAGES));
     setChatInput("");
-    if (roomRef.current && status === "connected") {
-      void roomRef.current.localParticipant.publishData(
+    void room.localParticipant
+      .publishData(
         new TextEncoder().encode(JSON.stringify(msg)),
         { reliable: true },
-      );
-    }
-  }, [status]);
+      )
+      .catch((error: unknown) => {
+        console.error("Failed to publish chat message", error);
+        setChatSendError(tx("コメントの送信に失敗しました。接続状態を確認してください。", "Failed to send the message. Please check your connection."));
+      });
+  }, [status, tx]);
 
   const sendChat = useCallback(() => {
     sendChatText(chatInput);
@@ -180,6 +193,41 @@ export default function RoomPage() {
   const insertChatPhrase = useCallback((phrase: string) => {
     setChatInput((current) => (current.trim() ? `${current.trimEnd()} ${phrase}` : phrase));
     window.requestAnimationFrame(() => chatInputRef.current?.focus());
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const videoShell = videoShellRef.current;
+    if (typeof document === "undefined" || !videoShell) return;
+
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {
+        // no-op
+      });
+      return;
+    }
+
+    void videoShell.requestFullscreen().catch(() => {
+      // no-op
+    });
+  }, []);
+
+  const revealVideoControls = useCallback(() => {
+    setShowVideoControls(true);
+    if (videoControlsTimerRef.current) {
+      window.clearTimeout(videoControlsTimerRef.current);
+    }
+    videoControlsTimerRef.current = window.setTimeout(() => {
+      setShowVideoControls(false);
+      videoControlsTimerRef.current = null;
+    }, 1400);
+  }, []);
+
+  const hideVideoControls = useCallback(() => {
+    if (videoControlsTimerRef.current) {
+      window.clearTimeout(videoControlsTimerRef.current);
+      videoControlsTimerRef.current = null;
+    }
+    setShowVideoControls(false);
   }, []);
 
   const phraseSessionState = useMemo<SmartPhraseSessionState>(() => {
@@ -192,6 +240,23 @@ export default function RoomPage() {
     const timeout = window.setTimeout(() => setLatestCue(null), 4200);
     return () => window.clearTimeout(timeout);
   }, [latestCue]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === videoShellRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (videoControlsTimerRef.current) {
+        window.clearTimeout(videoControlsTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!roomId) return;
@@ -441,9 +506,9 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
-      <header className="bg-[var(--brand-bg-900)]">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-5 lg:px-12">
+    <div className="flex h-screen flex-col overflow-hidden bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
+      <header className="shrink-0 bg-[var(--brand-bg-900)]">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-3 lg:px-12">
           <button onClick={() => router.push("/")} className="flex items-center">
             <Image src="/logo/aiment_logotype.svg" alt="aiment" width={120} height={40} className="h-8 w-auto object-contain" />
           </button>
@@ -463,68 +528,85 @@ export default function RoomPage() {
         </div>
       </header>
 
-      <main className="mx-auto h-[calc(100vh-76px-96px)] w-full max-w-[1600px] overflow-hidden px-4 py-4 lg:px-8">
-        <div className="grid h-full grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
+      <main
+        className={`mx-auto min-h-0 w-full max-w-[1600px] flex-1 overflow-hidden px-4 pt-4 lg:px-8 ${
+          requestedRole === "listener" ? "pb-4" : "pb-28"
+        }`}
+      >
+        <div className={`grid h-full grid-cols-1 gap-4 ${chatOpen ? "xl:grid-cols-[1fr_360px]" : "xl:grid-cols-[1fr_64px]"}`}>
           <section className="min-h-0 min-w-0 space-y-4 overflow-y-auto pr-1">
-            <div className="overflow-hidden rounded-2xl bg-[var(--brand-bg-900)] shadow-xl">
-              <div className="relative" style={{ aspectRatio: "16/9" }}>
-                {requestedRole === "listener" ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--brand-surface)] text-center">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--brand-primary)]/10">
-                      <span className="text-2xl">👂</span>
-                    </div>
-                    <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("リスナーモード", "Listener Mode")}</p>
-                    <p className="max-w-[260px] text-xs text-[var(--brand-text-muted)]">
-                      {tx("ライブ配信視聴機能は近日公開予定です。", "Live stream viewing is coming soon.")}
+            <div ref={videoShellRef} className="overflow-hidden rounded-2xl bg-black shadow-xl">
+              <div
+                onMouseMove={revealVideoControls}
+                onMouseLeave={hideVideoControls}
+                className={`relative bg-black ${isFullscreen ? "h-screen" : ""}`}
+                style={isFullscreen ? undefined : { aspectRatio: "16/9" }}
+              >
+                <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+                <div ref={remoteAudioContainerRef} className="hidden" aria-hidden />
+                {status === "failed" && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--brand-surface)] px-6 text-center">
+                    <p className="text-sm font-semibold text-[var(--brand-accent)]">{tx("接続に失敗しました", "Connection failed")}</p>
+                    {failureReason && (
+                      <p className="rounded-xl bg-[var(--brand-accent)]/15 px-4 py-2 text-xs text-[var(--brand-accent)]">{failureReason}</p>
+                    )}
+                    <button
+                      onClick={() => router.back()}
+                      className="mt-1 rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white"
+                    >
+                      {tx("戻る", "Back")}
+                    </button>
+                  </div>
+                )}
+                {status !== "failed" && !remoteConnected && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
+                    <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信者の映像を待機中", "Waiting for host stream")}</p>
+                    <p className="text-xs text-[var(--brand-text-muted)]">
+                      {tx("接続されると自動でライブ映像に切り替わります", "Stream switches automatically when connected")}
                     </p>
                   </div>
-                ) : (
-                  <>
-                    <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
-                    <div ref={remoteAudioContainerRef} className="hidden" aria-hidden />
-                    {status === "failed" && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--brand-surface)] px-6 text-center">
-                        <p className="text-sm font-semibold text-[var(--brand-accent)]">{tx("接続に失敗しました", "Connection failed")}</p>
-                        {failureReason && (
-                          <p className="rounded-xl bg-[var(--brand-accent)]/15 px-4 py-2 text-xs text-[var(--brand-accent)]">{failureReason}</p>
-                        )}
-                        <button
-                          onClick={() => router.back()}
-                          className="mt-1 rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white"
-                        >
-                          {tx("戻る", "Back")}
-                        </button>
-                      </div>
-                    )}
-                    {status !== "failed" && !remoteConnected && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
-                        <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信者の映像を待機中", "Waiting for host stream")}</p>
-                        <p className="text-xs text-[var(--brand-text-muted)]">
-                          {tx("接続されると自動でライブ映像に切り替わります", "Stream switches automatically when connected")}
-                        </p>
-                      </div>
-                    )}
-                  </>
                 )}
 
-                {requestedRole !== "listener" && (
-                  <>
-                    <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold">LIVE</div>
-                    <div className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-xs">
-                      {assignedRole === "host" ? tx("配信者メイン", "Host Main") : tx("スピーカー", "Speaker")}
-                    </div>
-                  </>
-                )}
+                <div className="absolute right-3 top-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleFullscreen}
+                    aria-label={isFullscreen ? tx("フルスクリーンを終了", "Exit fullscreen") : tx("フルスクリーン", "Fullscreen")}
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/25 text-white shadow-lg backdrop-blur transition-all hover:bg-black/35 focus-visible:opacity-100 ${
+                      showVideoControls ? "opacity-100" : "opacity-0"
+                    }`}
+                  >
+                    {isFullscreen ? (
+                      <ArrowsPointingInIcon className="h-5 w-5" aria-hidden />
+                    ) : (
+                      <ArrowsPointingOutIcon className="h-5 w-5" aria-hidden />
+                    )}
+                  </button>
+                </div>
+
               </div>
             </div>
 
           </section>
 
           <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
+            {chatOpen ? (
+              <>
             <div className="px-4 py-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">{tx("ライブチャット", "Live Chat")}</p>
-                <span className="rounded-full bg-[var(--brand-surface)] px-2 py-0.5 text-[11px] text-[var(--brand-text-muted)]">{chatMessages.length}件</span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-[var(--brand-surface)] px-2 py-0.5 text-[11px] text-[var(--brand-text-muted)]">{chatMessages.length}件</span>
+                  <button
+                    type="button"
+                    onClick={() => setChatOpen(false)}
+                    aria-label={tx("コメントを閉じる", "Close comments")}
+                    className="inline-flex h-8 items-center gap-1 rounded-full bg-[var(--brand-surface)] px-3 text-[11px] font-bold text-[var(--brand-text-muted)] transition-colors hover:text-[var(--brand-text)]"
+                  >
+                    <ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden />
+                    <span>{tx("OFF", "Off")}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -585,16 +667,23 @@ export default function RoomPage() {
                     event.preventDefault();
                     sendChat();
                   }}
-                  placeholder={tx("チャットを入力", "Type a message")}
-                  className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)]"
+                  disabled={status !== "connected"}
+                  placeholder={status === "connected" ? tx("チャットを入力", "Type a message") : tx("接続後に送信できます", "Connect to send")}
+                  className="flex-1 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm text-[var(--brand-text)] outline-none placeholder:text-[var(--brand-text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
                 />
                 <button
                   onClick={sendChat}
-                  className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-primary)]"
+                  disabled={status !== "connected"}
+                  className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {tx("送信", "Send")}
                 </button>
               </div>
+              {chatSendError ? (
+                <p className="mt-2 rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs font-semibold text-[var(--brand-accent)]">
+                  {chatSendError}
+                </p>
+              ) : null}
               <SmartPhraseAssist
                 sessionState={phraseSessionState}
                 onSendPhrase={sendChatText}
@@ -602,71 +691,84 @@ export default function RoomPage() {
                 className="mt-2"
               />
             </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                aria-label={tx("コメントを開く", "Open comments")}
+                className="flex h-full min-h-[64px] w-full flex-col items-center justify-center gap-2 text-[var(--brand-text-muted)] transition-colors hover:bg-[var(--brand-surface)] hover:text-[var(--brand-text)]"
+              >
+                <ChatBubbleLeftRightIcon className="h-6 w-6" aria-hidden />
+                <span className="text-[11px] font-bold [writing-mode:vertical-rl]">{tx("コメント", "Chat")}</span>
+              </button>
+            )}
           </aside>
         </div>
       </main>
 
-      <div className="pointer-events-none fixed bottom-4 left-1/2 z-30 w-[calc(100%-24px)] max-w-[720px] -translate-x-1/2">
-        <div className="pointer-events-auto rounded-[28px] bg-[var(--brand-bg-800)]/95 px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.38)] backdrop-blur">
-          <div className="flex items-center justify-center gap-2 md:gap-3">
-            <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-              <button
-                onClick={() => applyMic(!micOn)}
-                disabled={!canSendMic}
-                className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
-                  canSendMic
-                    ? micOn
-                      ? "bg-[var(--brand-primary)] text-white"
-                      : "bg-transparent text-[var(--brand-text-muted)]"
-                    : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
-                }`}
-              >
-                {micOn ? (
-                  <MicrophoneIcon className="h-5 w-5" aria-hidden />
-                ) : (
-                  <span className="relative flex h-5 w-5 items-center justify-center">
+      {requestedRole !== "listener" && (
+        <div className="pointer-events-none fixed bottom-4 left-1/2 z-30 w-[calc(100%-24px)] max-w-[720px] -translate-x-1/2">
+          <div className="pointer-events-auto rounded-[28px] bg-[var(--brand-bg-800)]/95 px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.38)] backdrop-blur">
+            <div className="flex items-center justify-center gap-2 md:gap-3">
+              <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
+                <button
+                  onClick={() => applyMic(!micOn)}
+                  disabled={!canSendMic}
+                  className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+                    canSendMic
+                      ? micOn
+                        ? "bg-[var(--brand-primary)] text-white"
+                        : "bg-transparent text-[var(--brand-text-muted)]"
+                      : "cursor-not-allowed bg-[var(--brand-surface)] text-[var(--brand-text-muted)]/60"
+                  }`}
+                >
+                  {micOn ? (
                     <MicrophoneIcon className="h-5 w-5" aria-hidden />
-                    <span className="pointer-events-none absolute h-6 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
-                    <span className="pointer-events-none absolute h-6 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
-                  </span>
+                  ) : (
+                    <span className="relative flex h-5 w-5 items-center justify-center">
+                      <MicrophoneIcon className="h-5 w-5" aria-hidden />
+                      <span className="pointer-events-none absolute h-6 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
+                      <span className="pointer-events-none absolute h-6 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canSendMic}
+                  onClick={() => {
+                    setShowMicMenu((v) => !v);
+                    setShowCamMenu(false);
+                  }}
+                  className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
+                >
+                  <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                </button>
+                {showMicMenu && canSendMic && (
+                  <div className="absolute bottom-14 left-0 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
+                    {audioDevices.map((device, index) => (
+                      <button
+                        key={device.deviceId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMicDeviceId(device.deviceId);
+                          setShowMicMenu(false);
+                          if (roomRef.current && micOn) {
+                            void roomRef.current.localParticipant.setMicrophoneEnabled(true, { deviceId: device.deviceId });
+                          }
+                        }}
+                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
+                          selectedMicDeviceId === device.deviceId
+                            ? "bg-[var(--brand-primary)] text-white font-bold"
+                            : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
+                        }`}
+                      >
+                        {device.label || `Microphone ${index + 1}`}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </button>
-              <button
-                type="button"
-                disabled={!canSendMic}
-                onClick={() => {
-                  setShowMicMenu((v) => !v);
-                  setShowCamMenu(false);
-                }}
-                className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-              >
-                <ChevronDownIcon className="h-4 w-4" aria-hidden />
-              </button>
-              {showMicMenu && canSendMic && (
-                <div className="absolute bottom-14 left-0 z-20 min-w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                  {audioDevices.map((device, index) => (
-                    <button
-                      key={device.deviceId}
-                      type="button"
-                      onClick={() => {
-                        setSelectedMicDeviceId(device.deviceId);
-                        setShowMicMenu(false);
-                        if (roomRef.current && micOn) {
-                          void roomRef.current.localParticipant.setMicrophoneEnabled(true, { deviceId: device.deviceId });
-                        }
-                      }}
-                      className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                        selectedMicDeviceId === device.deviceId
-                          ? "bg-[var(--brand-primary)] text-white font-bold"
-                          : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                      }`}
-                    >
-                      {device.label || `Microphone ${index + 1}`}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+              </div>
 
             {canSendCam && (
               <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
@@ -764,6 +866,7 @@ export default function RoomPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
