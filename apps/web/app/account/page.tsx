@@ -5,11 +5,15 @@ import { useRouter } from "next/navigation";
 import {
   BellAlertIcon,
   CreditCardIcon,
+  EyeIcon,
+  EyeSlashIcon,
   ShieldCheckIcon,
   UserCircleIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { TopNav } from "../components/home/TopNav";
+import { EmailVerifyModal } from "../components/account/EmailVerifyModal";
+import { PhoneVerifyModal } from "../components/account/PhoneVerifyModal";
 import { PaymentModal } from "../components/billing/PaymentModal";
 import {
   createCheckout,
@@ -34,6 +38,28 @@ import type {
 
 const SETTINGS_STORAGE_KEY_PREFIX = "aiment.account-settings.ui.v1";
 const IS_DEV = process.env.NODE_ENV !== "production";
+
+function maskPhone(phone: string, visible: boolean): string {
+  if (visible) return phone;
+  const digits = phone.replace(/\D/g, "");
+  const last4 = digits.slice(-4);
+  const masked = phone.slice(0, -4).replace(/\d/g, "*");
+  return masked + last4;
+}
+
+function maskEmail(email: string, visible: boolean): string {
+  if (visible) return email;
+  const at = email.indexOf("@");
+  if (at < 0) return email;
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  const maskedLocal = local.slice(0, 1) + "*".repeat(Math.max(local.length - 1, 3));
+  const dot = domain.lastIndexOf(".");
+  const domainName = dot > 0 ? domain.slice(0, dot) : domain;
+  const tld = dot > 0 ? domain.slice(dot) : "";
+  const maskedDomain = domainName.slice(0, 1) + "*".repeat(Math.max(domainName.length - 1, 3));
+  return `${maskedLocal}@${maskedDomain}${tld}`;
+}
 
 type AccountUiSettings = {
   mfaEnabled: boolean;
@@ -165,6 +191,10 @@ export default function AccountPage() {
   const [activeTab, setActiveTab] = useState<AccountTab>("profile");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [phoneVisible, setPhoneVisible] = useState(false);
+  const [emailVisible, setEmailVisible] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<AccountSnapshot | null>(null);
 
   const defaultUiSettings = useMemo<AccountUiSettings>(
@@ -620,146 +650,64 @@ export default function AccountPage() {
               <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">ログイン方法</p>
               <p className="mt-1 text-sm text-[var(--brand-text)]">{draft.authProvider}</p>
             </div>
+            {/* メールアドレス */}
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--brand-text)]">メールアドレス確認</p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">{draft.emailVerifiedAt ? "確認済み" : "未確認"}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--brand-text)]">メールアドレス</p>
+                  <div className="mt-1 flex items-center gap-1">
+                    <p className="truncate text-xs text-[var(--brand-text-muted)]">
+                      {draft.email ? maskEmail(draft.email, emailVisible) : "未登録"}
+                    </p>
+                    {draft.email ? (
+                      <button type="button" onClick={() => setEmailVisible((v) => !v)} className="shrink-0 text-[var(--brand-text-muted)]">
+                        {emailVisible ? <EyeSlashIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
+                      </button>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-[var(--brand-text-muted)]">
+                    {draft.emailVerifiedAt ? "✓ 確認済み" : "未確認"}
+                  </p>
                 </div>
-                {!draft.emailVerifiedAt ? (
+                {!draft.emailVerifiedAt && draft.email ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      void request<{ devCode: string }>("/api/account/verify/email/request", { method: "POST" }).then((payload) => {
-                        setDevEmailCode(IS_DEV ? payload.devCode : null);
-                        setMessage("メール確認コードを発行しました。");
-                        setError(null);
-                      }).catch((caughtError) => {
-                        setError(caughtError instanceof Error ? caughtError.message : "失敗しました。");
-                      });
-                    }}
-                    className="rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
+                    onClick={() => setShowEmailModal(true)}
+                    className="shrink-0 rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
                   >
-                    コード送信
+                    認証する
                   </button>
                 ) : null}
               </div>
-              {!draft.emailVerifiedAt ? (
-                <div className="mt-3 space-y-2">
-                  {IS_DEV && devEmailCode ? <p className="text-xs text-[var(--brand-secondary)]">開発用コード: {devEmailCode}</p> : null}
-                  <div className="flex gap-2">
-                    <input
-                      value={emailCode}
-                      onChange={(event) => setEmailCode(event.target.value)}
-                      placeholder="確認コード"
-                      className="h-10 flex-1 rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void request("/api/account/verify/email/confirm", {
-                          method: "POST",
-                          body: JSON.stringify({ code: emailCode }),
-                        }).then(async () => {
-                          await refreshSession();
-                          setMessage("メール確認が完了しました。");
-                          setDevEmailCode(null);
-                          setEmailCode("");
-                          setError(null);
-                        }).catch((caughtError) => {
-                          setError(caughtError instanceof Error ? caughtError.message : "失敗しました。");
-                        });
-                      }}
-                      className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs font-semibold text-[var(--brand-text)]"
-                    >
-                      確認する
-                    </button>
-                  </div>
-                </div>
-              ) : null}
             </div>
+
+            {/* 電話番号 */}
             <div className="rounded-lg bg-[var(--brand-surface)] p-4">
               <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--brand-text)]">電話番号</p>
-                  <p className="mt-1 text-xs text-[var(--brand-text-muted)]">
-                    {draft.phoneVerifiedAt ? "確認済み" : draft.phoneNumber ? "未確認 — 下記で認証してください" : "未登録"}
+                  <div className="mt-1 flex items-center gap-1">
+                    <p className="truncate text-xs text-[var(--brand-text-muted)]">
+                      {draft.phoneNumber ? maskPhone(draft.phoneNumber, phoneVisible) : "未登録"}
+                    </p>
+                    {draft.phoneNumber ? (
+                      <button type="button" onClick={() => setPhoneVisible((v) => !v)} className="shrink-0 text-[var(--brand-text-muted)]">
+                        {phoneVisible ? <EyeSlashIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
+                      </button>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-[var(--brand-text-muted)]">
+                    {draft.phoneVerifiedAt ? "✓ 確認済み" : draft.phoneNumber ? "未確認" : ""}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPhoneModal(true)}
+                  className="shrink-0 rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
+                >
+                  {draft.phoneVerifiedAt ? "番号を変更" : "認証する"}
+                </button>
               </div>
-              {!draft.phoneVerifiedAt ? (
-                <>
-                  <input
-                    type="tel"
-                    value={draft.phoneNumber ?? ""}
-                    onChange={(event) => {
-                      setDraft((prev) => (prev ? { ...prev, phoneNumber: event.target.value || undefined } : prev));
-                      setHasChanges(true);
-                    }}
-                    placeholder="+81 90-0000-0000"
-                    className="mt-3 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
-                  />
-                  {draft.phoneNumber && draft.phoneNumber !== user?.phoneNumber ? (
-                    <p className="mt-1 text-xs text-[var(--brand-text-muted)]">「変更を保存」後にコードを送信できます。</p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="mt-2 text-sm text-[var(--brand-text)]">{draft.phoneNumber}</p>
-              )}
-              {user?.phoneNumber && user.phoneNumber === draft.phoneNumber && !draft.phoneVerifiedAt ? (
-                <div className="mt-3 space-y-2">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void request<{ devCode: string }>("/api/account/verify/phone/request", { method: "POST" }).then((payload) => {
-                          setDevPhoneCode(IS_DEV ? payload.devCode : null);
-                          setPhoneCodeRequested(true);
-                          setMessage("電話確認コードを発行しました。");
-                          setError(null);
-                        }).catch((caughtError) => {
-                          setError(caughtError instanceof Error ? caughtError.message : "失敗しました。");
-                        });
-                      }}
-                      className="rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-semibold text-[var(--brand-bg-900)]"
-                    >
-                      コード送信
-                    </button>
-                  </div>
-                  {IS_DEV && devPhoneCode ? <p className="text-xs text-[var(--brand-secondary)]">開発用コード: {devPhoneCode}</p> : null}
-                  {phoneCodeRequested ? (
-                    <div className="flex gap-2">
-                      <input
-                        value={phoneCode}
-                        onChange={(event) => setPhoneCode(event.target.value)}
-                        placeholder="SMSコード"
-                        className="h-10 flex-1 rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void request("/api/account/verify/phone/confirm", {
-                            method: "POST",
-                            body: JSON.stringify({ code: phoneCode }),
-                          }).then(async () => {
-                            await refreshSession();
-                            setMessage("電話番号確認が完了しました。");
-                            setDevPhoneCode(null);
-                            setPhoneCodeRequested(false);
-                            setPhoneCode("");
-                            setError(null);
-                          }).catch((caughtError) => {
-                            setError(caughtError instanceof Error ? caughtError.message : "失敗しました。");
-                          });
-                        }}
-                        className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs font-semibold text-[var(--brand-text)]"
-                      >
-                        確認する
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
             <ToggleItem
               label="2段階認証（2FA）"
@@ -1042,6 +990,31 @@ export default function AccountPage() {
             setPaymentModal(null);
             setBillingLoading(false);
           }}
+        />
+      ) : null}
+
+      {showPhoneModal ? (
+        <PhoneVerifyModal
+          isDev={IS_DEV}
+          onSuccess={async () => {
+            setShowPhoneModal(false);
+            await refreshSession();
+            setMessage("電話番号の認証が完了しました。");
+          }}
+          onClose={() => setShowPhoneModal(false)}
+        />
+      ) : null}
+
+      {showEmailModal && draft?.email ? (
+        <EmailVerifyModal
+          email={draft.email}
+          isDev={IS_DEV}
+          onSuccess={async () => {
+            setShowEmailModal(false);
+            await refreshSession();
+            setMessage("メールアドレスの認証が完了しました。");
+          }}
+          onClose={() => setShowEmailModal(false)}
         />
       ) : null}
     </div>
