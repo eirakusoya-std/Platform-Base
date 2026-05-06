@@ -33,6 +33,41 @@ async function getSendGridClient(): Promise<SendGridClient | null> {
 
 const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL?.trim() ?? "noreply@aiment.jp";
 
+export async function sendEarlyAccessNotification(opts: {
+  participantName: string;
+  participantEmail: string;
+}): Promise<void> {
+  const client = await getSendGridClient();
+  const notifyAddresses = ["kmc2427@kamiyama.ac.jp", "kmc2408@kamiyama.ac.jp"];
+  const { participantName, participantEmail } = opts;
+
+  if (!client) {
+    console.info(`[mailer] Early access payment received: ${participantName} <${participantEmail}>`);
+    return;
+  }
+
+  await Promise.all(
+    notifyAddresses.map((to) =>
+      client.send({
+        to,
+        from: { email: FROM_EMAIL, name: "Aiment" },
+        subject: "【Aiment】アーリーアクセス参加者の支払い完了",
+        text: `アーリーアクセスへの支払いが完了しました。\n\n参加者名: ${participantName}\nメールアドレス: ${participantEmail}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0f0f14;color:#e8e8f0;border-radius:16px;">
+            <h2 style="color:#a78bfa;margin-bottom:8px;">Aiment</h2>
+            <h3 style="margin-top:0;">アーリーアクセス参加者の支払い完了</h3>
+            <table style="width:100%;border-collapse:collapse;margin:24px 0;">
+              <tr><td style="color:#9090a0;padding:8px 0;border-bottom:1px solid #1a1a2e;">参加者名</td><td style="padding:8px 0;border-bottom:1px solid #1a1a2e;">${participantName}</td></tr>
+              <tr><td style="color:#9090a0;padding:8px 0;">メールアドレス</td><td style="padding:8px 0;">${participantEmail}</td></tr>
+            </table>
+          </div>
+        `,
+      })
+    )
+  );
+}
+
 export async function sendVerificationEmail(to: string, code: string): Promise<void> {
   const client = await getSendGridClient();
   if (!client) {
