@@ -1,7 +1,7 @@
 "use client";
 
 // SOLID: S（アーリーアクセス専用の決済フローに専念）
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -72,6 +72,20 @@ function PaymentForm({
   );
 }
 
+function usePhpToJpy(phpAmount: number) {
+  const [jpy, setJpy] = useState<number | null>(null);
+  useEffect(() => {
+    fetch("https://api.frankfurter.app/latest?from=PHP&to=JPY")
+      .then((r) => r.json() as Promise<{ rates?: { JPY?: number } }>)
+      .then((data) => {
+        const rate = data.rates?.JPY;
+        if (rate) setJpy(Math.round(phpAmount * rate));
+      })
+      .catch(() => null);
+  }, [phpAmount]);
+  return jpy;
+}
+
 export default function EarlyAccessPaymentPage() {
   const [step, setStep] = useState<Step>("form");
   const [name, setName] = useState("");
@@ -79,6 +93,7 @@ export default function EarlyAccessPaymentPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const jpyEquiv = usePhpToJpy(200);
 
   const handleFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -126,7 +141,13 @@ export default function EarlyAccessPaymentPage() {
         <div className="mb-6">
           <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-[var(--brand-primary)]">Early Access</p>
           <h1 className="text-2xl font-bold text-[var(--brand-text)]">アーリーアクセス参加</h1>
-          <p className="mt-1 text-sm text-[var(--brand-text-muted)]">特別セッションへの参加費 ₱200</p>
+          <p className="mt-1 text-sm text-[var(--brand-text-muted)]">
+            特別セッションへの参加費{" "}
+            <span className="font-semibold text-[var(--brand-text)]">₱200</span>
+            {jpyEquiv ? (
+              <span className="ml-1 text-xs text-[var(--brand-text-muted)]">（約{jpyEquiv.toLocaleString()}円）</span>
+            ) : null}
+          </p>
         </div>
 
         {step === "form" && (
@@ -163,7 +184,7 @@ export default function EarlyAccessPaymentPage() {
               disabled={loading || !name.trim() || !email.trim()}
               className="w-full rounded-lg bg-[var(--brand-primary)] py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {loading ? "準備中..." : "支払いへ進む →"}
+              {loading ? "準備中..." : `支払いへ進む → ₱200${jpyEquiv ? `（約${jpyEquiv.toLocaleString()}円）` : ""}`}
             </button>
           </form>
         )}
