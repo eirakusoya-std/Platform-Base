@@ -66,42 +66,25 @@ export async function POST(request: Request) {
       existingCustomers.data[0]?.id ??
       (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
 
-    // Subscription を作成（payment_behavior: default_incomplete）
+    // Subscription を作成。expand で latest_invoice.payment_intent を1回のAPI呼び出しで取得する
+    // （Stripe公式サブスクリプション統合ガイド準拠）
     const stripeSubscription = await stripe.subscriptions.create({
       customer: customerId,
       items: [{ price: priceId, quantity: 1 }],
       payment_behavior: "default_incomplete",
       payment_settings: { save_default_payment_method: "on_subscription" },
+      expand: ["latest_invoice.payment_intent"],
       metadata: { userId: user.id, plan: body.plan },
     });
 
-    // Invoice の payment_intent (PaymentIntent ID) から client_secret を取得する。
-    // Stripe SDK v18 の型定義は Invoice.payment_intent を含まないが、
-    // REST API は常にこのフィールドを返すため unknown キャストで安全にアクセスする。
-    const rawInvoice = stripeSubscription.latest_invoice;
-    const invoiceId = typeof rawInvoice === "string" ? rawInvoice : rawInvoice?.id;
-    if (!invoiceId) {
-      throw new Error("Subscription has no latest_invoice");
-    }
-
-    // draft状態のInvoiceはPaymentIntentが未生成なのでfinalizeして確定させる
-    let invoice = await stripe.invoices.retrieve(invoiceId);
-    if (invoice.status === "draft") {
-      invoice = await stripe.invoices.finalizeInvoice(invoiceId);
-    }
-
-    // confirmation_secret（SDK v18 新方式）が利用可能であれば優先使用
-    const secretFromConfirmation = invoice.confirmation_secret?.client_secret ?? null;
-
-    // フォールバック: REST API が返す payment_intent フィールドを unknown キャストで取得
-    const paymentIntentId = (invoice as unknown as { payment_intent?: string | null }).payment_intent ?? null;
-    const secretFromPaymentIntent = paymentIntentId
-      ? (await stripe.paymentIntents.retrieve(paymentIntentId)).client_secret
-      : null;
-
-    const clientSecret = secretFromConfirmation ?? secretFromPaymentIntent;
+    // SDK v18 の型定義は expand 後のネスト構造を含まないため unknown キャストでアクセスする
+    type ExpandedSub = {
+      latest_invoice: { id: string; payment_intent: { id: string; client_secret: string | null } | null } | null;
+    };
+    const expanded = stripeSubscription as unknown as ExpandedSub;
+    const clientSecret = expanded.latest_invoice?.payment_intent?.client_secret ?? null;
     if (!clientSecret) {
-      throw new Error("Cannot retrieve client_secret from invoice");
+      throw new Error("Cannot retrieve client_secret from subscription invoice");
     }
 
     const subscription = await createPendingSubscription({
