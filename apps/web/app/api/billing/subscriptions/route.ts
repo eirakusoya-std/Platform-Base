@@ -66,24 +66,19 @@ export async function POST(request: Request) {
       existingCustomers.data[0]?.id ??
       (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
 
-    // Subscription を作成（Stripe公式サブスクリプション統合ガイド準拠）
+    // Stripe API 2025-03-31+ では invoice.payment_intent が廃止され confirmation_secret に変更。
+    // confirmation_secret は expand しないとレスポンスに含まれないため明示指定が必須。
     const stripeSubscription = await stripe.subscriptions.create({
       customer: customerId,
       items: [{ price: priceId, quantity: 1 }],
       payment_behavior: "default_incomplete",
       payment_settings: { save_default_payment_method: "on_subscription" },
-      expand: ["latest_invoice.payment_intent"],
+      expand: ["latest_invoice.confirmation_secret"],
       metadata: { userId: user.id, plan: body.plan },
     });
 
     // SDK v18 の型定義は expand 後のネスト構造を含まないため unknown キャストでアクセスする
-    type ExpandedPI = { id: string; client_secret: string | null };
-    type ExpandedInv = {
-      id: string;
-      status: string;
-      payment_intent: ExpandedPI | string | null;
-      confirmation_secret?: { client_secret: string | null } | null;
-    };
+    type ExpandedInv = { id: string; confirmation_secret: { client_secret: string | null } | null };
     type ExpandedSub = { latest_invoice: ExpandedInv | string | null };
     const expanded = stripeSubscription as unknown as ExpandedSub;
     const rawInvoice = expanded.latest_invoice;
@@ -91,46 +86,20 @@ export async function POST(request: Request) {
     const invoiceId = typeof rawInvoice === "string" ? rawInvoice : (rawInvoice?.id ?? null);
     if (!invoiceId) throw new Error("Subscription has no latest_invoice");
 
-    let clientSecret: string | null = null;
+    // expand されたオブジェクトから confirmation_secret を取得
+    let clientSecret: string | null =
+      typeof rawInvoice !== "string" ? (rawInvoice?.confirmation_secret?.client_secret ?? null) : null;
 
-    // ① expand が成功してオブジェクトとして返った場合
-    if (typeof rawInvoice !== "string" && rawInvoice) {
-      const pi = rawInvoice.payment_intent;
-      if (pi && typeof pi === "object") {
-        clientSecret = pi.client_secret;
-      } else if (typeof pi === "string") {
-        // expand が ID 文字列のみを返した場合は直接取得
-        clientSecret = (await stripe.paymentIntents.retrieve(pi)).client_secret;
-      }
-      if (!clientSecret) {
-        clientSecret = rawInvoice.confirmation_secret?.client_secret ?? null;
-      }
-    }
-
-    // ② expand が効かなかった場合: インボイスを別途取得して payment_intent を取り出す
+    // フォールバック: expand が効かなかった場合は invoice を明示 expand して再取得
     if (!clientSecret) {
-      const invoice = await stripe.invoices.retrieve(invoiceId);
-      type InvWithPI = { payment_intent?: string | { client_secret: string | null } | null; confirmation_secret?: { client_secret: string | null } | null };
-      const inv = invoice as unknown as InvWithPI;
-      if (inv.confirmation_secret?.client_secret) {
-        clientSecret = inv.confirmation_secret.client_secret;
-      } else if (typeof inv.payment_intent === "string") {
-        clientSecret = (await stripe.paymentIntents.retrieve(inv.payment_intent)).client_secret;
-      } else if (inv.payment_intent && typeof inv.payment_intent === "object") {
-        clientSecret = inv.payment_intent.client_secret;
-      }
+      const invoice = await stripe.invoices.retrieve(invoiceId, {
+        expand: ["confirmation_secret"],
+      });
+      clientSecret = invoice.confirmation_secret?.client_secret ?? null;
     }
 
     if (!clientSecret) {
-      // デバッグ情報をエラーに含めてStripe設定の問題を診断できるようにする
-      const dbg = {
-        subId: stripeSubscription.id,
-        invoiceId,
-        invType: typeof rawInvoice,
-        piType: typeof rawInvoice !== "string" ? typeof rawInvoice?.payment_intent : "N/A",
-        subStatus: stripeSubscription.status,
-      };
-      throw new Error(`Cannot retrieve client_secret — debug: ${JSON.stringify(dbg)}`);
+      throw new Error("Cannot retrieve client_secret from invoice confirmation_secret");
     }
 
     const subscription = await createPendingSubscription({
