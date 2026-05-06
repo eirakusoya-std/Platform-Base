@@ -163,6 +163,8 @@ export default function AccountPage() {
   const [reportDetails, setReportDetails] = useState("");
   const [phoneCodeRequested, setPhoneCodeRequested] = useState(false);
   const [activeTab, setActiveTab] = useState<AccountTab>("profile");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<AccountSnapshot | null>(null);
 
   const defaultUiSettings = useMemo<AccountUiSettings>(
@@ -987,7 +989,43 @@ export default function AccountPage() {
                   >
                     ログアウト
                   </button>
-                  <button className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white">アカウントを削除</button>
+                  {deleteConfirm ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-[var(--brand-accent)]">本当に削除しますか？</span>
+                      <button
+                        type="button"
+                        disabled={deleting}
+                        onClick={() => {
+                          setDeleting(true);
+                          fetch("/api/account/delete", { method: "DELETE" })
+                            .then((r) => r.json())
+                            .then(async () => {
+                              await logout();
+                              router.push("/");
+                            })
+                            .catch(() => setDeleting(false));
+                        }}
+                        className="h-9 rounded-lg bg-[var(--brand-accent)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        {deleting ? "削除中..." : "削除する"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirm(false)}
+                        className="h-9 rounded-lg bg-[var(--brand-surface-soft)] px-4 text-sm text-[var(--brand-text)]"
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(true)}
+                      className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white"
+                    >
+                      アカウントを削除
+                    </button>
+                  )}
                 </div>
               </section>
             ) : null}
