@@ -13,6 +13,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "@repo/livekit": "workspace:*",
     "@repo/shared": "workspace:*",
+    "@sendgrid/mail": "^8.1.6",
     "@stripe/react-stripe-js": "^6.3.0",
     "@stripe/stripe-js": "^9.4.0",
     "livekit-client": "^2.0.0",

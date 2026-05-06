@@ -655,17 +655,17 @@ export default function AccountPage() {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--brand-text)]">メールアドレス</p>
-                  <div className="mt-1 flex items-center gap-1">
-                    <p className="truncate text-xs text-[var(--brand-text-muted)]">
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <p className="truncate text-sm text-[var(--brand-text)]">
                       {draft.email ? maskEmail(draft.email, emailVisible) : "未登録"}
                     </p>
                     {draft.email ? (
                       <button type="button" onClick={() => setEmailVisible((v) => !v)} className="shrink-0 text-[var(--brand-text-muted)]">
-                        {emailVisible ? <EyeSlashIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
+                        {emailVisible ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
                       </button>
                     ) : null}
                   </div>
-                  <p className="mt-0.5 text-[10px] text-[var(--brand-text-muted)]">
+                  <p className="mt-0.5 text-xs text-[var(--brand-text-muted)]">
                     {draft.emailVerifiedAt ? "✓ 確認済み" : "未確認"}
                   </p>
                 </div>
@@ -686,17 +686,17 @@ export default function AccountPage() {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--brand-text)]">電話番号</p>
-                  <div className="mt-1 flex items-center gap-1">
-                    <p className="truncate text-xs text-[var(--brand-text-muted)]">
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <p className="truncate text-sm text-[var(--brand-text)]">
                       {draft.phoneNumber ? maskPhone(draft.phoneNumber, phoneVisible) : "未登録"}
                     </p>
                     {draft.phoneNumber ? (
                       <button type="button" onClick={() => setPhoneVisible((v) => !v)} className="shrink-0 text-[var(--brand-text-muted)]">
-                        {phoneVisible ? <EyeSlashIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
+                        {phoneVisible ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
                       </button>
                     ) : null}
                   </div>
-                  <p className="mt-0.5 text-[10px] text-[var(--brand-text-muted)]">
+                  <p className="mt-0.5 text-xs text-[var(--brand-text-muted)]">
                     {draft.phoneVerifiedAt ? "✓ 確認済み" : draft.phoneNumber ? "未確認" : ""}
                   </p>
                 </div>
