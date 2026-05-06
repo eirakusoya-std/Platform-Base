@@ -950,6 +950,39 @@ export async function updateAccountProfile(
   });
 }
 
+export async function updateAccountSetup(
+  userId: string,
+  patch: { role?: SessionUser["role"]; name?: string; channelName?: string },
+) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const current = await neonGetStoredUserById(userId);
+    if (!current) return null;
+
+    const nextName = patch.name != null ? patch.name.trim() : current.name;
+    const nextRole = patch.role ?? current.role;
+    const nextChannelName = patch.channelName != null ? patch.channelName.trim() || null : current.channelName ?? null;
+
+    await db`
+      UPDATE users SET name = ${nextName}, role = ${nextRole}, channel_name = ${nextChannelName}
+      WHERE id = ${userId}
+    `;
+    const rows = await db`SELECT * FROM users WHERE id = ${userId}`;
+    if (!rows[0]) return null;
+    return sanitizeUser(rowToStoredUser(rows[0]));
+  }
+
+  return mutateStore((store) => {
+    const target = store.users.find((entry) => entry.id === userId);
+    if (!target) return null;
+    if (patch.name != null) target.name = patch.name.trim();
+    if (patch.role != null) target.role = patch.role;
+    if (patch.channelName != null) target.channelName = patch.channelName.trim() || undefined;
+    return sanitizeUser(target);
+  });
+}
+
 export async function requestEmailVerification(userId: string) {
   const code = makeVerificationCode();
 
