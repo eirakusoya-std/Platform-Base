@@ -75,8 +75,9 @@ export async function POST(request: Request) {
       metadata: { userId: user.id, plan: body.plan },
     });
 
-    // latest_invoice を取得し confirmation_secret からclientSecretを得る
-    // （Stripe SDK v18ではInvoice.payment_intentが廃止、confirmation_secretを使用）
+    // Invoice の payment_intent (PaymentIntent ID) から client_secret を取得する。
+    // Stripe SDK v18 の型定義は Invoice.payment_intent を含まないが、
+    // REST API は常にこのフィールドを返すため unknown キャストで安全にアクセスする。
     const rawInvoice = stripeSubscription.latest_invoice;
     const invoiceId = typeof rawInvoice === "string" ? rawInvoice : rawInvoice?.id;
     if (!invoiceId) {
@@ -84,9 +85,19 @@ export async function POST(request: Request) {
     }
 
     const invoice = await stripe.invoices.retrieve(invoiceId);
-    const clientSecret = invoice.confirmation_secret?.client_secret;
+
+    // confirmation_secret（SDK v18 新方式）が利用可能であれば優先使用
+    const secretFromConfirmation = invoice.confirmation_secret?.client_secret ?? null;
+
+    // フォールバック: REST API が返す payment_intent フィールドを unknown キャストで取得
+    const paymentIntentId = (invoice as unknown as { payment_intent?: string | null }).payment_intent ?? null;
+    const secretFromPaymentIntent = paymentIntentId
+      ? (await stripe.paymentIntents.retrieve(paymentIntentId)).client_secret
+      : null;
+
+    const clientSecret = secretFromConfirmation ?? secretFromPaymentIntent;
     if (!clientSecret) {
-      throw new Error("Invoice has no confirmation_secret");
+      throw new Error("Cannot retrieve client_secret from invoice");
     }
 
     const subscription = await createPendingSubscription({
