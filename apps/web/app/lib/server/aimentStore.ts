@@ -165,6 +165,9 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
       typeof entry.preferredVideoDeviceId === "string" ? entry.preferredVideoDeviceId : undefined,
     preferredVideoLabel:
       typeof entry.preferredVideoLabel === "string" ? entry.preferredVideoLabel : undefined,
+    ingressId: typeof entry.ingressId === "string" ? entry.ingressId : undefined,
+    streamKey: typeof entry.streamKey === "string" ? entry.streamKey : undefined,
+    rtmpUrl: typeof entry.rtmpUrl === "string" ? entry.rtmpUrl : undefined,
   };
 }
 
@@ -338,9 +341,15 @@ async function initSchema() {
       speaker_slots_left INTEGER NOT NULL DEFAULT 5,
       speaker_required_plan TEXT NOT NULL DEFAULT 'free',
       preferred_video_device_id TEXT,
-      preferred_video_label TEXT
+      preferred_video_label TEXT,
+      ingress_id TEXT,
+      stream_key TEXT,
+      rtmp_url TEXT
     )
   `;
+  await db`ALTER TABLE stream_sessions ADD COLUMN IF NOT EXISTS ingress_id TEXT`;
+  await db`ALTER TABLE stream_sessions ADD COLUMN IF NOT EXISTS stream_key TEXT`;
+  await db`ALTER TABLE stream_sessions ADD COLUMN IF NOT EXISTS rtmp_url TEXT`;
   await db`
     CREATE TABLE IF NOT EXISTS reservations (
       reservation_id TEXT PRIMARY KEY,
@@ -408,6 +417,9 @@ function rowToStreamSession(row: any): StreamSession {
     speakerRequiredPlan: normalizePlanValue(row.speaker_required_plan),
     preferredVideoDeviceId: row.preferred_video_device_id ?? undefined,
     preferredVideoLabel: row.preferred_video_label ?? undefined,
+    ingressId: row.ingress_id ?? undefined,
+    streamKey: row.stream_key ?? undefined,
+    rtmpUrl: row.rtmp_url ?? undefined,
   };
 }
 
@@ -1635,6 +1647,55 @@ export async function cancelReservation(actor: SessionUser, reservationId: strin
     reservation.cancelledAt = new Date().toISOString();
     syncSessionSlots(store);
     return reservation;
+  });
+}
+
+export async function setSessionIngress(
+  sessionId: string,
+  ingressId: string,
+  streamKey: string,
+  rtmpUrl: string,
+): Promise<void> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    await db`
+      UPDATE stream_sessions
+      SET ingress_id = ${ingressId}, stream_key = ${streamKey}, rtmp_url = ${rtmpUrl}
+      WHERE session_id = ${sessionId}
+    `;
+    return;
+  }
+  await mutateStore((store) => {
+    const session = store.streamSessions.find((s) => s.sessionId === sessionId);
+    if (session) {
+      session.ingressId = ingressId;
+      session.streamKey = streamKey;
+      session.rtmpUrl = rtmpUrl;
+    }
+    return null;
+  });
+}
+
+export async function clearSessionIngress(sessionId: string): Promise<void> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    await db`
+      UPDATE stream_sessions
+      SET ingress_id = NULL, stream_key = NULL, rtmp_url = NULL
+      WHERE session_id = ${sessionId}
+    `;
+    return;
+  }
+  await mutateStore((store) => {
+    const session = store.streamSessions.find((s) => s.sessionId === sessionId);
+    if (session) {
+      delete session.ingressId;
+      delete session.streamKey;
+      delete session.rtmpUrl;
+    }
+    return null;
   });
 }
 
