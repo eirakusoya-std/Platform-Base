@@ -87,6 +87,10 @@ export type StreamSession = {
   speakerRequiredPlan: SubscriptionPlan;
   preferredVideoDeviceId?: string;
   preferredVideoLabel?: string;
+  /** OBS stream key info — only returned to the session host */
+  ingressId?: string;
+  streamKey?: string;
+  rtmpUrl?: string;
 };
 
 export type CreateStreamSessionInput = {
