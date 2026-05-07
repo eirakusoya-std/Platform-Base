@@ -441,15 +441,15 @@ export default function StudioLiveSessionPage() {
   const isLive = connectionStatus === "live" || session.status === "live";
 
   return (
-    <div className="h-screen overflow-hidden bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
+    <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav mode="studio" />
 
-      <main className="mx-auto grid h-[calc(100vh-72px)] max-w-[1440px] grid-cols-[1fr_320px] gap-4 overflow-hidden px-4 py-3 lg:grid-cols-[58px_1fr_360px] lg:px-6">
-        <aside className="hidden lg:block">
+      <main className="mx-auto grid max-w-[1440px] grid-cols-[1fr_320px] items-start gap-4 px-4 py-3 lg:grid-cols-[58px_1fr_360px] lg:px-6">
+        <aside className="sticky top-4 hidden lg:block">
           <StudioProgress current="live" orientation="vertical" />
         </aside>
 
-        <section className="flex min-h-0 flex-col overflow-hidden">
+        <section className="flex flex-col gap-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold">Live Studio</h1>
@@ -521,9 +521,9 @@ export default function StudioLiveSessionPage() {
             </div>
           </section>
 
-          <section className="mt-3 min-h-0 flex-1 overflow-hidden rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
+          <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
             <h2 className="mb-2 text-xs font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("配信設定", "Stream Settings")}</h2>
-            <div className="h-full space-y-3 overflow-y-auto pr-1">
+            <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 {metrics.map((item) => (
                   <div key={item.label} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
@@ -586,8 +586,8 @@ export default function StudioLiveSessionPage() {
           </section>
         </section>
 
-        <aside className="flex min-h-0 flex-col overflow-hidden">
-          <section className="flex h-full min-h-[220px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
+        <aside className="sticky top-4 self-start">
+          <section className="flex h-[calc(100vh-88px)] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
             <div className="border-b border-black/20 px-3 py-2">
               <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
                 <ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden />
