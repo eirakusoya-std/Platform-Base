@@ -1,4 +1,4 @@
-import { IngressClient, IngressInput } from "livekit-server-sdk";
+import { IngressClient, IngressInput, RoomServiceClient } from "livekit-server-sdk";
 
 export type IngressParams = {
   apiKey: string;
@@ -49,4 +49,24 @@ export async function deleteRtmpIngress(params: {
 }): Promise<void> {
   const client = new IngressClient(toHttpHost(params.host), params.apiKey, params.apiSecret);
   await client.deleteIngress(params.ingressId);
+}
+
+export async function checkObsConnected(params: {
+  apiKey: string;
+  apiSecret: string;
+  host: string;
+  roomName: string;
+  participantIdentity: string;
+}): Promise<boolean> {
+  const roomClient = new RoomServiceClient(
+    toHttpHost(params.host),
+    params.apiKey,
+    params.apiSecret,
+  );
+  try {
+    const participants = await roomClient.listParticipants(params.roomName);
+    return participants.some((p) => p.identity === params.participantIdentity);
+  } catch {
+    return false;
+  }
 }
