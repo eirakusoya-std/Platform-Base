@@ -6,7 +6,6 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownCircleIcon,
   ChatBubbleLeftRightIcon,
-  ChevronDownIcon,
   MicrophoneIcon,
   PaperAirplaneIcon,
   PlayIcon,
@@ -19,16 +18,15 @@ import { Room, RoomEvent, Track } from "livekit-client";
 import { OpenCueMiniPanelButton, sendCue, type CueEvent } from "../../../components/cue/CueMiniPanel";
 import { TopNav } from "../../../components/home/TopNav";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
-import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../../lib/cameraDevices";
 import { useI18n } from "../../../lib/i18n";
 import {
   getStreamSession,
   setStreamSessionStatus,
   subscribeStreamSessions,
   type StreamSession,
-  updateStreamSession,
 } from "../../../lib/streamSessions";
 import { useUserSession } from "../../../lib/userSession";
+import { ObsStreamPanel } from "./ObsStreamPanel";
 
 type ParticipantItem = {
   id: string;
@@ -101,35 +99,17 @@ export default function StudioLiveSessionPage() {
   const [chat, setChat] = useState<ChatItem[]>(INITIAL_CHAT);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
-  const [startWarnings, setStartWarnings] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [connectedViewers, setConnectedViewers] = useState(0);
-  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState(() => searchParams.get("micDeviceId") ?? "");
-  const [showMicMenu, setShowMicMenu] = useState(false);
-  const [showCamMenu, setShowCamMenu] = useState(false);
+  const [obsConnected, setObsConnected] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
-  const streamRef = useRef<MediaStream | null>(null);
   const roomRef = useRef<Room | null>(null);
   const autoStartDoneRef = useRef(false);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
-
-  const clearResolvedWarnings = useCallback((next: { micOn?: boolean; camOn?: boolean; hasVideoDevice?: boolean }) => {
-    setStartWarnings((prev) =>
-      prev.filter((warning) => {
-        if ((warning.includes("マイク") || warning.includes("MIC")) && next.micOn) return false;
-        if ((warning.includes("カメラ") || warning.includes("CAM")) && next.camOn) return false;
-        if ((warning.includes("カメラソース") || warning.includes("camera source")) && next.hasVideoDevice) return false;
-        return true;
-      }),
-    );
-  }, []);
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -169,103 +149,6 @@ export default function StudioLiveSessionPage() {
     };
   }, [sessionId]);
 
-  // Pre-live preview via getUserMedia (skipped while live)
-  useEffect(() => {
-    if (notFound || connectionStatus === "live" || connectionStatus === "starting") return;
-
-    let cancelled = false;
-
-    const setupPreview = async () => {
-      try {
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true,
-          audio: selectedAudioDeviceId ? { deviceId: { exact: selectedAudioDeviceId } } : true,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-        if (previewRef.current) {
-          previewRef.current.srcObject = stream;
-          previewRef.current.muted = true;
-        }
-
-        stream.getAudioTracks().forEach((track) => {
-          track.enabled = micOn;
-        });
-        stream.getVideoTracks().forEach((track) => {
-          track.enabled = camOn;
-        });
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        if (!cancelled) {
-          const videos = devices.filter((device) => device.kind === "videoinput");
-          const audios = devices.filter((device) => device.kind === "audioinput");
-          setVideoDevices(videos);
-          setAudioDevices(audios);
-          if (!selectedVideoDeviceId && videos.length > 0) {
-            const sessionPreferred = session?.preferredVideoDeviceId
-              ? videos.find((device) => device.deviceId === session.preferredVideoDeviceId) ?? null
-              : null;
-            const preferred = sessionPreferred ?? pickPreferredVideoDevice(videos);
-            if (preferred?.deviceId) setSelectedVideoDeviceId(preferred.deviceId);
-          }
-          if (!selectedAudioDeviceId && audios.length > 0) {
-            setSelectedAudioDeviceId(audios[0].deviceId);
-          }
-          setMediaError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setMediaError(
-            tx("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。", "Camera/mic access denied. Check browser permissions."),
-          );
-        }
-      }
-    };
-
-    setupPreview();
-
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      if (previewRef.current) previewRef.current.srcObject = null;
-    };
-  }, [notFound, selectedVideoDeviceId, selectedAudioDeviceId, session?.preferredVideoDeviceId, micOn, camOn, tx, connectionStatus]);
-
-  const selectedVideoLabel = useMemo(() => {
-    return (
-      videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ??
-      session?.preferredVideoLabel ??
-      tx("デフォルトカメラ", "Default camera")
-    );
-  }, [selectedVideoDeviceId, session?.preferredVideoLabel, tx, videoDevices]);
-
-  const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
-
-  const selectedAudioLabel = useMemo(
-    () => audioDevices.find((device) => device.deviceId === selectedAudioDeviceId)?.label ?? tx("デフォルトマイク", "Default microphone"),
-    [audioDevices, selectedAudioDeviceId, tx],
-  );
-
-  useEffect(() => {
-    if (!session || !selectedVideoDeviceId) return;
-    if (
-      session.preferredVideoDeviceId === selectedVideoDeviceId &&
-      session.preferredVideoLabel === selectedVideoLabel
-    )
-      return;
-
-    void updateStreamSession(session.sessionId, {
-      preferredVideoDeviceId: selectedVideoDeviceId,
-      preferredVideoLabel: selectedVideoLabel,
-    });
-  }, [selectedVideoDeviceId, selectedVideoLabel, session?.preferredVideoDeviceId, session?.preferredVideoLabel, session?.sessionId]);
 
   const metrics = useMemo(
     () => [
@@ -365,7 +248,6 @@ export default function StudioLiveSessionPage() {
   const handleMicToggle = () => {
     const next = !micOn;
     setMicOn(next);
-    clearResolvedWarnings({ micOn: next });
     if (roomRef.current && connectionStatus === "live") {
       void roomRef.current.localParticipant.setMicrophoneEnabled(next);
     }
@@ -374,7 +256,6 @@ export default function StudioLiveSessionPage() {
   const handleCamToggle = () => {
     const next = !camOn;
     setCamOn(next);
-    clearResolvedWarnings({ camOn: next });
     if (roomRef.current && connectionStatus === "live") {
       void roomRef.current.localParticipant.setCameraEnabled(next);
     }
@@ -383,19 +264,8 @@ export default function StudioLiveSessionPage() {
   const startBroadcast = async () => {
     if (!session) return;
 
-    const warnings: string[] = [];
-    if (camOn && !selectedVideoDeviceId) warnings.push(tx("カメラソースを選択してください。", "Choose a camera source."));
-    setStartWarnings(warnings);
-    if (warnings.length > 0) return;
-
-    setStartWarnings([]);
     setConnectionStatus("starting");
     setMediaError(null);
-
-    // Stop preview stream so LiveKit can acquire media
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    if (previewRef.current) previewRef.current.srcObject = null;
 
     // Get LiveKit token
     let tokenData: { token: string; livekitUrl: string };
@@ -512,12 +382,8 @@ export default function StudioLiveSessionPage() {
 
     try {
       await room.connect(tokenData.livekitUrl, tokenData.token);
-      await room.localParticipant.setCameraEnabled(camOn, {
-        deviceId: selectedVideoDeviceId || undefined,
-      });
-      await room.localParticipant.setMicrophoneEnabled(micOn, {
-        deviceId: selectedAudioDeviceId || undefined,
-      });
+      await room.localParticipant.setCameraEnabled(camOn);
+      await room.localParticipant.setMicrophoneEnabled(micOn);
     } catch (err) {
       setMediaError(err instanceof Error ? err.message : "Failed to connect to LiveKit");
       setConnectionStatus("failed");
@@ -547,15 +413,13 @@ export default function StudioLiveSessionPage() {
     if (!shouldAutoStart || autoStartDoneRef.current) return;
     if (notFound || !session) return;
     if (connectionStatus !== "idle") return;
-    if (!streamRef.current) return;
-    if (camOn && !selectedVideoDeviceId) return;
 
     autoStartDoneRef.current = true;
     const timer = window.setTimeout(() => {
       void startBroadcast();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [shouldAutoStart, notFound, session, connectionStatus, selectedVideoDeviceId, micOn, camOn]);
+  }, [shouldAutoStart, notFound, session, connectionStatus]);
 
   if (!sessionHydrated || !isVtuber) return null;
 
@@ -608,14 +472,6 @@ export default function StudioLiveSessionPage() {
             </div>
           </div>
 
-          {startWarnings.length > 0 && (
-            <div className="mb-2 rounded-xl bg-[var(--brand-accent)]/15 p-2.5 text-xs text-[var(--brand-accent)]">
-              {startWarnings.map((w) => (
-                <p key={w}>{w}</p>
-              ))}
-            </div>
-          )}
-
           <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
             <div className="mx-auto max-w-[640px] overflow-hidden rounded-xl bg-[var(--brand-bg-900)]" style={{ aspectRatio: "16/9" }}>
               <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
@@ -638,81 +494,8 @@ export default function StudioLiveSessionPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  <div className="relative inline-flex items-center rounded-full bg-[var(--brand-surface)]">
-                    <CircleControl label="MIC" icon={MicrophoneIcon} slashedWhenOff on={micOn} onToggle={handleMicToggle} />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMicMenu((v) => !v);
-                        setShowCamMenu(false);
-                      }}
-                      className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-                    >
-                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
-                    </button>
-                    {showMicMenu && (
-                      <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                        {audioDevices.map((device, index) => (
-                          <button
-                            key={device.deviceId}
-                            type="button"
-                            onClick={() => {
-                              setSelectedAudioDeviceId(device.deviceId);
-                              setShowMicMenu(false);
-                              if (roomRef.current && micOn) {
-                                void roomRef.current.localParticipant.setMicrophoneEnabled(true, { deviceId: device.deviceId });
-                              }
-                            }}
-                            className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                              selectedAudioDeviceId === device.deviceId
-                                ? "bg-[var(--brand-primary)] text-white font-bold"
-                                : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                            }`}
-                          >
-                            {device.label || `Microphone ${index + 1}`}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="relative inline-flex items-center rounded-full bg-[var(--brand-surface)]">
-                    <CircleControl label="CAM" icon={VideoCameraIcon} offIcon={VideoCameraSlashIcon} on={camOn} onToggle={handleCamToggle} />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCamMenu((v) => !v);
-                        setShowMicMenu(false);
-                      }}
-                      className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-                    >
-                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
-                    </button>
-                    {showCamMenu && (
-                      <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                        {videoDevices.map((device, index) => (
-                          <button
-                            key={device.deviceId}
-                            type="button"
-                            onClick={() => {
-                              setSelectedVideoDeviceId(device.deviceId);
-                              clearResolvedWarnings({ hasVideoDevice: true });
-                              setShowCamMenu(false);
-                              if (roomRef.current && camOn) {
-                                void roomRef.current.localParticipant.setCameraEnabled(true, { deviceId: device.deviceId });
-                              }
-                            }}
-                            className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                              selectedVideoDeviceId === device.deviceId
-                                ? "bg-[var(--brand-primary)] text-white font-bold"
-                                : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                            }`}
-                          >
-                            {device.label || `Camera ${index + 1}`}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <CircleControl label="MIC" icon={MicrophoneIcon} slashedWhenOff on={micOn} onToggle={handleMicToggle} />
+                  <CircleControl label="CAM" icon={VideoCameraIcon} offIcon={VideoCameraSlashIcon} on={camOn} onToggle={handleCamToggle} />
                 </div>
 
                 <button
@@ -723,7 +506,9 @@ export default function StudioLiveSessionPage() {
                           void startBroadcast();
                         }
                   }
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-extrabold ${
+                  disabled={!isLive && !obsConnected && connectionStatus === "idle"}
+                  title={!isLive && !obsConnected ? tx("OBSを先に接続してください", "Connect OBS first") : undefined}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-extrabold disabled:opacity-50 ${
                     isLive
                       ? "bg-[var(--brand-accent)] text-[var(--brand-text)] shadow-[0_10px_24px_rgba(255,59,92,0.25)]"
                       : "bg-[var(--brand-primary)] text-white shadow-[0_10px_24px_rgba(124,106,230,0.4)]"
@@ -748,47 +533,15 @@ export default function StudioLiveSessionPage() {
                 ))}
               </div>
 
-              <label className="grid gap-1 text-sm">
-                <span className="text-[var(--brand-text-muted)]">{tx("配信カメラ", "Camera Source")}</span>
-                <select
-                  value={selectedVideoDeviceId}
-                  onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
-                  className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
-                >
-                  <option value="">{tx("デフォルトカメラ", "Default camera")}</option>
-                  {videoDevices.map((device, index) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Camera ${index + 1}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-1 text-sm">
-                <span className="text-[var(--brand-text-muted)]">{tx("配信マイク", "Microphone Source")}</span>
-                <select
-                  value={selectedAudioDeviceId}
-                  onChange={(event) => setSelectedAudioDeviceId(event.target.value)}
-                  className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
-                >
-                  <option value="">{tx("デフォルトマイク", "Default microphone")}</option>
-                  {audioDevices.map((device, index) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Microphone ${index + 1}`}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs text-[var(--brand-text-muted)]">{selectedAudioLabel}</span>
-              </label>
-
-              {!usingVirtualCamera && (
-                <div className="rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)]">
-                  {tx(
-                    "仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。",
-                    "A non-virtual camera is selected. Virtual camera is recommended.",
-                  )}
-                </div>
-              )}
+              <div className="rounded-xl bg-[var(--brand-bg-900)] p-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--brand-text-muted)]">
+                  {tx("OBS配信設定", "OBS Stream Setup")}
+                </p>
+                <ObsStreamPanel
+                  sessionId={sessionId}
+                  onConnectionChange={setObsConnected}
+                />
+              </div>
 
               <div>
                 <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー一覧", "Speakers")}</p>
