@@ -140,12 +140,12 @@ export default function EarlyAccessPaymentPage() {
         <div className="mb-6">
           <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-[var(--brand-primary)]">Early Access</p>
           <h1 className="text-2xl font-bold text-[var(--brand-text)]">Join Early Access</h1>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-lg font-semibold text-[var(--brand-text)]">₱200 PHP</span>
+          <div className="mt-3">
+            <span className="text-3xl font-bold text-[var(--brand-text)]">₱200 PHP</span>
             {jpyEquiv ? (
-              <span className="text-sm text-[var(--brand-text-muted)]">= {jpyEquiv.toLocaleString()} yen</span>
+              <p className="mt-1 text-lg font-medium text-[var(--brand-text-muted)]">≈ {jpyEquiv.toLocaleString()} yen</p>
             ) : (
-              <span className="text-sm text-[var(--brand-text-muted)]">Special session fee</span>
+              <p className="mt-1 text-sm text-[var(--brand-text-muted)]">Special session fee</p>
             )}
           </div>
         </div>
@@ -200,6 +200,10 @@ export default function EarlyAccessPaymentPage() {
             />
           </Elements>
         ) : null}
+
+        <p className="mt-6 text-center text-xs text-[var(--brand-text-muted)]">
+          A payment processing fee of approximately 1.6–3.5% may be added.
+        </p>
       </div>
     </main>
   );
