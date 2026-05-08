@@ -75,11 +75,10 @@ function PaymentForm({
 function usePhpToJpy(phpAmount: number) {
   const [jpy, setJpy] = useState<number | null>(null);
   useEffect(() => {
-    fetch("https://api.frankfurter.app/latest?from=PHP&to=JPY")
-      .then((r) => r.json() as Promise<{ rates?: { JPY?: number } }>)
+    fetch("/api/early-access/exchange-rate")
+      .then((r) => r.json() as Promise<{ rate?: number }>)
       .then((data) => {
-        const rate = data.rates?.JPY;
-        if (rate) setJpy(Math.round(phpAmount * rate));
+        if (data.rate) setJpy(Math.round(phpAmount * data.rate));
       })
       .catch(() => null);
   }, [phpAmount]);
