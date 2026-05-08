@@ -1,12 +1,10 @@
 "use client";
 
-import { ComponentType, SVGProps, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChatBubbleLeftRightIcon, ChevronDownIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../components/home/TopNav";
 import { StudioProgress } from "../../components/ui/StudioProgress";
 import type { SubscriptionPlan } from "../../lib/apiTypes";
-import { isLikelyVirtualCamera, pickPreferredVideoDevice } from "../../lib/cameraDevices";
 import { useI18n } from "../../lib/i18n";
 import { createStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
@@ -18,39 +16,6 @@ type NoticeItem = {
   text: string;
 };
 
-type CircleControlProps = {
-  label?: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  offIcon?: ComponentType<SVGProps<SVGSVGElement>>;
-  slashedWhenOff?: boolean;
-  on: boolean;
-  onToggle: () => void;
-};
-
-function CircleControl({ icon: Icon, offIcon: OffIcon, slashedWhenOff, on, onToggle }: CircleControlProps) {
-  const CurrentIcon = on ? Icon : (OffIcon ?? Icon);
-  return (
-    <button
-      onClick={onToggle}
-      className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
-        on
-          ? "bg-[var(--brand-primary)] text-white"
-          : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
-      }`}
-    >
-      <span className="relative flex h-6 w-6 items-center justify-center">
-        <CurrentIcon className="h-6 w-6" aria-hidden />
-        {!on && slashedWhenOff && (
-          <>
-            <span className="pointer-events-none absolute h-7 w-[5px] -rotate-45 rounded-full bg-black" aria-hidden />
-            <span className="pointer-events-none absolute h-7 w-[2px] -rotate-45 rounded-full bg-current" aria-hidden />
-          </>
-        )}
-      </span>
-    </button>
-  );
-}
-
 export default function StudioPreLivePage() {
   const router = useRouter();
   const { tx } = useI18n();
@@ -59,9 +24,6 @@ export default function StudioPreLivePage() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]>("英語");
   const [description, setDescription] = useState("");
-  const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(true);
-  const [chatOn, setChatOn] = useState(true);
   const [creating, setCreating] = useState(false);
   const [publishMode, setPublishMode] = useState<"create_only" | "scheduled" | "go_live_now">("go_live_now");
   const [showPublishMenu, setShowPublishMenu] = useState(false);
@@ -70,7 +32,6 @@ export default function StudioPreLivePage() {
     const local = new Date(target.getTime() - target.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 16);
   });
-  const [mediaError, setMediaError] = useState<string | null>(null);
   const [startWarnings, setStartWarnings] = useState<string[]>([]);
 
   const [speakerSlotsTotal, setSpeakerSlotsTotal] = useState(5);
@@ -78,26 +39,10 @@ export default function StudioPreLivePage() {
   const [chatInput, setChatInput] = useState("");
   const [notices, setNotices] = useState<NoticeItem[]>([]);
 
-  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState("");
-  const [showMicMenu, setShowMicMenu] = useState(false);
-  const [showCamMenu, setShowCamMenu] = useState(false);
-
-  const previewRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const clearResolvedWarnings = (next: { micOn?: boolean; camOn?: boolean; hasVideoDevice?: boolean }) => {
-    setStartWarnings((prev) =>
-      prev.filter((warning) => {
-        if ((warning.includes("マイク") || warning.includes("MIC")) && next.micOn) return false;
-        if ((warning.includes("カメラ") || warning.includes("CAM")) && next.camOn) return false;
-        if ((warning.includes("カメラソース") || warning.includes("camera source")) && next.hasVideoDevice) return false;
-        return true;
-      }),
-    );
-  };
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!isVtuber) router.replace("/");
+  }, [hydrated, isVtuber, router]);
 
   const sendNotice = () => {
     const text = chatInput.trim();
@@ -105,87 +50,6 @@ export default function StudioPreLivePage() {
     setNotices((prev) => [...prev, { id: crypto.randomUUID(), text }]);
     setChatInput("");
   };
-
-  useEffect(() => {
-    if (!hydrated) return;
-    if (!isVtuber) router.replace("/");
-  }, [hydrated, isVtuber, router]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const setupPreview = async () => {
-      try {
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true,
-          audio: selectedAudioDeviceId ? { deviceId: { exact: selectedAudioDeviceId } } : true,
-        });
-
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-        if (previewRef.current) {
-          previewRef.current.srcObject = stream;
-          previewRef.current.muted = true;
-        }
-
-        stream.getAudioTracks().forEach((track) => {
-          track.enabled = micOn;
-        });
-        stream.getVideoTracks().forEach((track) => {
-          track.enabled = camOn;
-        });
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        if (cancelled) return;
-
-        const videos = devices.filter((device) => device.kind === "videoinput");
-        const audios = devices.filter((device) => device.kind === "audioinput");
-        setVideoDevices(videos);
-        setAudioDevices(audios);
-
-        if (!selectedVideoDeviceId && videos.length > 0) {
-          const preferred = pickPreferredVideoDevice(videos);
-          if (preferred?.deviceId) setSelectedVideoDeviceId(preferred.deviceId);
-        }
-        if (!selectedAudioDeviceId && audios.length > 0) {
-          setSelectedAudioDeviceId(audios[0].deviceId);
-        }
-
-        setMediaError(null);
-      } catch {
-        if (!cancelled) {
-          setMediaError(tx("カメラまたはマイクにアクセスできません。ブラウザ権限を確認してください。", "Camera/mic access denied. Check browser permissions."));
-        }
-      }
-    };
-
-    setupPreview();
-
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      if (previewRef.current) previewRef.current.srcObject = null;
-    };
-  }, [selectedVideoDeviceId, selectedAudioDeviceId, camOn, micOn, tx]);
-
-  const selectedVideoLabel = useMemo(
-    () => videoDevices.find((device) => device.deviceId === selectedVideoDeviceId)?.label ?? tx("デフォルトカメラ", "Default camera"),
-    [selectedVideoDeviceId, tx, videoDevices],
-  );
-
-  const usingVirtualCamera = useMemo(() => isLikelyVirtualCamera(selectedVideoLabel), [selectedVideoLabel]);
-
-  const selectedAudioLabel = useMemo(
-    () => audioDevices.find((device) => device.deviceId === selectedAudioDeviceId)?.label ?? tx("デフォルトマイク", "Default microphone"),
-    [audioDevices, selectedAudioDeviceId, tx],
-  );
 
   const startBroadcastFlow = async () => {
     setShowPublishMenu(false);
@@ -222,24 +86,13 @@ export default function StudioPreLivePage() {
         slotsTotal: 50,
         speakerSlotsTotal,
         speakerRequiredPlan,
-        preferredVideoDeviceId: selectedVideoDeviceId || undefined,
-        preferredVideoLabel: selectedVideoLabel || undefined,
       });
 
-      const query = new URLSearchParams();
-      if (selectedAudioDeviceId) query.set("micDeviceId", selectedAudioDeviceId);
       if (publishMode === "go_live_now") {
-        query.set("autostart", "1");
-        router.push(`/studio/live/${encodeURIComponent(created.sessionId)}?${query.toString()}`);
+        router.push(`/studio/live/${encodeURIComponent(created.sessionId)}?autostart=1`);
         return;
       }
-
-      const queryString = query.toString();
-      router.push(
-        queryString
-          ? `/studio/live/${encodeURIComponent(created.sessionId)}?${queryString}`
-          : `/studio/live/${encodeURIComponent(created.sessionId)}`,
-      );
+      router.push(`/studio/live/${encodeURIComponent(created.sessionId)}`);
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "";
       if (message.includes("VTuber registration requires verified phone")) {
@@ -299,30 +152,21 @@ export default function StudioPreLivePage() {
                 <div className="absolute right-0 top-[44px] z-20 w-[260px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/40">
                   <button
                     type="button"
-                    onClick={() => {
-                      setPublishMode("go_live_now");
-                      setShowPublishMenu(false);
-                    }}
+                    onClick={() => { setPublishMode("go_live_now"); setShowPublishMenu(false); }}
                     className={`w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "go_live_now" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
                   >
                     {tx("今すぐ開始", "Start now")}
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setPublishMode("create_only");
-                      setShowPublishMenu(false);
-                    }}
+                    onClick={() => { setPublishMode("create_only"); setShowPublishMenu(false); }}
                     className={`mt-1 w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "create_only" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
                   >
                     {tx("枠だけ作成", "Create room only")}
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setPublishMode("scheduled");
-                      setShowPublishMenu(false);
-                    }}
+                    onClick={() => { setPublishMode("scheduled"); setShowPublishMenu(false); }}
                     className={`mt-1 w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "scheduled" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
                   >
                     {tx("予約配信", "Schedule stream")}
@@ -340,115 +184,7 @@ export default function StudioPreLivePage() {
             </div>
           )}
 
-          <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
-            <div
-              className="relative mx-auto max-w-[520px] overflow-hidden rounded-xl bg-[var(--brand-bg-900)]"
-              style={{ aspectRatio: "16/9" }}
-            >
-              <video ref={previewRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-              {!camOn && (
-                <div className="absolute inset-0 flex items-center justify-center bg-[var(--brand-bg-900)]/70 text-sm font-semibold text-[var(--brand-text-muted)]">
-                  {tx("カメラOFF", "Camera OFF")}
-                </div>
-              )}
-            </div>
-            {mediaError && <p className="mt-2 text-xs text-[var(--brand-accent)]">{mediaError}</p>}
-
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-                <CircleControl
-                  label="MIC"
-                  icon={MicrophoneIcon}
-                  slashedWhenOff
-                  on={micOn}
-                  onToggle={() => {
-                    const next = !micOn;
-                    setMicOn(next);
-                    clearResolvedWarnings({ micOn: next });
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowMicMenu((v) => !v);
-                    setShowCamMenu(false);
-                  }}
-                  className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-                >
-                  <ChevronDownIcon className="h-4 w-4" aria-hidden />
-                </button>
-                {showMicMenu && (
-                  <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                    {audioDevices.map((device, index) => (
-                      <button
-                        key={device.deviceId}
-                        type="button"
-                        onClick={() => {
-                          setSelectedAudioDeviceId(device.deviceId);
-                          setShowMicMenu(false);
-                        }}
-                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                          selectedAudioDeviceId === device.deviceId
-                            ? "bg-[var(--brand-primary)] text-white font-bold"
-                            : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                        }`}
-                      >
-                        {device.label || `Microphone ${index + 1}`}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="relative inline-flex items-center rounded-full bg-[var(--brand-bg-900)]">
-                <CircleControl
-                  label="CAM"
-                  icon={VideoCameraIcon}
-                  offIcon={VideoCameraSlashIcon}
-                  on={camOn}
-                  onToggle={() => {
-                    const next = !camOn;
-                    setCamOn(next);
-                    clearResolvedWarnings({ camOn: next });
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCamMenu((v) => !v);
-                    setShowMicMenu(false);
-                  }}
-                  className="flex h-12 w-8 items-center justify-center border-l border-black/20 bg-transparent text-[var(--brand-text-muted)]"
-                >
-                  <ChevronDownIcon className="h-4 w-4" aria-hidden />
-                </button>
-                {showCamMenu && (
-                  <div className="absolute left-0 top-16 z-20 min-w-[240px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/35">
-                    {videoDevices.map((device, index) => (
-                      <button
-                        key={device.deviceId}
-                        type="button"
-                        onClick={() => {
-                          setSelectedVideoDeviceId(device.deviceId);
-                          clearResolvedWarnings({ hasVideoDevice: true });
-                          setShowCamMenu(false);
-                        }}
-                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${
-                          selectedVideoDeviceId === device.deviceId
-                            ? "bg-[var(--brand-primary)] text-white font-bold"
-                            : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"
-                        }`}
-                      >
-                        {device.label || `Camera ${index + 1}`}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <CircleControl label="CHAT" icon={ChatBubbleLeftRightIcon} slashedWhenOff on={chatOn} onToggle={() => setChatOn((v) => !v)} />
-            </div>
-          </section>
-
-          <section className="mt-3 min-h-0 flex-1 overflow-hidden rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
+          <section className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
             <h2 className="mb-2 text-xs font-semibold tracking-wide text-[var(--brand-text-muted)]">{tx("配信設定", "Stream Settings")}</h2>
             <div className="h-full overflow-y-auto pr-1">
               <div className="rounded-xl bg-[var(--brand-bg-900)]/28 p-3">
@@ -462,24 +198,12 @@ export default function StudioPreLivePage() {
                     <span className="text-[var(--brand-text-muted)]">{tx("カテゴリ", "Category")}</span>
                     <select value={category} onChange={(e) => setCategory(e.target.value as (typeof CATEGORY_OPTIONS)[number])} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
                       {CATEGORY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
+                        <option key={option} value={option}>{option}</option>
                       ))}
                     </select>
                   </label>
 
-                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs text-[var(--brand-text-muted)] lg:col-span-2">
-                    {tx("マイク:", "Mic:")} {selectedAudioLabel} / {tx("カメラ:", "Camera:")} {selectedVideoLabel}
-                  </div>
-
-                  {!usingVirtualCamera && (
-                    <div className="rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)] lg:col-span-2">
-                      {tx("仮想カメラ以外が選択されています。VTuber配信では仮想カメラの利用を推奨します。", "A non-virtual camera is selected. Virtual camera is recommended.")}
-                    </div>
-                  )}
-
-                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm">
+                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm lg:col-span-2">
                     <p className="text-[11px] text-[var(--brand-text-muted)]">{tx("公開方法", "Publish Mode")}</p>
                     <p className="font-semibold text-[var(--brand-text)]">
                       {publishMode === "go_live_now"
