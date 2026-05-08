@@ -40,11 +40,6 @@ function PaymentForm({
     }
 
     if (paymentIntent?.id) {
-      await fetch("/api/early-access/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
-      }).catch(() => null);
       onSuccess(paymentIntent.id);
     }
   };

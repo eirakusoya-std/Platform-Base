@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import type { SubscriptionPlan, SubscriptionStatus } from "@/app/lib/apiTypes";
 import { activateTicketPurchase, logPaymentEvent, markSubscriptionStatusByProviderId } from "@/app/lib/server/billingStore";
+import { sendEarlyAccessNotification } from "@/app/lib/server/mailer";
 import { recordMonitoringEvent } from "@/app/lib/server/opsStore";
 import { getStripeClient } from "@/app/lib/server/stripe";
 
@@ -38,9 +39,20 @@ async function processEvent(event: { id: string; type: string; data: { object: R
   // PaymentIntent成功: Elements経由のチケット決済をアクティブ化（idempotent）
   if (event.type === "payment_intent.succeeded") {
     const providerPaymentIntentId = typeof object.id === "string" ? object.id : undefined;
-    if (providerPaymentIntentId) {
+
+    // アーリーアクセス決済の通知メール
+    if (typeof metadata.type === "string" && metadata.type === "early_access") {
+      const participantName = typeof metadata.participantName === "string" ? metadata.participantName : "";
+      const participantEmail = typeof metadata.participantEmail === "string" ? metadata.participantEmail : "";
+      if (participantName && participantEmail) {
+        await sendEarlyAccessNotification({ participantName, participantEmail }).catch((err) =>
+          console.error("[webhook] Failed to send early access notification:", err),
+        );
+      }
+    } else if (providerPaymentIntentId) {
       await activateTicketPurchase({ providerPaymentIntentId });
     }
+
     await logPaymentEvent({
       provider: "stripe",
       providerEventId: event.id,
