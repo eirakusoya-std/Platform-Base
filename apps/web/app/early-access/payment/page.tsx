@@ -34,7 +34,7 @@ function PaymentForm({
     });
 
     if (confirmError) {
-      setError(confirmError.message ?? "決済に失敗しました。");
+      setError(confirmError.message ?? "Payment failed. Please try again.");
       setLoading(false);
       return;
     }
@@ -58,7 +58,7 @@ function PaymentForm({
         disabled={!stripe || loading}
         className="w-full rounded-lg bg-[var(--brand-secondary)] py-3 text-sm font-semibold text-[var(--brand-bg-900)] disabled:opacity-60"
       >
-        {loading ? "処理中..." : "₱200 を支払う"}
+        {loading ? "Processing..." : "Pay ₱200"}
       </button>
       <button
         type="button"
@@ -66,7 +66,7 @@ function PaymentForm({
         disabled={loading}
         className="w-full rounded-lg bg-[var(--brand-surface-soft)] py-2.5 text-sm text-[var(--brand-text-muted)] disabled:opacity-60"
       >
-        戻る
+        Back
       </button>
     </form>
   );
@@ -107,12 +107,12 @@ export default function EarlyAccessPaymentPage() {
         body: JSON.stringify({ name: name.trim(), email: email.trim() }),
       });
       const data = (await res.json()) as { clientSecret?: string; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "エラーが発生しました");
-      if (!data.clientSecret) throw new Error("決済情報の取得に失敗しました");
+      if (!res.ok) throw new Error(data.error ?? "Something went wrong");
+      if (!data.clientSecret) throw new Error("Failed to initialize payment");
       setClientSecret(data.clientSecret);
       setStep("payment");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -125,10 +125,10 @@ export default function EarlyAccessPaymentPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--brand-secondary)]/20">
             <span className="text-3xl">✓</span>
           </div>
-          <h1 className="mb-2 text-2xl font-bold text-[var(--brand-text)]">支払い完了</h1>
+          <h1 className="mb-2 text-2xl font-bold text-[var(--brand-text)]">Payment Complete</h1>
           <p className="text-sm text-[var(--brand-text-muted)]">
-            アーリーアクセスへの参加が確定しました。<br />
-            詳細は追ってご連絡いたします。
+            Your early access spot is confirmed.<br />
+            We will reach out to you shortly.
           </p>
         </div>
       </main>
@@ -140,34 +140,35 @@ export default function EarlyAccessPaymentPage() {
       <div className="w-full max-w-md rounded-2xl bg-[var(--brand-surface)] p-8 shadow-xl">
         <div className="mb-6">
           <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-[var(--brand-primary)]">Early Access</p>
-          <h1 className="text-2xl font-bold text-[var(--brand-text)]">アーリーアクセス参加</h1>
-          <p className="mt-1 text-sm text-[var(--brand-text-muted)]">
-            特別セッションへの参加費{" "}
-            <span className="font-semibold text-[var(--brand-text)]">₱200</span>
+          <h1 className="text-2xl font-bold text-[var(--brand-text)]">Join Early Access</h1>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-lg font-semibold text-[var(--brand-text)]">₱200 PHP</span>
             {jpyEquiv ? (
-              <span className="ml-1 text-xs text-[var(--brand-text-muted)]">（約{jpyEquiv.toLocaleString()}円）</span>
-            ) : null}
-          </p>
+              <span className="text-sm text-[var(--brand-text-muted)]">= {jpyEquiv.toLocaleString()} yen</span>
+            ) : (
+              <span className="text-sm text-[var(--brand-text-muted)]">Special session fee</span>
+            )}
+          </div>
         </div>
 
         {step === "form" && (
           <form onSubmit={(e) => void handleFormSubmit(e)} className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-[var(--brand-text)]">
-                お名前 <span className="text-[var(--brand-accent)]">*</span>
+                Full Name <span className="text-[var(--brand-accent)]">*</span>
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                placeholder="山田 太郎"
+                placeholder="John Smith"
                 className="w-full rounded-lg border border-[var(--brand-surface-soft)] bg-[var(--brand-bg-900)] px-4 py-2.5 text-sm text-[var(--brand-text)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
               />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-[var(--brand-text)]">
-                メールアドレス <span className="text-[var(--brand-accent)]">*</span>
+                Email Address <span className="text-[var(--brand-accent)]">*</span>
               </label>
               <input
                 type="email"
@@ -184,7 +185,7 @@ export default function EarlyAccessPaymentPage() {
               disabled={loading || !name.trim() || !email.trim()}
               className="w-full rounded-lg bg-[var(--brand-primary)] py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {loading ? "準備中..." : `支払いへ進む → ₱200${jpyEquiv ? `（約${jpyEquiv.toLocaleString()}円）` : ""}`}
+              {loading ? "Preparing..." : "Continue to Payment →"}
             </button>
           </form>
         )}
