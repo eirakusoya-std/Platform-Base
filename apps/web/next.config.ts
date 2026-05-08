@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
             value: [
               `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${stripeCsp} https://pay.google.com https://accounts.google.com`,
               `frame-src 'self' ${stripeCsp} https://pay.google.com`,
-              `connect-src 'self' ${stripeCsp} https://api.stripe.com`,
+              `connect-src 'self' ${stripeCsp} https://api.stripe.com https://api.frankfurter.app`,
               `img-src 'self' data: blob: https://*.stripe.com`,
             ].join("; "),
           },
