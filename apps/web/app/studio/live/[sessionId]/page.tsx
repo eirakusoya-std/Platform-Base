@@ -395,6 +395,10 @@ export default function StudioLiveSessionPage() {
   const stopBroadcast = async () => {
     if (!session) return;
     cleanupConnection();
+    // Ingress を削除してから終了（上限超過を防ぐ）
+    await fetch(`/api/livekit/ingress?sessionId=${encodeURIComponent(session.sessionId)}`, {
+      method: "DELETE",
+    }).catch(() => null);
     const endedSession = await setStreamSessionStatus(session.sessionId, "ended");
     if (endedSession) {
       router.push(`/studio/live/${encodeURIComponent(session.sessionId)}/post`);
