@@ -51,6 +51,23 @@ export async function deleteRtmpIngress(params: {
   await client.deleteIngress(params.ingressId);
 }
 
+export async function listIngresses(params: {
+  apiKey: string;
+  apiSecret: string;
+  host: string;
+}): Promise<{ ingressId: string; name: string; roomName: string; streamKey: string; rtmpUrl: string; state: string }[]> {
+  const client = new IngressClient(toHttpHost(params.host), params.apiKey, params.apiSecret);
+  const ingresses = await client.listIngress({});
+  return ingresses.map((i) => ({
+    ingressId: i.ingressId ?? "",
+    name: i.name ?? "",
+    roomName: i.roomName ?? "",
+    streamKey: i.streamKey ?? "",
+    rtmpUrl: i.url ?? "",
+    state: i.state?.status?.toString() ?? "unknown",
+  }));
+}
+
 export async function checkObsConnected(params: {
   apiKey: string;
   apiSecret: string;
