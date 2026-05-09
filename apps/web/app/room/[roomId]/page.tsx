@@ -399,7 +399,7 @@ export default function RoomPage() {
                 {
                   id: `cue-${cueKey}`,
                   user: "Live cue",
-                  text: `${cue.icon} ${cue.english} / ${cue.japanese}`,
+                  text: [cue.english, cue.japanese].filter(Boolean).join(" / "),
                   kind: "cue" as const,
                 },
               ].slice(-MAX_CHAT_MESSAGES));
