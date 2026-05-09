@@ -36,7 +36,6 @@ export default function StudioPreLivePage() {
   });
   const [startWarnings, setStartWarnings] = useState<string[]>([]);
   const [thumbnail, setThumbnail] = useState(DEFAULT_THUMBNAIL);
-  const [uploadingThumb, setUploadingThumb] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [speakerSlotsTotal, setSpeakerSlotsTotal] = useState(5);
@@ -49,23 +48,27 @@ export default function StudioPreLivePage() {
     if (!isVtuber) router.replace("/");
   }, [hydrated, isVtuber, router]);
 
-  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingThumb(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/upload/thumbnail", { method: "POST", body: form });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      if (data.url) setThumbnail(data.url);
-    } catch (err) {
-      setStartWarnings([err instanceof Error ? err.message : "サムネイルのアップロードに失敗しました"]);
-    } finally {
-      setUploadingThumb(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!file.type.startsWith("image/")) {
+      setStartWarnings([tx("画像ファイルを選択してください。", "Please select an image file.")]);
+      return;
     }
+    if (file.size > 4 * 1024 * 1024) {
+      setStartWarnings([tx("画像サイズは4MB以下にしてください。", "Image size must be 4MB or less.")]);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (result) setThumbnail(result);
+    };
+    reader.onerror = () => {
+      setStartWarnings([tx("画像の読み込みに失敗しました。", "Failed to load image.")]);
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const sendNotice = () => {
@@ -233,7 +236,6 @@ export default function StudioPreLivePage() {
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadingThumb}
                         className={`relative h-16 w-28 overflow-hidden rounded-lg border-2 transition ${
                           !PRESET_THUMBNAILS.includes(thumbnail) ? "border-[var(--brand-primary)]" : "border-dashed border-[var(--brand-surface-soft)] hover:border-[var(--brand-primary)]"
                         }`}
@@ -243,8 +245,8 @@ export default function StudioPreLivePage() {
                           <img src={thumbnail} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--brand-text-muted)]">
-                            <span className="text-xl">{uploadingThumb ? "⏳" : "+"}</span>
-                            <span className="text-[10px]">{uploadingThumb ? tx("アップロード中", "Uploading…") : tx("アップロード", "Upload")}</span>
+                            <span className="text-xl">+</span>
+                            <span className="text-[10px]">{tx("アップロード", "Upload")}</span>
                           </span>
                         )}
                       </button>
