@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
 import { StudioProgress } from "../../components/ui/StudioProgress";
@@ -10,6 +10,8 @@ import { createStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
 
 const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
+const PRESET_THUMBNAILS = [1, 2, 3, 4, 5].map((n) => `/image/thumbnail/thumbnail_${n}.png`);
+const DEFAULT_THUMBNAIL = PRESET_THUMBNAILS[4];
 
 type NoticeItem = {
   id: string;
@@ -33,6 +35,9 @@ export default function StudioPreLivePage() {
     return local.toISOString().slice(0, 16);
   });
   const [startWarnings, setStartWarnings] = useState<string[]>([]);
+  const [thumbnail, setThumbnail] = useState(DEFAULT_THUMBNAIL);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [speakerSlotsTotal, setSpeakerSlotsTotal] = useState(5);
   const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<SubscriptionPlan>("free");
@@ -43,6 +48,25 @@ export default function StudioPreLivePage() {
     if (!hydrated) return;
     if (!isVtuber) router.replace("/");
   }, [hydrated, isVtuber, router]);
+
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingThumb(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload/thumbnail", { method: "POST", body: form });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      if (data.url) setThumbnail(data.url);
+    } catch (err) {
+      setStartWarnings([err instanceof Error ? err.message : "サムネイルのアップロードに失敗しました"]);
+    } finally {
+      setUploadingThumb(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const sendNotice = () => {
     const text = chatInput.trim();
@@ -80,7 +104,7 @@ export default function StudioPreLivePage() {
         title: title.trim(),
         category,
         description: description.trim(),
-        thumbnail: "/image/thumbnail/thumbnail_5.png",
+        thumbnail,
         startsAt,
         participationType: "First-come",
         slotsTotal: 50,
@@ -189,6 +213,51 @@ export default function StudioPreLivePage() {
             <div className="h-full overflow-y-auto pr-1">
               <div className="rounded-xl bg-[var(--brand-bg-900)]/28 p-3">
                 <div className="grid auto-rows-max content-start gap-3 pb-3 lg:grid-cols-2">
+                  {/* サムネイル */}
+                  <div className="lg:col-span-2">
+                    <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("サムネイル", "Thumbnail")}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {PRESET_THUMBNAILS.map((src) => (
+                        <button
+                          key={src}
+                          type="button"
+                          onClick={() => setThumbnail(src)}
+                          className={`relative h-16 w-28 overflow-hidden rounded-lg border-2 transition ${
+                            thumbnail === src ? "border-[var(--brand-primary)]" : "border-transparent opacity-60 hover:opacity-100"
+                          }`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={src} alt="" className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingThumb}
+                        className={`relative h-16 w-28 overflow-hidden rounded-lg border-2 transition ${
+                          !PRESET_THUMBNAILS.includes(thumbnail) ? "border-[var(--brand-primary)]" : "border-dashed border-[var(--brand-surface-soft)] hover:border-[var(--brand-primary)]"
+                        }`}
+                      >
+                        {!PRESET_THUMBNAILS.includes(thumbnail) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={thumbnail} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--brand-text-muted)]">
+                            <span className="text-xl">{uploadingThumb ? "⏳" : "+"}</span>
+                            <span className="text-[10px]">{uploadingThumb ? tx("アップロード中", "Uploading…") : tx("アップロード", "Upload")}</span>
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => void handleThumbnailUpload(e)}
+                    />
+                  </div>
+
                   <label className="grid gap-1 text-sm">
                     <span className="text-[var(--brand-text-muted)]">{tx("タイトル", "Title")}</span>
                     <input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none" />
