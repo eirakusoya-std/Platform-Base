@@ -18,22 +18,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "LiveKit not configured" }, { status: 500 });
     }
 
-    // both vtuber and speaker require authentication
+    // vtuber and speaker require authentication; listener can be anonymous
     const sessionUser = await resolveSessionUser();
-    if (!sessionUser) {
+    if (role !== "listener" && !sessionUser) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     // speaker requires an active reservation
     if (role === "speaker") {
-      const reserved = await hasActiveSpeakerReservation(sessionUser.id, sessionId);
+      const reserved = await hasActiveSpeakerReservation(sessionUser!.id, sessionId);
       if (!reserved) {
         return NextResponse.json({ error: "Speaker reservation required" }, { status: 403 });
       }
     }
 
-    const userId = sessionUser.id;
-    const userName = sessionUser.name;
+    const userId = sessionUser?.id ?? `guest-${crypto.randomUUID()}`;
+    const userName = sessionUser?.name ?? "Guest";
 
     const roomName = sessionId;
     const params = { apiKey, apiSecret, roomName, userId, userName };
