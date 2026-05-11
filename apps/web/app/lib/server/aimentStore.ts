@@ -263,7 +263,6 @@ function validateTransition(current: StreamSessionStatus, next: StreamSessionSta
 
 function requireVerifiedVtuber(actor: SessionUser) {
   if (actor.role !== "vtuber") throw new Error("Only VTuber accounts can perform this action");
-  if (!actor.phoneVerifiedAt) throw new Error("VTuber registration requires verified phone");
 }
 
 
@@ -682,8 +681,6 @@ export async function signupUser(input: SignupInput) {
   if (!input.name.trim()) throw new Error("Display name is required");
   if (!input.email.trim()) throw new Error("Email address is required");
   if (input.provider === "password" && !input.password) throw new Error("Password is required");
-  if (input.role === "vtuber" && !input.phoneNumber?.trim())
-    throw new Error("Phone number is required for VTuber registration");
 
   const now = new Date().toISOString();
 

@@ -124,15 +124,6 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (!user?.phoneVerifiedAt) {
-                      window.alert(
-                        tx(
-                          "電話番号認証が完了していません。アカウント設定で電話番号を認証してから配信を作成してください。",
-                          "Phone verification is not complete. Please verify your phone in Account Settings before creating a stream.",
-                        ),
-                      );
-                      return;
-                    }
                     router.push("/studio/pre-live");
                   }}
                   className={`hidden shadow-[var(--ui-shadow-1)] sm:inline-flex ${buttonClassName({ variant: "primary", size: "md" })}`}
