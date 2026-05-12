@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { StreamSessionStatus } from "@/app/lib/apiTypes";
-import { createStreamSession, listStreamSessions, listStreamSessionsByHost } from "@/app/lib/server/aimentStore";
+import { createStreamSession, countStreamSessions, listStreamSessions, listStreamSessionsByHost } from "@/app/lib/server/aimentStore";
 import { resolveSessionUser, requireSessionUser } from "@/app/lib/server/auth";
 
 export const runtime = "nodejs";
@@ -20,6 +20,11 @@ export async function GET(request: Request) {
   const mine = url.searchParams.get("mine") === "1";
   const hostUserId = url.searchParams.get("hostUserId")?.trim();
 
+  if (url.searchParams.get("count") === "1") {
+    const count = await countStreamSessions(statuses);
+    return NextResponse.json({ count });
+  }
+
   if (mine) {
     const actor = await resolveSessionUser();
     if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,7 +38,9 @@ export async function GET(request: Request) {
   }
 
   const sessions = await listStreamSessions(statuses);
-  return NextResponse.json({ sessions });
+  return NextResponse.json({ sessions }, {
+    headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" },
+  });
 }
 
 export async function POST(request: Request) {
