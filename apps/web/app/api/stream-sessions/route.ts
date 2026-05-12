@@ -38,7 +38,9 @@ export async function GET(request: Request) {
   }
 
   const sessions = await listStreamSessions(statuses);
-  return NextResponse.json({ sessions });
+  return NextResponse.json({ sessions }, {
+    headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" },
+  });
 }
 
 export async function POST(request: Request) {

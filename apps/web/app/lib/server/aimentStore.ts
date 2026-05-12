@@ -402,9 +402,9 @@ function rowToStreamSession(row: any): StreamSession {
     status: row.status as StreamSessionStatus,
     createdAt: row.created_at as string,
     startsAt: row.starts_at as string,
-    description: row.description as string,
+    description: (row.description as string) ?? "",
     category: row.category as string,
-    thumbnail: row.thumbnail as string,
+    thumbnail: (row.thumbnail as string) ?? "",
     hostName: row.host_name as string,
     participationType: row.participation_type as "First-come" | "Lottery",
     requiredPlan: normalizePlanValue(row.required_plan),
@@ -1077,6 +1077,16 @@ export async function confirmPhoneVerification(userId: string, code: string) {
   });
 }
 
+// Columns for list responses — thumbnail/description/OBS fields excluded to minimise transfer size.
+// Detail endpoints use getStreamSessionById which returns all columns.
+const LIST_COLUMNS = `
+  s.session_id, s.host_user_id, s.host_name, s.title, s.status, s.created_at,
+  s.starts_at, s.category, s.participation_type, s.required_plan,
+  s.reservation_required, s.slots_total, s.slots_left,
+  s.speaker_slots_total, s.speaker_slots_left, s.speaker_required_plan,
+  u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+`;
+
 export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
   if (USE_NEON) {
     await ensureSchema();
@@ -1084,14 +1094,14 @@ export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
     const rows =
       statuses?.length
         ? await db`
-            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            SELECT ${db.unsafe(LIST_COLUMNS)}
             FROM stream_sessions s
             LEFT JOIN users u ON u.id = s.host_user_id
             WHERE s.status = ANY(${statuses})
             ORDER BY s.created_at DESC
           `
         : await db`
-            SELECT s.*, u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
+            SELECT ${db.unsafe(LIST_COLUMNS)}
             FROM stream_sessions s
             LEFT JOIN users u ON u.id = s.host_user_id
             ORDER BY s.created_at DESC

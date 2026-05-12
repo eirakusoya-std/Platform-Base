@@ -24,21 +24,19 @@ type Props = {
   onConnectionChange: (connected: boolean) => void;
 };
 
-const POLL_INTERVAL_MS = 3000;
-
 export function ObsStreamPanel({ sessionId, onConnectionChange }: Props) {
   const { tx } = useI18n();
   const [ingress, setIngress] = useState<IngressInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [obsConnected, setObsConnected] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -102,7 +100,8 @@ export function ObsStreamPanel({ sessionId, onConnectionChange }: Props) {
     }
   }, [sessionId, confirmRegen]);
 
-  const pollStatus = useCallback(async () => {
+  const checkStatus = useCallback(async () => {
+    setChecking(true);
     try {
       const res = await fetch(
         `/api/livekit/ingress/status?sessionId=${encodeURIComponent(sessionId)}`,
@@ -114,20 +113,15 @@ export function ObsStreamPanel({ sessionId, onConnectionChange }: Props) {
         onConnectionChange(data.connected);
       }
     } catch {
-      // no-op — transient network error
+      // no-op
+    } finally {
+      if (mountedRef.current) setChecking(false);
     }
   }, [sessionId, onConnectionChange]);
 
   useEffect(() => {
     void fetchIngress();
   }, [fetchIngress]);
-
-  useEffect(() => {
-    pollRef.current = setInterval(() => void pollStatus(), POLL_INTERVAL_MS);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [pollStatus]);
 
   const copyToClipboard = useCallback(
     async (text: string, setCopied: (v: boolean) => void) => {
@@ -183,24 +177,31 @@ export function ObsStreamPanel({ sessionId, onConnectionChange }: Props) {
     <>
       <div className="space-y-3">
         {/* OBS接続ステータス */}
-        <div
-          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
-            obsConnected
-              ? "bg-green-500/15 text-green-400"
-              : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
-          }`}
-        >
-          <span
-            className={`h-2 w-2 shrink-0 rounded-full ${
-              obsConnected ? "animate-pulse bg-green-400" : "bg-[var(--brand-text-muted)]"
+        <div className="flex items-center gap-2">
+          <div
+            className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+              obsConnected
+                ? "bg-green-500/15 text-green-400"
+                : "bg-[var(--brand-bg-900)] text-[var(--brand-text-muted)]"
             }`}
-          />
-          {obsConnected
-            ? tx("OBS接続済み — 配信開始ボタンを押せます", "OBS connected — ready to go live")
-            : tx(
-                "OBS未接続 — 下記の設定をOBSに入力してください",
-                "OBS not connected — enter settings in OBS",
-              )}
+          >
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${
+                obsConnected ? "animate-pulse bg-green-400" : "bg-[var(--brand-text-muted)]"
+              }`}
+            />
+            {obsConnected
+              ? tx("OBS接続済み — 配信開始ボタンを押せます", "OBS connected — ready to go live")
+              : tx("OBS未接続", "OBS not connected")}
+          </div>
+          <button
+            type="button"
+            onClick={() => void checkStatus()}
+            disabled={checking}
+            className="shrink-0 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-xs font-semibold text-[var(--brand-text-muted)] hover:text-[var(--brand-text)] disabled:opacity-50"
+          >
+            {checking ? "..." : tx("確認", "Check")}
+          </button>
         </div>
 
         {/* RTMP URL */}
