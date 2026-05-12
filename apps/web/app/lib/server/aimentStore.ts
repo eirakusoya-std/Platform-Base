@@ -1107,6 +1107,22 @@ export async function listStreamSessions(statuses?: StreamSessionStatus[]) {
   return attachHostFields(sorted, store.users);
 }
 
+export async function countStreamSessions(statuses?: StreamSessionStatus[]) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows = statuses?.length
+      ? await db`SELECT COUNT(*)::int AS n FROM stream_sessions WHERE status = ANY(${statuses})`
+      : await db`SELECT COUNT(*)::int AS n FROM stream_sessions`;
+    return (rows[0]?.n as number) ?? 0;
+  }
+  const store = await readStore();
+  const filtered = statuses?.length
+    ? store.streamSessions.filter((s) => statuses.includes(s.status))
+    : store.streamSessions;
+  return filtered.length;
+}
+
 export async function getStreamSessionById(sessionId: string) {
   if (USE_NEON) {
     await ensureSchema();

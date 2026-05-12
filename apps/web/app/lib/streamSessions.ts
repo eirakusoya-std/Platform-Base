@@ -151,29 +151,47 @@ export async function setStreamSessionStatus(sessionId: string, status: StreamSe
   }
 }
 
-export function subscribeStreamSessions(onUpdate: () => void, intervalMs = 2000): () => void {
+export function subscribeStreamSessions(onUpdate: () => void, intervalMs = 10000): () => void {
   if (!isBrowser()) return () => undefined;
 
-  const tick = () => onUpdate();
-  const timer = window.setInterval(tick, intervalMs);
-  window.addEventListener(UPDATE_EVENT, tick);
-  window.addEventListener("focus", tick);
-  document.addEventListener("visibilitychange", tick);
+  let lastCount = -1;
+
+  const checkCount = async () => {
+    try {
+      const res = await fetch(`${API_BASE}?status=prelive,live&count=1`, { cache: "no-store" });
+      if (!res.ok) return;
+      const { count } = (await res.json()) as { count: number };
+      if (count !== lastCount) {
+        lastCount = count;
+        onUpdate();
+      }
+    } catch {
+      // transient error — ignore
+    }
+  };
+
+  // immediate local events (same tab mutations) still trigger instantly
+  const onLocalUpdate = () => {
+    lastCount = -1; // force re-fetch on next tick
+    onUpdate();
+  };
+
+  void checkCount();
+  const timer = window.setInterval(() => void checkCount(), intervalMs);
+  window.addEventListener(UPDATE_EVENT, onLocalUpdate);
 
   // cross-tab updates via BroadcastChannel
   let bc: BroadcastChannel | null = null;
   try {
     bc = new BroadcastChannel(BC_CHANNEL);
-    bc.onmessage = tick;
+    bc.onmessage = onLocalUpdate;
   } catch {
     // no-op
   }
 
   return () => {
     window.clearInterval(timer);
-    window.removeEventListener(UPDATE_EVENT, tick);
-    window.removeEventListener("focus", tick);
-    document.removeEventListener("visibilitychange", tick);
+    window.removeEventListener(UPDATE_EVENT, onLocalUpdate);
     bc?.close();
   };
 }

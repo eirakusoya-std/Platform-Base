@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { StreamSessionStatus } from "@/app/lib/apiTypes";
-import { createStreamSession, listStreamSessions, listStreamSessionsByHost } from "@/app/lib/server/aimentStore";
+import { createStreamSession, countStreamSessions, listStreamSessions, listStreamSessionsByHost } from "@/app/lib/server/aimentStore";
 import { resolveSessionUser, requireSessionUser } from "@/app/lib/server/auth";
 
 export const runtime = "nodejs";
@@ -19,6 +19,11 @@ export async function GET(request: Request) {
   const statuses = parseStatuses(url);
   const mine = url.searchParams.get("mine") === "1";
   const hostUserId = url.searchParams.get("hostUserId")?.trim();
+
+  if (url.searchParams.get("count") === "1") {
+    const count = await countStreamSessions(statuses);
+    return NextResponse.json({ count });
+  }
 
   if (mine) {
     const actor = await resolveSessionUser();
