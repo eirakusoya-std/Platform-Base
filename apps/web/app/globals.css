@@ -328,6 +328,19 @@ textarea::placeholder {
   font-family: var(--font-latin);
   font-weight: 800;
   text-decoration: none;
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.lp-cta-button:hover {
+  transform: translateY(-2px);
+}
+
+.lp-cta-button:hover .join-arrow {
+  transform: translateX(3px);
 }
 
 .lp-cta-button-primary {
@@ -366,6 +379,7 @@ textarea::placeholder {
   place-items: center;
   font-size: 16px;
   line-height: 1;
+  transition: transform 180ms ease;
 }
 
 .join-arrow svg {
@@ -381,6 +395,41 @@ textarea::placeholder {
   align-items: center;
   min-height: 625px;
   padding-bottom: 40px;
+}
+
+.eyebrow,
+.hero-copy h1,
+.hero-copy h2,
+.lead,
+.hero-actions,
+.cta-helper {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: heroTextIn 520ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.eyebrow {
+  animation-delay: 1.16s;
+}
+
+.hero-copy h1 {
+  animation-delay: 1.28s;
+}
+
+.hero-copy h2 {
+  animation-delay: 1.42s;
+}
+
+.lead {
+  animation-delay: 1.56s;
+}
+
+.hero-actions {
+  animation-delay: 1.82s;
+}
+
+.cta-helper {
+  animation-delay: 1.94s;
 }
 
 .eyebrow,
@@ -486,12 +535,33 @@ textarea::placeholder {
   min-height: 615px;
 }
 
+.hero-art::before {
+  position: absolute;
+  inset: 46px 18px 82px 8px;
+  z-index: 2;
+  content: "";
+  border-radius: 42px;
+  opacity: 0;
+  background:
+    linear-gradient(90deg, rgba(124, 106, 230, 0.12), transparent 58%) 18% 22% / 260px 42px no-repeat,
+    linear-gradient(90deg, rgba(255, 59, 92, 0.13), transparent 64%) 84% 38% / 220px 38px no-repeat,
+    linear-gradient(90deg, rgba(0, 229, 255, 0.14), transparent 62%) 34% 68% / 240px 40px no-repeat,
+    rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+  animation: heroChatVeil 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
 .hero-character {
   position: absolute;
   top: 0;
   right: 20px;
   width: min(100%, 530px);
   aspect-ratio: 669 / 746;
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateY(20px) scale(0.92);
+  transform-origin: center 62%;
+  animation: heroCharacterEnter 860ms cubic-bezier(0.16, 1, 0.3, 1) 0.36s forwards;
 }
 
 .hero-character-mask,
@@ -529,31 +599,37 @@ textarea::placeholder {
   display: block;
   height: auto;
   overflow: visible;
-  transform: scale(1.3);
+  opacity: 0;
+  transform: translate(var(--bubble-start-x, 0), 10px) scale(1.08);
+  animation: heroBubbleEnter 2.2s cubic-bezier(0.16, 1, 0.3, 1) 0.08s forwards;
 }
 
 .bubble-blue {
   top: 52px;
   left: 34px;
   width: 112px;
+  --bubble-start-x: 36px;
 }
 
 .bubble-yellow {
   top: 175px;
   left: 2px;
   width: 178px;
+  --bubble-start-x: 42px;
 }
 
 .bubble-dark {
   left: 66px;
   bottom: 98px;
   width: 226px;
+  --bubble-start-x: 28px;
 }
 
 .bubble-pink {
   right: 0;
   bottom: 218px;
   width: 166px;
+  --bubble-start-x: -38px;
 }
 
 .vtuber-row {
@@ -561,6 +637,74 @@ textarea::placeholder {
   right: 158px;
   bottom: 102px;
   display: flex;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: heroTextIn 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 2.02s forwards;
+}
+
+@keyframes heroCharacterEnter {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(20px) scale(0.92);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes heroBubbleEnter {
+  0% {
+    opacity: 0.72;
+    transform: translate(var(--bubble-start-x, 0), 10px) scale(1.08);
+  }
+
+  54% {
+    opacity: 0.88;
+    transform: translate(calc(var(--bubble-start-x, 0) * 0.22), 2px) scale(1.18);
+  }
+
+  86% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.34);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.3);
+  }
+}
+
+@keyframes heroChatVeil {
+  0% {
+    opacity: 0.72;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  48% {
+    opacity: 0.46;
+    transform: translateY(0) scale(1.02);
+  }
+
+  100% {
+    opacity: 0.12;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes heroTextIn {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .concept {
@@ -1300,6 +1444,15 @@ textarea::placeholder {
     transform-origin: top center;
   }
 
+  .hero-character {
+    filter: blur(4px);
+    animation-duration: 700ms;
+  }
+
+  .hero-art::before {
+    inset: 34px 10px 72px;
+  }
+
   .concept {
     margin-top: -80px;
     padding: 76px 0;
@@ -1421,5 +1574,37 @@ textarea::placeholder {
     flex-wrap: wrap;
     justify-content: center;
     gap: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-page *,
+  .lp-page *::before,
+  .lp-page *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+
+  .eyebrow,
+  .hero-copy h1,
+  .hero-copy h2,
+  .lead,
+  .hero-actions,
+  .cta-helper,
+  .hero-character,
+  .hero-bubble-svg,
+  .vtuber-row {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+
+  .hero-bubble-svg {
+    transform: scale(1.3);
+  }
+
+  .hero-art::before {
+    opacity: 0.08;
   }
 }
