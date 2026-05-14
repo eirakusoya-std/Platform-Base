@@ -15,9 +15,16 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track } from "livekit-client";
-import { OpenCueMiniPanelButton, sendCue, type CueEvent } from "../../../components/cue/CueMiniPanel";
 import { TopNav } from "../../../components/home/TopNav";
+import { VTuberTranslationAssistPanel } from "../../../components/translation/TranslationAssistPanels";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
+import {
+  parseChatDataPayload,
+  primaryTextForMessage,
+  secondaryTextForMessage,
+  type BilingualChatMessage,
+  type ChatSenderRole,
+} from "../../../lib/chatMessages";
 import { useI18n } from "../../../lib/i18n";
 import {
   getStreamSession,
@@ -37,10 +44,7 @@ type ParticipantItem = {
 
 type ConnectionStatus = "idle" | "starting" | "live" | "failed";
 
-type ChatItem = {
-  id: string;
-  user: string;
-  text: string;
+type ChatItem = BilingualChatMessage & {
   mine?: boolean;
 };
 
@@ -163,34 +167,36 @@ export default function StudioLiveSessionPage() {
     [connectionStatus, connectedViewers, participants, tx],
   );
 
-  const sendChatText = useCallback((phrase: string) => {
-    const text = phrase.trim();
-    if (!text) return;
-    const msg = { type: "chat", id: crypto.randomUUID(), user: "host", text };
-    seenChatIdsRef.current.add(msg.id);
-    setChat((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text, mine: true }].slice(-MAX_CHAT_MESSAGES));
+  const sendTranslatedChatMessage = useCallback((message: BilingualChatMessage) => {
+    seenChatIdsRef.current.add(message.id);
+    setChat((prev) => [...prev, { ...message, mine: true }].slice(-MAX_CHAT_MESSAGES));
     setChatInput("");
     if (roomRef.current && connectionStatus === "live") {
       void roomRef.current.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify(msg)),
+        new TextEncoder().encode(JSON.stringify({ type: "chat", ...message })),
         { reliable: true },
       );
     }
   }, [connectionStatus]);
+
+  const sendChatText = useCallback((phrase: string) => {
+    const text = phrase.trim();
+    if (!text) return;
+    const message: BilingualChatMessage = {
+      id: crypto.randomUUID(),
+      sessionId,
+      senderRole: "vtuber",
+      senderName: "host",
+      originalText: text,
+      originalLang: "ja",
+      createdAt: new Date().toISOString(),
+    };
+    sendTranslatedChatMessage(message);
+  }, [sendTranslatedChatMessage, sessionId]);
 
   const sendChat = useCallback(() => {
     sendChatText(chatInput);
   }, [chatInput, sendChatText]);
-
-  const sendCueEvent = useCallback((cueEvent: CueEvent) => {
-    sendCue(cueEvent);
-    if (roomRef.current && connectionStatus === "live") {
-      void roomRef.current.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify({ type: "cue", ...cueEvent })),
-        { reliable: true },
-      );
-    }
-  }, [connectionStatus]);
 
   useEffect(() => {
     const el = chatListRef.current;
@@ -364,15 +370,24 @@ export default function StudioLiveSessionPage() {
           id?: string;
           user?: string;
           text?: string;
+          senderRole?: ChatSenderRole;
+          senderName?: string;
+          originalText?: string;
+          originalLang?: "ja" | "en";
+          translatedText?: string;
+          translatedLang?: "ja" | "en";
+          createdAt?: string;
         };
-        const id = msg.id;
-        const user = msg.user;
-        const text = msg.text;
-        if (msg.type === "chat" && id && user && text && !seenChatIdsRef.current.has(id)) {
-          seenChatIdsRef.current.add(id);
+        const chatMessage = parseChatDataPayload(msg, {
+          sessionId,
+          senderRole: "speaker",
+          senderName: msg.user,
+        });
+        if (chatMessage && !seenChatIdsRef.current.has(chatMessage.id)) {
+          seenChatIdsRef.current.add(chatMessage.id);
           setChat((prev) => [
             ...prev,
-            { id, user, text },
+            chatMessage,
           ].slice(-MAX_CHAT_MESSAGES));
         }
       } catch {
@@ -590,8 +605,8 @@ export default function StudioLiveSessionPage() {
           </section>
         </section>
 
-        <aside className="sticky top-4 self-start">
-          <section className="flex h-[calc(100vh-88px)] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
+        <aside className="sticky top-4 max-h-[calc(100vh-88px)] self-start space-y-3 overflow-y-auto pr-1">
+          <section className="flex h-[520px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
             <div className="border-b border-black/20 px-3 py-2">
               <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
                 <ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden />
@@ -605,8 +620,11 @@ export default function StudioLiveSessionPage() {
                     key={m.id}
                     className={`rounded-lg px-3 py-2 ${m.mine ? "ml-6 bg-[var(--brand-primary)]/20" : "mr-6 bg-[var(--brand-bg-900)]"}`}
                   >
-                    <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{m.user}</p>
-                    <p className="text-sm text-[var(--brand-text)]">{m.text}</p>
+                    <p className="mb-1 text-[11px] font-semibold text-[var(--brand-primary)]">{m.senderName ?? m.senderRole}</p>
+                    <p className="text-sm text-[var(--brand-text)]">{primaryTextForMessage(m)}</p>
+                    {secondaryTextForMessage(m) ? (
+                      <p className="mt-1 text-xs leading-relaxed text-[var(--brand-text-muted)]">{secondaryTextForMessage(m)}</p>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -639,9 +657,13 @@ export default function StudioLiveSessionPage() {
                   {tx("送信", "Send")}
                 </button>
               </div>
-              <OpenCueMiniPanelButton sessionId={sessionId} onSendCue={sendCueEvent} className="mt-2" />
             </div>
           </section>
+          <VTuberTranslationAssistPanel
+            sessionId={sessionId}
+            messages={chat}
+            onSendMessage={sendTranslatedChatMessage}
+          />
         </aside>
       </main>
     </div>
