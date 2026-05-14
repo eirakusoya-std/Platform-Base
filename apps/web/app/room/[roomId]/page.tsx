@@ -18,16 +18,22 @@ import {
 import { Room, RoomEvent, Track } from "livekit-client";
 import type { CueCategory, CueEvent } from "../../components/cue/CueMiniPanel";
 import { SmartPhraseAssist, type SmartPhraseSessionState } from "../../components/chat/SmartPhraseAssist";
+import { SpeakerTranslationAssistPanel } from "../../components/translation/TranslationAssistPanels";
+import {
+  parseChatDataPayload,
+  primaryTextForMessage,
+  secondaryTextForMessage,
+  type BilingualChatMessage,
+  type ChatSenderRole,
+} from "../../lib/chatMessages";
 import { useI18n } from "../../lib/i18n";
 
 type Role = "host" | "listener" | "speaker" | "unknown";
 type RequestedRole = "host" | "listener" | "speaker";
 type Status = "idle" | "connecting" | "connected" | "failed";
 
-type ChatMessage = {
-  id: string;
-  user: string;
-  text: string;
+type ChatMessage = BilingualChatMessage & {
+  user?: string;
   mine?: boolean;
   kind?: "chat" | "cue";
 };
@@ -122,6 +128,7 @@ export default function RoomPage() {
 
   const canSendMic = assignedRole === "host" || assignedRole === "speaker";
   const canSendCam = assignedRole === "host";
+  const senderRole = requestedRole === "host" ? "vtuber" : requestedRole;
 
   const cleanup = useCallback(() => {
     roomRef.current?.disconnect();
@@ -162,6 +169,26 @@ export default function RoomPage() {
     [canSendCam, selectedCamDeviceId],
   );
 
+  const publishTranslatedMessage = useCallback((message: BilingualChatMessage, mine = true) => {
+    const room = roomRef.current;
+    if (!room || status !== "connected") {
+      setChatSendError(tx("接続後に送信できます。", "You can send after the room is connected."));
+      return;
+    }
+    seenChatIdsRef.current.add(message.id);
+    setChatMessages((prev) => [...prev, { ...message, mine }].slice(-MAX_CHAT_MESSAGES));
+    setChatInput("");
+    void room.localParticipant
+      .publishData(
+        new TextEncoder().encode(JSON.stringify({ type: "chat", ...message })),
+        { reliable: true },
+      )
+      .catch((error: unknown) => {
+        console.error("Failed to publish chat message", error);
+        setChatSendError(tx("コメントの送信に失敗しました。接続状態を確認してください。", "Failed to send the message. Please check your connection."));
+      });
+  }, [status, tx]);
+
   const sendChatText = useCallback((text: string) => {
     const value = text.trim();
     if (!value) return;
@@ -172,20 +199,16 @@ export default function RoomPage() {
     }
     setChatSendError(null);
     const displayName = room.localParticipant.name ?? "you";
-    const msg = { type: "chat", id: crypto.randomUUID(), user: displayName, text: value };
-    seenChatIdsRef.current.add(msg.id);
-    setChatMessages((prev) => [...prev, { id: msg.id, user: msg.user, text: msg.text, mine: true }].slice(-MAX_CHAT_MESSAGES));
-    setChatInput("");
-    void room.localParticipant
-      .publishData(
-        new TextEncoder().encode(JSON.stringify(msg)),
-        { reliable: true },
-      )
-      .catch((error: unknown) => {
-        console.error("Failed to publish chat message", error);
-        setChatSendError(tx("コメントの送信に失敗しました。接続状態を確認してください。", "Failed to send the message. Please check your connection."));
-      });
-  }, [status, tx]);
+    publishTranslatedMessage({
+      id: crypto.randomUUID(),
+      sessionId: roomId,
+      senderRole,
+      senderName: displayName,
+      originalText: value,
+      originalLang: senderRole === "vtuber" ? "ja" : "en",
+      createdAt: new Date().toISOString(),
+    });
+  }, [publishTranslatedMessage, roomId, senderRole, status, tx]);
 
   const sendChat = useCallback(() => {
     sendChatText(chatInput);
@@ -376,22 +399,30 @@ export default function RoomPage() {
             id?: string;
             user?: string;
             text?: string;
+            senderRole?: ChatSenderRole;
+            senderName?: string;
+            originalText?: string;
+            originalLang?: "ja" | "en";
+            translatedText?: string;
+            translatedLang?: "ja" | "en";
+            createdAt?: string;
             sessionId?: string;
             cueId?: string;
             english?: string;
             japanese?: string;
             icon?: string;
             category?: CueCategory;
-            createdAt?: string;
           };
-          const id = msg.id;
-          const user = msg.user;
-          const text = msg.text;
-          if (msg.type === "chat" && id && user && text && !seenChatIdsRef.current.has(id)) {
-            seenChatIdsRef.current.add(id);
+          const chatMessage = parseChatDataPayload(msg, {
+            sessionId: roomId,
+            senderRole: "speaker",
+            senderName: msg.user,
+          });
+          if (chatMessage && !seenChatIdsRef.current.has(chatMessage.id)) {
+            seenChatIdsRef.current.add(chatMessage.id);
             setChatMessages((prev) => [
               ...prev,
-              { id, user, text },
+              chatMessage,
             ].slice(-MAX_CHAT_MESSAGES));
           }
           const cue = parseCueMessage(msg);
@@ -400,14 +431,21 @@ export default function RoomPage() {
             if (!seenCueIdsRef.current.has(cueKey)) {
               seenCueIdsRef.current.add(cueKey);
               setLatestCue(cue);
+              const cueChatMessage: ChatMessage = {
+                id: `cue-${cueKey}`,
+                sessionId: cue.sessionId,
+                senderRole: "vtuber",
+                senderName: "Live cue",
+                originalText: cue.japanese || cue.english,
+                originalLang: cue.japanese ? "ja" : "en",
+                translatedText: cue.japanese ? cue.english : undefined,
+                translatedLang: cue.japanese ? "en" : undefined,
+                createdAt: cue.createdAt,
+                kind: "cue",
+              };
               setChatMessages((prev) => [
                 ...prev,
-                {
-                  id: `cue-${cueKey}`,
-                  user: "Live cue",
-                  text: [cue.english, cue.japanese].filter(Boolean).join(" / "),
-                  kind: "cue" as const,
-                },
+                cueChatMessage,
               ].slice(-MAX_CHAT_MESSAGES));
             }
           }
@@ -649,11 +687,16 @@ export default function RoomPage() {
                     }`}
                   >
                     <p className={`mb-1 text-[11px] font-semibold ${message.kind === "cue" ? "text-[var(--brand-secondary)]" : "text-[var(--brand-primary)]"}`}>
-                      {message.user}
+                      {message.senderName ?? message.senderRole}
                     </p>
                     <p className={`text-sm leading-relaxed ${message.kind === "cue" ? "font-bold text-[var(--brand-secondary)]" : "text-[var(--brand-text)]"}`}>
-                      {message.text}
+                      {primaryTextForMessage(message)}
                     </p>
+                    {secondaryTextForMessage(message) ? (
+                      <p className="mt-1 text-xs leading-relaxed text-[var(--brand-text-muted)]">
+                        {secondaryTextForMessage(message)}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -674,10 +717,9 @@ export default function RoomPage() {
                 <div className="mb-2 rounded-xl bg-[var(--brand-surface)] px-3 py-2 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--brand-text-muted)]">Live cue</span>
-                    <span className="text-[10px] font-bold text-[var(--brand-text-muted)]">{latestCue.category}</span>
                   </div>
                   <p className="mt-1 text-sm font-extrabold text-[var(--brand-secondary)]">
-                    <span aria-hidden>{latestCue.icon}</span> {latestCue.english}
+                    {latestCue.english}
                     <span className="ml-2 text-xs text-[var(--brand-text)]">{latestCue.japanese}</span>
                   </p>
                 </div>
@@ -709,12 +751,21 @@ export default function RoomPage() {
                   {chatSendError}
                 </p>
               ) : null}
-              <SmartPhraseAssist
-                sessionState={phraseSessionState}
-                onSendPhrase={sendChatText}
-                onInsertPhrase={insertChatPhrase}
-                className="mt-2"
-              />
+              {requestedRole === "speaker" ? (
+                <SpeakerTranslationAssistPanel
+                  sessionId={roomId}
+                  messages={chatMessages.filter((message) => message.kind !== "cue")}
+                  onSendMessage={(message) => publishTranslatedMessage(message)}
+                  className="mt-2"
+                />
+              ) : (
+                <SmartPhraseAssist
+                  sessionState={phraseSessionState}
+                  onSendPhrase={sendChatText}
+                  onInsertPhrase={insertChatPhrase}
+                  className="mt-2"
+                />
+              )}
             </div>
               </>
             ) : (
