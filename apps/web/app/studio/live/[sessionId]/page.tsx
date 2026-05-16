@@ -14,7 +14,7 @@ import {
   VideoCameraSlashIcon,
   XMarkIcon,
 } from "@heroicons/react/24/solid";
-import { Room, RoomEvent, Track } from "livekit-client";
+import { Room, RoomEvent, Track, type Participant } from "livekit-client";
 import { TopNav } from "../../../components/home/TopNav";
 import { VTuberTranslationAssistPanel } from "../../../components/translation/TranslationAssistPanels";
 import { StudioProgress } from "../../../components/ui/StudioProgress";
@@ -40,6 +40,9 @@ type ParticipantItem = {
   name: string;
   status: "watching" | "speaking" | "requested";
   muted: boolean;
+  isSpeaking: boolean;
+  audioLevel: number;
+  lastSpokeAt: number | null;
 };
 
 type ConnectionStatus = "idle" | "starting" | "live" | "failed";
@@ -85,6 +88,89 @@ function CircleControl({ icon: Icon, offIcon: OffIcon, slashedWhenOff, on, onTog
   );
 }
 
+function SpeakerTalkOverlay({
+  participants,
+  tx,
+}: {
+  participants: ParticipantItem[];
+  tx: (ja: string, en: string) => string;
+}) {
+  return (
+    <aside className="fixed bottom-4 left-3 right-3 top-auto z-[80] max-h-[38vh] overflow-hidden rounded-2xl border border-white/12 bg-[var(--brand-bg-800)]/78 shadow-[0_18px_44px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-20 sm:w-[320px] sm:max-h-[min(520px,calc(100vh-112px))]">
+      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
+        <p className="text-xs font-bold text-[var(--brand-text)]">{tx("スピーカー", "Speakers")}</p>
+        <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-text-muted)]">
+          {participants.length}
+        </span>
+      </div>
+      <div className="max-h-[calc(38vh-42px)] space-y-1.5 overflow-y-auto p-2 sm:max-h-[calc(min(520px,100vh-112px)-42px)]">
+        {participants.length === 0 ? (
+          <p className="rounded-xl bg-white/6 px-3 py-3 text-xs text-[var(--brand-text-muted)]">
+            {tx("スピーカーはいません", "No speakers yet")}
+          </p>
+        ) : (
+          participants.map((participant) => {
+            const isSpeaking = participant.isSpeaking;
+            const level = Math.max(0.08, Math.min(1, participant.audioLevel || 0));
+            const initial = (participant.name || participant.id).trim().charAt(0).toUpperCase();
+
+            return (
+              <div
+                key={participant.id}
+                className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all duration-200 ${
+                  isSpeaking
+                    ? "border-[var(--brand-primary)]/55 bg-[var(--brand-primary)]/18 shadow-[0_0_22px_rgba(124,106,230,0.22)]"
+                    : "border-white/8 bg-white/5"
+                }`}
+              >
+                <div
+                  className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-extrabold ${
+                    isSpeaking
+                      ? "bg-[var(--brand-primary)] text-white ring-2 ring-[var(--brand-primary)]/65 ring-offset-2 ring-offset-[var(--brand-bg-800)]"
+                      : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
+                  }`}
+                >
+                  <span>{initial || "S"}</span>
+                  {isSpeaking ? (
+                    <span className="absolute -inset-1 rounded-full border border-[var(--brand-primary)]/55 shadow-[0_0_18px_rgba(124,106,230,0.55)]" />
+                  ) : null}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <p className="truncate text-sm font-bold text-[var(--brand-text)]">{participant.name}</p>
+                    {isSpeaking ? (
+                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--brand-primary)]/25 px-1.5 py-0.5 text-[9px] font-bold text-[var(--brand-primary)]">
+                        <span className="h-2 w-0.5 rounded-full bg-current opacity-60" style={{ transform: `scaleY(${0.6 + level * 0.7})` }} />
+                        <span className="h-2.5 w-0.5 rounded-full bg-current" style={{ transform: `scaleY(${0.75 + level * 0.8})` }} />
+                        <span className="h-2 w-0.5 rounded-full bg-current opacity-75" style={{ transform: `scaleY(${0.55 + level * 0.75})` }} />
+                        <span className="ml-0.5">{tx("発話中", "Speaking")}</span>
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className={`h-full rounded-full transition-all duration-200 ${
+                          isSpeaking ? "bg-[var(--brand-primary)]" : "bg-white/18"
+                        }`}
+                        style={{ width: `${Math.round(level * 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-[10px] font-semibold ${participant.muted ? "text-[var(--brand-accent)]" : "text-[var(--brand-text-muted)]"}`}>
+                      {participant.muted ? tx("ミュート", "Muted") : tx("有効", "On")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </aside>
+  );
+}
+
 export default function StudioLiveSessionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -114,6 +200,8 @@ export default function StudioLiveSessionPage() {
   const roomRef = useRef<Room | null>(null);
   const autoStartDoneRef = useRef(false);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
+  const activeSpeakerIdsRef = useRef<Set<string>>(new Set());
+  const speakingLingerTimersRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -232,13 +320,58 @@ export default function StudioLiveSessionPage() {
     setShowScrollToBottom(!atBottom);
   }, []);
 
-  const toggleParticipantMute = (id: string) => {
-    setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, muted: !p.muted } : p)));
-  };
+  const isSpeakerParticipant = useCallback((participant: Participant) => {
+    return (
+      participant.permissions?.canPublishSources?.some((source) => String(source) === "microphone") ||
+      participant.isMicrophoneEnabled ||
+      participant.audioTrackPublications.size > 0
+    );
+  }, []);
 
-  const kickParticipant = (id: string) => {
-    setParticipants((prev) => prev.filter((p) => p.id !== id));
-  };
+  const clearSpeakingTimer = useCallback((participantId: string) => {
+    const timer = speakingLingerTimersRef.current.get(participantId);
+    if (timer) {
+      window.clearTimeout(timer);
+      speakingLingerTimersRef.current.delete(participantId);
+    }
+  }, []);
+
+  const upsertParticipant = useCallback((participant: Participant, patch: Partial<ParticipantItem> = {}) => {
+    if (!isSpeakerParticipant(participant)) {
+      setParticipants((prev) => prev.filter((item) => item.id !== participant.identity));
+      return;
+    }
+
+    const nextItem: ParticipantItem = {
+      id: participant.identity,
+      name: participant.name ?? participant.identity,
+      status: participant.isSpeaking ? "speaking" : "watching",
+      muted: !participant.isMicrophoneEnabled,
+      isSpeaking: participant.isSpeaking,
+      audioLevel: participant.audioLevel,
+      lastSpokeAt: participant.isSpeaking ? Date.now() : null,
+      ...patch,
+    };
+
+    setParticipants((prev) => {
+      const exists = prev.some((item) => item.id === participant.identity);
+      if (!exists) return [...prev, nextItem];
+      return prev.map((item) =>
+        item.id === participant.identity
+          ? {
+              ...item,
+              name: nextItem.name,
+              muted: nextItem.muted,
+              status: nextItem.isSpeaking ? "speaking" : item.status === "requested" ? "requested" : "watching",
+              isSpeaking: nextItem.isSpeaking,
+              audioLevel: nextItem.audioLevel,
+              lastSpokeAt: nextItem.lastSpokeAt ?? item.lastSpokeAt,
+              ...patch,
+            }
+          : item,
+      );
+    });
+  }, [isSpeakerParticipant]);
 
   const cleanupConnection = useCallback(() => {
     roomRef.current?.disconnect();
@@ -246,6 +379,9 @@ export default function StudioLiveSessionPage() {
     if (remoteAudioContainerRef.current) {
       remoteAudioContainerRef.current.innerHTML = "";
     }
+    speakingLingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    speakingLingerTimersRef.current.clear();
+    activeSpeakerIdsRef.current.clear();
     setConnectedViewers(0);
     setConnectionStatus("idle");
     setParticipants([]);
@@ -299,6 +435,9 @@ export default function StudioLiveSessionPage() {
     room.on(RoomEvent.Connected, () => {
       setConnectionStatus("live");
       void setStreamSessionStatus(session.sessionId, "live");
+      room.remoteParticipants.forEach((participant) => {
+        upsertParticipant(participant);
+      });
     });
 
     room.on(RoomEvent.Disconnected, () => {
@@ -315,26 +454,86 @@ export default function StudioLiveSessionPage() {
     });
 
     room.on(RoomEvent.ParticipantConnected, (participant) => {
-      setParticipants((prev) => [
-        ...prev.filter((p) => p.id !== participant.identity),
-        {
-          id: participant.identity,
-          name: participant.name ?? participant.identity,
-          status: "speaking",
-          muted: false,
-        },
-      ]);
+      upsertParticipant(participant, {
+        status: participant.isSpeaking ? "speaking" : "watching",
+        isSpeaking: participant.isSpeaking,
+        audioLevel: participant.audioLevel,
+        lastSpokeAt: participant.isSpeaking ? Date.now() : null,
+      });
       setConnectedViewers((n) => n + 1);
     });
 
     room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      clearSpeakingTimer(participant.identity);
+      activeSpeakerIdsRef.current.delete(participant.identity);
       setParticipants((prev) => prev.filter((p) => p.id !== participant.identity));
       setConnectedViewers((n) => Math.max(0, n - 1));
+    });
+
+    room.on(RoomEvent.ParticipantNameChanged, (_name, participant) => {
+      if (participant.identity === room.localParticipant.identity) return;
+      upsertParticipant(participant);
+    });
+
+    room.on(RoomEvent.TrackMuted, (publication, participant) => {
+      if (publication.source !== Track.Source.Microphone || participant.identity === room.localParticipant.identity) return;
+      upsertParticipant(participant, { muted: true, isSpeaking: false, audioLevel: 0, status: "watching" });
+    });
+
+    room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+      if (publication.source !== Track.Source.Microphone || participant.identity === room.localParticipant.identity) return;
+      upsertParticipant(participant, { muted: false });
+    });
+
+    room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+      const previousActiveIds = activeSpeakerIdsRef.current;
+      const nextActiveIds = new Set(
+        speakers
+          .filter((participant) => participant.identity !== room.localParticipant.identity)
+          .map((participant) => participant.identity),
+      );
+      const now = Date.now();
+
+      speakers.forEach((participant) => {
+        if (participant.identity === room.localParticipant.identity) return;
+        clearSpeakingTimer(participant.identity);
+        upsertParticipant(participant, {
+          status: "speaking",
+          muted: !participant.isMicrophoneEnabled,
+          isSpeaking: true,
+          audioLevel: participant.audioLevel,
+          lastSpokeAt: now,
+        });
+      });
+
+      previousActiveIds.forEach((participantId) => {
+        if (nextActiveIds.has(participantId)) return;
+        clearSpeakingTimer(participantId);
+        const timer = window.setTimeout(() => {
+          setParticipants((prev) =>
+            prev.map((participant) =>
+              participant.id === participantId && participant.lastSpokeAt != null && Date.now() - participant.lastSpokeAt >= 650
+                ? { ...participant, status: "watching", isSpeaking: false, audioLevel: 0 }
+                : participant,
+            ),
+          );
+          speakingLingerTimersRef.current.delete(participantId);
+        }, 700);
+        speakingLingerTimersRef.current.set(participantId, timer);
+      });
+
+      activeSpeakerIdsRef.current = nextActiveIds;
     });
 
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
       if (track.kind !== Track.Kind.Audio || !remoteAudioContainerRef.current) return;
       if (participant.identity === room.localParticipant.identity) return;
+      upsertParticipant(participant, {
+        muted: !participant.isMicrophoneEnabled,
+        isSpeaking: participant.isSpeaking,
+        audioLevel: participant.audioLevel,
+        lastSpokeAt: participant.isSpeaking ? Date.now() : null,
+      });
 
       const audioEl = track.attach() as HTMLAudioElement;
       audioEl.autoplay = true;
@@ -462,6 +661,7 @@ export default function StudioLiveSessionPage() {
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav mode="studio" />
+      <SpeakerTalkOverlay participants={participants} tx={tx} />
 
       <main className="mx-auto grid max-w-[1440px] grid-cols-[1fr_320px] items-start gap-4 px-4 py-3 lg:grid-cols-[58px_1fr_360px] lg:px-6">
         <aside className="sticky top-4 hidden lg:block">
@@ -560,46 +760,6 @@ export default function StudioLiveSessionPage() {
                   sessionId={sessionId}
                   onConnectionChange={setObsConnected}
                 />
-              </div>
-
-              <div>
-                <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー一覧", "Speakers")}</p>
-                <div className="space-y-2">
-                  {participants.length === 0 ? (
-                    <p className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-3 text-sm text-[var(--brand-text-muted)]">
-                      {connectionStatus === "live"
-                        ? tx("スピーカーはいません", "No speakers yet")
-                        : tx("配信を開始するとスピーカーが表示されます", "Start stream to see speakers")}
-                    </p>
-                  ) : (
-                    participants.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
-                        <div>
-                          <p className="text-sm font-semibold">{p.name}</p>
-                          <p className="text-xs text-[var(--brand-text-muted)]">
-                            {p.status === "speaking" ? tx("会話中", "Speaking") : p.status === "requested" ? tx("申請中", "Requested") : tx("視聴中", "Watching")}
-                            {" / "}
-                            {p.muted ? tx("ミュート", "Muted") : tx("有効", "Unmuted")}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => toggleParticipantMute(p.id)}
-                            className="rounded-md bg-[var(--brand-primary)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-primary)]"
-                          >
-                            {p.muted ? tx("解除", "Unmute") : tx("ミュート", "Mute")}
-                          </button>
-                          <button
-                            onClick={() => kickParticipant(p.id)}
-                            className="rounded-md bg-[var(--brand-accent)]/20 px-2 py-1 text-xs font-semibold text-[var(--brand-accent)]"
-                          >
-                            {tx("キック", "Kick")}
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
               </div>
             </div>
           </section>
