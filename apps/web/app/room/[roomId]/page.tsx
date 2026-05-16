@@ -629,12 +629,12 @@ export default function RoomPage() {
       </header>
 
       <main
-        className={`mx-auto min-h-0 w-full max-w-[1600px] flex-1 overflow-hidden px-4 pt-4 lg:px-8 ${
+        className={`mx-auto w-full max-w-[1600px] overflow-y-auto px-4 pt-4 lg:px-8 ${
           requestedRole === "listener" ? "pb-4" : "pb-28"
         }`}
       >
-        <div className={`grid h-full grid-cols-1 gap-4 ${chatOpen ? "xl:grid-cols-[1fr_360px]" : "xl:grid-cols-[1fr_64px]"}`}>
-          <section className="min-h-0 min-w-0 space-y-3 overflow-y-auto pr-1">
+        <div className={`grid grid-cols-1 items-start gap-4 xl:grid-cols-[1fr_360px] ${!chatOpen ? "xl:grid-cols-[1fr_64px]" : ""}`}>
+          <section className="min-w-0 space-y-3">
             <div ref={videoShellRef} className="overflow-hidden rounded-2xl bg-black shadow-xl">
               <div
                 onMouseMove={revealVideoControls}
@@ -771,7 +771,7 @@ export default function RoomPage() {
             )}
           </section>
 
-          <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
+          <aside className="sticky top-4 flex min-h-0 max-h-[calc(100vh-80px)] flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
             {chatOpen ? (
               <>
             <div className="px-4 py-3">
