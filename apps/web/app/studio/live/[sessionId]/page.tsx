@@ -529,10 +529,11 @@ export default function StudioLiveSessionPage() {
     });
 
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-      if (track.kind !== Track.Kind.Audio || !remoteAudioContainerRef.current) return;
+      if (track.kind !== Track.Kind.Audio) return;
       if (participant.identity === room.localParticipant.identity) return;
 
       // Audio subscription is definitive proof this is a speaker — add directly.
+      // Do this before the ref check so participant tracking always runs.
       const audioItem: ParticipantItem = {
         id: participant.identity,
         name: participant.name ?? participant.identity,
@@ -549,6 +550,7 @@ export default function StudioLiveSessionPage() {
           : [...prev, audioItem];
       });
 
+      if (!remoteAudioContainerRef.current) return;
       const audioEl = track.attach() as HTMLAudioElement;
       audioEl.autoplay = true;
       audioEl.muted = false;
