@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownCircleIcon,
@@ -27,7 +28,7 @@ import {
   type ChatSenderRole,
 } from "../../lib/chatMessages";
 import { useI18n } from "../../lib/i18n";
-import { getStreamSession } from "../../lib/streamSessions";
+import { getStreamSession, listActiveStreamSessions, type StreamSession } from "../../lib/streamSessions";
 
 type Role = "host" | "listener" | "speaker" | "unknown";
 type RequestedRole = "host" | "listener" | "speaker";
@@ -46,6 +47,14 @@ type CueMessage = Partial<CueEvent> & {
 const MAX_CHAT_MESSAGES = 200;
 
 const INITIAL_CHAT: ChatMessage[] = [];
+
+function relativeTime(iso: string, tx: (jp: string, en: string) => string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (diff < 1) return tx("たった今配信開始", "Just started");
+  if (diff < 60) return tx(`${diff}分前に配信開始`, `Started ${diff} min ago`);
+  const h = Math.floor(diff / 60);
+  return tx(`${h}時間前に配信開始`, `Started ${h} hr ago`);
+}
 
 function parseRequestedRole(value: string | null): RequestedRole {
   if (value === "host" || value === "speaker" || value === "listener") return value;
@@ -95,6 +104,9 @@ export default function RoomPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [failureReason, setFailureReason] = useState<string | null>(null);
   const [assignedRole, setAssignedRole] = useState<Role>("unknown");
+  const [session, setSession] = useState<StreamSession | null>(null);
+  const [streamEnded, setStreamEnded] = useState(false);
+  const [suggestedSessions, setSuggestedSessions] = useState<StreamSession[]>([]);
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT);
@@ -367,6 +379,16 @@ export default function RoomPage() {
         setStatus("idle");
         setAssignedRole("unknown");
         setRemoteConnected(false);
+        // Check if session ended — if so show the ended screen
+        void getStreamSession(roomId).then((s) => {
+          if (!mounted) return;
+          if (s?.status === "ended") {
+            setStreamEnded(true);
+            void listActiveStreamSessions().then((sessions) => {
+              if (mounted) setSuggestedSessions(sessions.slice(0, 4));
+            });
+          }
+        });
       });
 
       room.on(RoomEvent.TrackSubscribed, (track, _pub, _participant) => {
@@ -499,6 +521,16 @@ export default function RoomPage() {
     };
   }, [cleanup, requestedRole, roomId, selectedMicDeviceId, selectedCamDeviceId]);
 
+  // Fetch session metadata for the info panel
+  useEffect(() => {
+    if (!roomId) return;
+    let mounted = true;
+    void getStreamSession(roomId).then((s) => {
+      if (mounted) setSession(s);
+    });
+    return () => { mounted = false; };
+  }, [roomId]);
+
   useEffect(() => {
     let mounted = true;
     const refreshDevices = async () => {
@@ -602,7 +634,7 @@ export default function RoomPage() {
         }`}
       >
         <div className={`grid h-full grid-cols-1 gap-4 ${chatOpen ? "xl:grid-cols-[1fr_360px]" : "xl:grid-cols-[1fr_64px]"}`}>
-          <section className="min-h-0 min-w-0 space-y-4 overflow-y-auto pr-1">
+          <section className="min-h-0 min-w-0 space-y-3 overflow-y-auto pr-1">
             <div ref={videoShellRef} className="overflow-hidden rounded-2xl bg-black shadow-xl">
               <div
                 onMouseMove={revealVideoControls}
@@ -682,6 +714,61 @@ export default function RoomPage() {
               </div>
             </div>
 
+            {/* Stream ended overlay */}
+            {streamEnded && (
+              <div className="rounded-2xl bg-[var(--brand-surface)] p-6">
+                <p className="text-center text-lg font-extrabold">{tx("配信が終了しました", "This stream has ended")}</p>
+                <p className="mt-1 text-center text-sm text-[var(--brand-text-muted)]">{tx("ご視聴ありがとうございました。", "Thank you for watching.")}</p>
+                {suggestedSessions.length > 0 && (
+                  <div className="mt-5">
+                    <p className="mb-3 text-xs font-bold text-[var(--brand-text-muted)]">{tx("他の配信を見る", "Other live sessions")}</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {suggestedSessions.map((s) => (
+                        <Link key={s.sessionId} href={`/join/${encodeURIComponent(s.sessionId)}`} className="flex gap-3 rounded-xl bg-[var(--brand-bg-900)] p-3 transition-colors hover:bg-[var(--brand-bg-900)]/60">
+                          {s.thumbnail && <Image src={s.thumbnail} alt={s.title} width={72} height={48} className="h-12 w-18 shrink-0 rounded-lg object-cover" />}
+                          <div className="min-w-0">
+                            <p className="line-clamp-2 text-xs font-semibold">{s.title}</p>
+                            <p className="mt-1 truncate text-[10px] text-[var(--brand-text-muted)]">{s.hostName}</p>
+                            {s.status === "live" && <span className="inline-block rounded bg-[var(--brand-accent)] px-1.5 py-0.5 text-[9px] font-bold text-white">{tx("配信中", "LIVE")}</span>}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => router.push("/")} className="mx-auto mt-5 block rounded-xl bg-[var(--brand-primary)] px-6 py-2.5 text-sm font-bold text-white">
+                  {tx("ホームへ", "Go Home")}
+                </button>
+              </div>
+            )}
+
+            {/* Session info panel — YouTube-style */}
+            {session && !streamEnded && (
+              <div className="px-1 pt-3">
+                <h1 className="text-base font-extrabold leading-snug">{session.title}</h1>
+                <div className="mt-3 flex items-center gap-3">
+                  {session.hostAvatarUrl ? (
+                    <Image src={session.hostAvatarUrl} alt={session.hostName} width={36} height={36} className="h-9 w-9 rounded-full object-cover" />
+                  ) : (
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--brand-surface)] text-sm font-extrabold text-[var(--brand-text-muted)]">
+                      {session.hostName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-bold">{session.hostChannelName ?? session.hostName}</p>
+                    <p className="text-xs text-[var(--brand-text-muted)]">{relativeTime(session.startsAt, tx)}</p>
+                  </div>
+                </div>
+                {session.description && (
+                  <details className="mt-3 rounded-xl bg-[var(--brand-surface)] px-4 py-3 text-sm">
+                    <summary className="cursor-pointer select-none font-semibold text-[var(--brand-text)]">
+                      {tx("概要", "Description")}
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--brand-text-muted)]">{session.description}</p>
+                  </details>
+                )}
+              </div>
+            )}
           </section>
 
           <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
