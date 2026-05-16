@@ -178,9 +178,11 @@ export default function RoomPage() {
     seenChatIdsRef.current.add(message.id);
     setChatMessages((prev) => [...prev, { ...message, mine }].slice(-MAX_CHAT_MESSAGES));
     setChatInput("");
+    const payload = JSON.stringify({ type: "chat", ...message });
+    console.debug("[room] publishData", payload.slice(0, 80));
     void room.localParticipant
       .publishData(
-        new TextEncoder().encode(JSON.stringify({ type: "chat", ...message })),
+        new TextEncoder().encode(payload),
         { reliable: true },
       )
       .catch((error: unknown) => {
@@ -394,7 +396,9 @@ export default function RoomPage() {
           if (participant?.identity && participant.identity === room.localParticipant.identity) {
             return;
           }
-          const msg = JSON.parse(new TextDecoder().decode(payload)) as {
+          const decoded = new TextDecoder().decode(payload);
+          console.debug("[room] DataReceived from", participant?.identity ?? "server", decoded.slice(0, 80));
+          const msg = JSON.parse(decoded) as {
             type?: string;
             id?: string;
             user?: string;

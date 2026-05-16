@@ -2,7 +2,7 @@
 
 import { ComponentType, SVGProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowDownCircleIcon,
   ChatBubbleLeftRightIcon,
@@ -12,7 +12,6 @@ import {
   StopIcon,
   VideoCameraIcon,
   VideoCameraSlashIcon,
-  XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track, type Participant } from "livekit-client";
 import { TopNav } from "../../../components/home/TopNav";
@@ -173,7 +172,6 @@ function SpeakerTalkOverlay({
 
 export default function StudioLiveSessionPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { tx } = useI18n();
   const { isVtuber, hydrated: sessionHydrated } = useUserSession();
   const params = useParams<{ sessionId: string }>();
@@ -321,9 +319,16 @@ export default function StudioLiveSessionPage() {
   }, []);
 
   const isSpeakerParticipant = useCallback((participant: Participant) => {
+    // If the participant has audio track publications, they're definitely a speaker
+    if (participant.audioTrackPublications.size > 0) return true;
+    if (participant.isMicrophoneEnabled) return true;
+    // Fall back to permissions — canPublishSources is a protobuf repeated field so it's
+    // always an array (never undefined), but permissions itself can be undefined when the
+    // LiveKit server omits the permission field from ParticipantInfo.
     const sources = participant.permissions?.canPublishSources;
     if (sources !== undefined) return sources.length > 0;
-    return participant.isMicrophoneEnabled || participant.audioTrackPublications.size > 0;
+    // Unknown at connection time — defer; TrackSubscribed will resolve it
+    return false;
   }, []);
 
   const clearSpeakingTimer = useCallback((participantId: string) => {
@@ -526,11 +531,22 @@ export default function StudioLiveSessionPage() {
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
       if (track.kind !== Track.Kind.Audio || !remoteAudioContainerRef.current) return;
       if (participant.identity === room.localParticipant.identity) return;
-      upsertParticipant(participant, {
+
+      // Audio subscription is definitive proof this is a speaker — add directly.
+      const audioItem: ParticipantItem = {
+        id: participant.identity,
+        name: participant.name ?? participant.identity,
+        status: participant.isSpeaking ? "speaking" : "watching",
         muted: !participant.isMicrophoneEnabled,
         isSpeaking: participant.isSpeaking,
         audioLevel: participant.audioLevel,
         lastSpokeAt: participant.isSpeaking ? Date.now() : null,
+      };
+      setParticipants((prev) => {
+        const exists = prev.some((item) => item.id === participant.identity);
+        return exists
+          ? prev.map((item) => item.id === participant.identity ? { ...item, ...audioItem } : item)
+          : [...prev, audioItem];
       });
 
       const audioEl = track.attach() as HTMLAudioElement;
@@ -562,7 +578,9 @@ export default function StudioLiveSessionPage() {
         if (participant?.identity && participant.identity === room.localParticipant.identity) {
           return;
         }
-        const msg = JSON.parse(new TextDecoder().decode(payload)) as {
+        const decoded = new TextDecoder().decode(payload);
+        console.debug("[studio] DataReceived from", participant?.identity ?? "server", decoded.slice(0, 80));
+        const msg = JSON.parse(decoded) as {
           type?: string;
           id?: string;
           user?: string;
