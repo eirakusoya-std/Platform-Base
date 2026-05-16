@@ -1108,11 +1108,11 @@ export async function confirmPhoneVerification(userId: string, code: string) {
   });
 }
 
-// Columns for list responses — thumbnail/description/OBS fields excluded to minimise transfer size.
+// Columns for list responses — description/OBS fields excluded to minimise transfer size.
 // Detail endpoints use getStreamSessionById which returns all columns.
 const LIST_COLUMNS = `
   s.session_id, s.host_user_id, s.host_name, s.title, s.status, s.created_at,
-  s.starts_at, s.category, s.participation_type, s.required_plan,
+  s.starts_at, s.category, s.thumbnail, s.participation_type, s.required_plan,
   s.reservation_required, s.slots_total, s.slots_left,
   s.speaker_slots_total, s.speaker_slots_left, s.speaker_required_plan,
   u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
