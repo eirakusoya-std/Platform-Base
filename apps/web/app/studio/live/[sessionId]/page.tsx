@@ -87,6 +87,16 @@ function CircleControl({ icon: Icon, offIcon: OffIcon, slashedWhenOff, on, onTog
   );
 }
 
+function MuteIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+      <path d="M10 2a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M5.5 9.5a.75.75 0 0 0-1.5 0 6 6 0 0 0 5.25 5.954V17H7.5a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-1.75v-1.546A6 6 0 0 0 16 9.5a.75.75 0 0 0-1.5 0 4.5 4.5 0 0 1-9 0Z" />
+      <line x1="3" y1="3" x2="17" y2="17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function SpeakerTalkOverlay({
   participants,
   tx,
@@ -95,38 +105,42 @@ function SpeakerTalkOverlay({
   tx: (ja: string, en: string) => string;
 }) {
   return (
-    <aside className="fixed bottom-4 left-3 right-3 top-auto z-[80] max-h-[38vh] overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]/78 backdrop-blur-xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-20 sm:w-[280px] sm:max-h-[min(520px,calc(100vh-112px))]">
+    <aside className="fixed bottom-4 left-3 right-3 top-auto z-[80] max-h-[38vh] overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]/78 backdrop-blur-xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-20 sm:w-[260px] sm:max-h-[min(480px,calc(100vh-112px))]">
       <div className="flex items-center justify-between px-3 py-2.5">
         <p className="text-xs font-bold text-[var(--brand-text)]">{tx("スピーカー", "Speakers")}</p>
         <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-text-muted)]">
           {participants.length}
         </span>
       </div>
-      <div className="max-h-[calc(38vh-38px)] overflow-y-auto px-3 pb-3 sm:max-h-[calc(min(520px,100vh-112px)-38px)]">
+      <div className="max-h-[calc(38vh-38px)] overflow-y-auto pb-2 sm:max-h-[calc(min(480px,100vh-112px)-38px)]">
         {participants.length === 0 ? (
-          <p className="text-xs text-[var(--brand-text-muted)]">{tx("スピーカーはいません", "No speakers yet")}</p>
+          <p className="px-3 text-xs text-[var(--brand-text-muted)]">{tx("スピーカーはいません", "No speakers yet")}</p>
         ) : (
-          <div className="flex flex-wrap gap-3">
-            {participants.map((participant) => {
-              const initial = (participant.name || participant.id).trim().charAt(0).toUpperCase();
-              const isGuest = participant.id.startsWith("guest-");
-              const content = (
-                <>
-                  <div className="grid h-10 w-10 place-items-center rounded-full bg-[var(--brand-surface)] text-sm font-extrabold text-[var(--brand-text)]">
-                    {initial || "S"}
-                  </div>
-                  <p className="w-14 truncate text-center text-[10px] text-[var(--brand-text-muted)]">{participant.name}</p>
-                </>
-              );
-              return isGuest ? (
-                <div key={participant.id} className="flex flex-col items-center gap-1">{content}</div>
-              ) : (
-                <a key={participant.id} href={`/users/${encodeURIComponent(participant.id)}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 hover:opacity-80">
-                  {content}
-                </a>
-              );
-            })}
-          </div>
+          participants.map((participant) => {
+            const initial = (participant.name || participant.id).trim().charAt(0).toUpperCase();
+            const isGuest = participant.id.startsWith("guest-");
+            const isSpeaking = participant.isSpeaking;
+            const row = (
+              <div className={`flex items-center gap-2.5 px-2 py-1.5 ${isSpeaking ? "rounded-lg mx-1 bg-green-500/10" : ""}`}>
+                <div className={`relative grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-extrabold ${
+                  isSpeaking ? "bg-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
+                }`}>
+                  {initial || "S"}
+                </div>
+                <p className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--brand-text)]">{participant.name}</p>
+                {participant.muted && (
+                  <span className="shrink-0 text-[var(--brand-text-muted)]"><MuteIcon /></span>
+                )}
+              </div>
+            );
+            return isGuest ? (
+              <div key={participant.id}>{row}</div>
+            ) : (
+              <a key={participant.id} href={`/users/${encodeURIComponent(participant.id)}`} target="_blank" rel="noopener noreferrer" className="block hover:bg-white/5">
+                {row}
+              </a>
+            );
+          })
         )}
       </div>
     </aside>
@@ -163,6 +177,9 @@ export default function StudioLiveSessionPage() {
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
   const activeSpeakerIdsRef = useRef<Set<string>>(new Set());
   const speakingLingerTimersRef = useRef<Map<string, number>>(new Map());
+  // Refs for navigation guard — keeps listeners stable without re-registering on every render
+  const isLiveRef = useRef(false);
+  const sessionRef = useRef<StreamSession | null>(null);
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -616,29 +633,33 @@ export default function StudioLiveSessionPage() {
     };
   }, [cleanupConnection]);
 
-  // Prevent accidental navigation while live
+  // Sync refs so event handlers always see current values without re-registering
   useEffect(() => {
-    if (connectionStatus !== "live" || !session) return;
+    isLiveRef.current = connectionStatus === "live";
+    sessionRef.current = session;
+    if (connectionStatus === "live") {
+      // Push a guard state so browser back button hits this first
+      window.history.pushState({ __liveGuard: true }, "");
+    }
+  }, [connectionStatus, session]);
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+  // Navigation guard — registered ONCE on mount with ref-based checks for reliability
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isLiveRef.current) return;
       e.preventDefault();
       e.returnValue = "";
     };
 
-    // Fire keepalive cleanup when the page actually hides (tab close / browser close)
-    const handlePageHide = () => {
-      void fetch(`/api/livekit/ingress?sessionId=${encodeURIComponent(session.sessionId)}`, {
-        method: "DELETE",
-        keepalive: true,
-      });
-      void fetch(`/api/stream-sessions/${encodeURIComponent(session.sessionId)}/end`, {
-        method: "POST",
-        keepalive: true,
-      });
+    const onPageHide = () => {
+      if (!isLiveRef.current || !sessionRef.current) return;
+      const id = encodeURIComponent(sessionRef.current.sessionId);
+      void fetch(`/api/livekit/ingress?sessionId=${id}`, { method: "DELETE", keepalive: true });
+      void fetch(`/api/stream-sessions/${id}/end`, { method: "POST", keepalive: true });
     };
 
-    // Intercept in-app link clicks → show stop confirm modal instead
-    const handleLinkClick = (e: MouseEvent) => {
+    const onLinkClick = (e: MouseEvent) => {
+      if (!isLiveRef.current) return;
       const anchor = (e.target as HTMLElement).closest("a");
       if (!anchor) return;
       const href = anchor.getAttribute("href");
@@ -648,24 +669,24 @@ export default function StudioLiveSessionPage() {
       setShowStopConfirm(true);
     };
 
-    // Intercept browser back button
-    const handlePopState = () => {
-      window.history.pushState(null, "", window.location.href);
+    const onPopState = () => {
+      if (!isLiveRef.current) return;
+      window.history.pushState({ __liveGuard: true }, "");
       setShowStopConfirm(true);
     };
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("pagehide", handlePageHide);
-    document.addEventListener("click", handleLinkClick, true);
-    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("click", onLinkClick, true);
+    window.addEventListener("popstate", onPopState);
 
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("pagehide", handlePageHide);
-      document.removeEventListener("click", handleLinkClick, true);
-      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("click", onLinkClick, true);
+      window.removeEventListener("popstate", onPopState);
     };
-  }, [connectionStatus, session]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!sessionHydrated || !isVtuber) return null;
 
