@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import Image from "next/image";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownCircleIcon,
+  ArrowTopRightOnSquareIcon,
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
   ChatBubbleLeftRightIcon,
@@ -15,7 +17,7 @@ import {
   VideoCameraIcon,
   VideoCameraSlashIcon,
 } from "@heroicons/react/24/solid";
-import { Room, RoomEvent, Track } from "livekit-client";
+import { Room, RoomEvent, Track, type Participant } from "livekit-client";
 import type { CueCategory, CueEvent } from "../../components/cue/CueMiniPanel";
 import { SmartPhraseAssist, type SmartPhraseSessionState } from "../../components/chat/SmartPhraseAssist";
 import { SpeakerTranslationAssistPanel } from "../../components/translation/TranslationAssistPanels";
@@ -41,6 +43,25 @@ type ChatMessage = BilingualChatMessage & {
 type CueMessage = Partial<CueEvent> & {
   type?: string;
 };
+
+type SpeakerParticipantItem = {
+  id: string;
+  name: string;
+  muted: boolean;
+  isSpeaking: boolean;
+  audioLevel: number;
+  lastSpokeAt: number | null;
+};
+
+type DocumentPictureInPictureController = {
+  requestWindow: (options?: { width?: number; height?: number }) => Promise<Window>;
+};
+
+declare global {
+  interface Window {
+    documentPictureInPicture?: DocumentPictureInPictureController;
+  }
+}
 
 const MAX_CHAT_MESSAGES = 200;
 
@@ -82,6 +103,217 @@ function parseCueMessage(message: unknown): CueEvent | null {
   };
 }
 
+function speakerInitial(name: string, id: string) {
+  return (name || id || "S").trim().charAt(0).toUpperCase() || "S";
+}
+
+function SpeakerParticipantRow({
+  participant,
+  tx,
+  compact = false,
+}: {
+  participant: SpeakerParticipantItem;
+  tx: (ja: string, en: string) => string;
+  compact?: boolean;
+}) {
+  const level = Math.max(0.08, Math.min(1, participant.audioLevel || 0));
+  return (
+    <div
+      className={`flex min-w-0 items-center gap-2 rounded-xl border transition-all duration-200 ${
+        compact ? "px-2.5 py-2" : "px-3 py-2.5"
+      } ${
+        participant.isSpeaking
+          ? "border-[var(--brand-primary)]/70 bg-[var(--brand-primary)]/25 shadow-[0_0_22px_rgba(124,106,230,0.26)]"
+          : "border-white/10 bg-[var(--brand-bg-800)]/78"
+      }`}
+    >
+      <div
+        className={`relative grid shrink-0 place-items-center rounded-full font-extrabold ${
+          compact ? "h-9 w-9 text-sm" : "h-10 w-10 text-sm"
+        } ${
+          participant.isSpeaking
+            ? "bg-[var(--brand-primary)] text-white ring-2 ring-[var(--brand-primary)]/65 ring-offset-2 ring-offset-[var(--brand-bg-800)]"
+            : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
+        }`}
+      >
+        {speakerInitial(participant.name, participant.id)}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="truncate text-sm font-bold text-[var(--brand-text)]">{participant.name}</p>
+          {participant.isSpeaking ? (
+            <span className="shrink-0 rounded-full bg-[var(--brand-primary)]/25 px-1.5 py-0.5 text-[9px] font-bold text-[var(--brand-primary)]">
+              {tx("発話中", "Speaking")}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-1 flex items-center gap-2">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+            <div
+              className={`h-full rounded-full transition-all duration-200 ${participant.isSpeaking ? "bg-[var(--brand-primary)]" : "bg-white/18"}`}
+              style={{ width: `${Math.round(level * 100)}%` }}
+            />
+          </div>
+          <span className={`text-[10px] font-semibold ${participant.muted ? "text-[var(--brand-accent)]" : "text-[var(--brand-text-muted)]"}`}>
+            {participant.muted ? tx("ミュート", "Muted") : tx("待機", "Ready")}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function setupSpeakerPictureInPictureDocument(pipWindow: Window) {
+  pipWindow.document.title = "aiment Speakers";
+  pipWindow.document.body.innerHTML = "";
+  pipWindow.document.body.style.margin = "0";
+  pipWindow.document.body.style.overflow = "hidden";
+
+  Array.from(document.head.querySelectorAll("style, link[rel='stylesheet']")).forEach((node) => {
+    pipWindow.document.head.appendChild(node.cloneNode(true));
+  });
+
+  const surfaceStyle = pipWindow.document.createElement("style");
+  surfaceStyle.textContent = `
+    :root,
+    html,
+    body {
+      background: var(--brand-surface) !important;
+      background-color: var(--brand-surface) !important;
+    }
+    body > div {
+      background: var(--brand-surface) !important;
+    }
+  `;
+  pipWindow.document.head.appendChild(surfaceStyle);
+}
+
+function SpeakerPictureInPictureButton({
+  participants,
+  tx,
+}: {
+  participants: SpeakerParticipantItem[];
+  tx: (ja: string, en: string) => string;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const pipWindowRef = useRef<Window | null>(null);
+  const pipRootRef = useRef<Root | null>(null);
+
+  const renderPanel = useCallback(() => {
+    pipRootRef.current?.render(
+      <main className="h-screen overflow-hidden bg-[var(--brand-surface)] p-2 text-[var(--brand-text)]">
+        <div className="flex items-center justify-between px-2 py-2">
+          <p className="text-xs font-bold">{tx("スピーカー", "Speakers")}</p>
+          <span className="rounded-full bg-[var(--brand-bg-900)] px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-text-muted)]">
+            {participants.length}
+          </span>
+        </div>
+        <div className="h-[calc(100vh-44px)] space-y-1.5 overflow-y-auto">
+          {participants.length === 0 ? (
+            <p className="rounded-xl bg-[var(--brand-bg-900)] px-3 py-3 text-xs text-[var(--brand-text-muted)]">
+              {tx("スピーカーはいません", "No speakers yet")}
+            </p>
+          ) : (
+            participants.map((participant) => (
+              <SpeakerParticipantRow key={participant.id} participant={participant} tx={tx} />
+            ))
+          )}
+        </div>
+      </main>,
+    );
+  }, [participants, tx]);
+
+  useEffect(() => {
+    renderPanel();
+  }, [renderPanel]);
+
+  useEffect(() => {
+    return () => {
+      pipRootRef.current?.unmount();
+      pipRootRef.current = null;
+      if (pipWindowRef.current && !pipWindowRef.current.closed) {
+        pipWindowRef.current.close();
+      }
+      pipWindowRef.current = null;
+    };
+  }, []);
+
+  const openPanel = async () => {
+    setError(null);
+    if (typeof window === "undefined") return;
+
+    const documentPictureInPicture = window.documentPictureInPicture;
+    if (!documentPictureInPicture) {
+      setError(tx("パネルを開けません。Chromeでお試しください。", "Panel requires Chrome."));
+      return;
+    }
+
+    try {
+      if (pipWindowRef.current && !pipWindowRef.current.closed) {
+        pipWindowRef.current.focus();
+        return;
+      }
+      const panelHeight = Math.min(420, Math.max(150, 56 + participants.length * 76));
+      const pipWindow = await documentPictureInPicture.requestWindow({ width: 320, height: panelHeight });
+      pipWindowRef.current = pipWindow;
+      setupSpeakerPictureInPictureDocument(pipWindow);
+      const rootElement = pipWindow.document.createElement("div");
+      pipWindow.document.body.appendChild(rootElement);
+      const root = createRoot(rootElement);
+      pipRootRef.current = root;
+      renderPanel();
+      pipWindow.addEventListener("pagehide", () => {
+        pipRootRef.current?.unmount();
+        pipRootRef.current = null;
+        pipWindowRef.current = null;
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : tx("パネルを開けませんでした。", "Could not open panel."));
+    }
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => void openPanel()}
+        aria-label={tx("スピーカーパネルを開く", "Open speaker panel")}
+        className="grid h-10 w-10 place-items-center rounded-full bg-[var(--brand-secondary)] text-black shadow-[0_12px_28px_rgba(255,213,102,0.24)]"
+      >
+        <ArrowTopRightOnSquareIcon className="h-5 w-5" aria-hidden />
+      </button>
+      {error ? (
+        <p className="absolute bottom-12 right-0 z-20 w-[220px] rounded-lg bg-[var(--brand-accent)]/20 px-3 py-2 text-xs font-semibold text-[var(--brand-accent)] shadow-lg">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function SpeakerParticipantDock({
+  participants,
+  tx,
+}: {
+  participants: SpeakerParticipantItem[];
+  tx: (ja: string, en: string) => string;
+}) {
+  if (participants.length === 0) return null;
+
+  return (
+    <div className="absolute inset-x-3 bottom-3 z-20 flex items-end gap-2">
+      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-black/34 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+        {participants.map((participant) => (
+          <div key={participant.id} className="w-[220px] shrink-0 sm:w-[240px]">
+            <SpeakerParticipantRow participant={participant} tx={tx} compact />
+          </div>
+        ))}
+      </div>
+      <SpeakerPictureInPictureButton participants={participants} tx={tx} />
+    </div>
+  );
+}
+
 export default function RoomPage() {
   const router = useRouter();
   const { tx } = useI18n();
@@ -104,6 +336,7 @@ export default function RoomPage() {
   const [showVideoControls, setShowVideoControls] = useState(false);
   const [latestCue, setLatestCue] = useState<CueEvent | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [speakerParticipants, setSpeakerParticipants] = useState<SpeakerParticipantItem[]>([]);
 
   const [micOn, setMicOn] = useState(requestedRole !== "listener" && searchParams.get("mic") !== "0");
   const [camOn, setCamOn] = useState(requestedRole === "host" && searchParams.get("cam") !== "0");
@@ -125,10 +358,64 @@ export default function RoomPage() {
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
   const seenCueIdsRef = useRef<Set<string>>(new Set());
   const videoControlsTimerRef = useRef<number | null>(null);
+  const activeSpeakerIdsRef = useRef<Set<string>>(new Set());
+  const speakingLingerTimersRef = useRef<Map<string, number>>(new Map());
 
   const canSendMic = assignedRole === "host" || assignedRole === "speaker";
   const canSendCam = assignedRole === "host";
   const senderRole = requestedRole === "host" ? "vtuber" : requestedRole;
+
+  const clearSpeakingTimer = useCallback((participantId: string) => {
+    const timer = speakingLingerTimersRef.current.get(participantId);
+    if (timer) {
+      window.clearTimeout(timer);
+      speakingLingerTimersRef.current.delete(participantId);
+    }
+  }, []);
+
+  const isSpeakerParticipant = useCallback((participant: Participant) => {
+    return (
+      participant.permissions?.canPublishSources?.some((source) => String(source) === "microphone") ||
+      participant.isMicrophoneEnabled ||
+      participant.audioTrackPublications.size > 0 ||
+      participant.identity === roomRef.current?.localParticipant.identity && requestedRole === "speaker"
+    );
+  }, [requestedRole]);
+
+  const upsertSpeakerParticipant = useCallback((participant: Participant, patch: Partial<SpeakerParticipantItem> = {}) => {
+    if (!isSpeakerParticipant(participant)) {
+      setSpeakerParticipants((prev) => prev.filter((item) => item.id !== participant.identity));
+      return;
+    }
+
+    const nextItem: SpeakerParticipantItem = {
+      id: participant.identity,
+      name: participant.name ?? participant.identity,
+      muted: !participant.isMicrophoneEnabled,
+      isSpeaking: participant.isSpeaking,
+      audioLevel: participant.audioLevel,
+      lastSpokeAt: participant.isSpeaking ? Date.now() : null,
+      ...patch,
+    };
+
+    setSpeakerParticipants((prev) => {
+      const exists = prev.some((item) => item.id === participant.identity);
+      if (!exists) return [...prev, nextItem];
+      return prev.map((item) =>
+        item.id === participant.identity
+          ? {
+              ...item,
+              name: nextItem.name,
+              muted: nextItem.muted,
+              isSpeaking: nextItem.isSpeaking,
+              audioLevel: nextItem.audioLevel,
+              lastSpokeAt: nextItem.lastSpokeAt ?? item.lastSpokeAt,
+              ...patch,
+            }
+          : item,
+      );
+    });
+  }, [isSpeakerParticipant]);
 
   const cleanup = useCallback(() => {
     roomRef.current?.disconnect();
@@ -138,6 +425,10 @@ export default function RoomPage() {
     }
     setAssignedRole("unknown");
     setRemoteConnected(false);
+    setSpeakerParticipants([]);
+    speakingLingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    speakingLingerTimersRef.current.clear();
+    activeSpeakerIdsRef.current.clear();
     setStatus("idle");
   }, []);
 
@@ -326,12 +617,21 @@ export default function RoomPage() {
         if (!mounted) return;
         setStatus("connected");
         setAssignedRole(requestedRole === "host" ? "host" : requestedRole);
+        room.remoteParticipants.forEach((participant) => upsertSpeakerParticipant(participant));
 
         if (requestedRole !== "listener") {
           void room.localParticipant.setMicrophoneEnabled(
             micOn,
             micOn && selectedMicDeviceId ? { deviceId: selectedMicDeviceId } : undefined,
           );
+          if (requestedRole === "speaker") {
+            upsertSpeakerParticipant(room.localParticipant, {
+              muted: !micOn,
+              isSpeaking: room.localParticipant.isSpeaking,
+              audioLevel: room.localParticipant.audioLevel,
+              lastSpokeAt: room.localParticipant.isSpeaking ? Date.now() : null,
+            });
+          }
         }
         // Publish camera for host only
         if (requestedRole === "host") {
@@ -347,9 +647,76 @@ export default function RoomPage() {
         setStatus("idle");
         setAssignedRole("unknown");
         setRemoteConnected(false);
+        setSpeakerParticipants([]);
+        speakingLingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+        speakingLingerTimersRef.current.clear();
+        activeSpeakerIdsRef.current.clear();
       });
 
-      room.on(RoomEvent.TrackSubscribed, (track, _pub, _participant) => {
+      room.on(RoomEvent.ParticipantConnected, (participant) => {
+        if (!mounted) return;
+        upsertSpeakerParticipant(participant);
+      });
+
+      room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        if (!mounted) return;
+        clearSpeakingTimer(participant.identity);
+        activeSpeakerIdsRef.current.delete(participant.identity);
+        setSpeakerParticipants((prev) => prev.filter((item) => item.id !== participant.identity));
+      });
+
+      room.on(RoomEvent.ParticipantNameChanged, (_name, participant) => {
+        if (!mounted) return;
+        upsertSpeakerParticipant(participant);
+      });
+
+      room.on(RoomEvent.TrackMuted, (publication, participant) => {
+        if (!mounted || publication.source !== Track.Source.Microphone) return;
+        upsertSpeakerParticipant(participant, { muted: true, isSpeaking: false, audioLevel: 0 });
+      });
+
+      room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+        if (!mounted || publication.source !== Track.Source.Microphone) return;
+        upsertSpeakerParticipant(participant, { muted: false });
+      });
+
+      room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        if (!mounted) return;
+        const previousActiveIds = activeSpeakerIdsRef.current;
+        const nextActiveIds = new Set(speakers.map((participant) => participant.identity));
+        const now = Date.now();
+
+        speakers.forEach((participant) => {
+          clearSpeakingTimer(participant.identity);
+          upsertSpeakerParticipant(participant, {
+            muted: !participant.isMicrophoneEnabled,
+            isSpeaking: true,
+            audioLevel: participant.audioLevel,
+            lastSpokeAt: now,
+          });
+        });
+
+        previousActiveIds.forEach((participantId) => {
+          if (nextActiveIds.has(participantId)) return;
+          clearSpeakingTimer(participantId);
+          const timer = window.setTimeout(() => {
+            setSpeakerParticipants((prev) =>
+              prev.map((participant) =>
+                participant.id === participantId && participant.lastSpokeAt != null && Date.now() - participant.lastSpokeAt >= 650
+                  ? { ...participant, isSpeaking: false, audioLevel: 0 }
+                  : participant,
+              ),
+            );
+            speakingLingerTimersRef.current.delete(participantId);
+          }, 700);
+          speakingLingerTimersRef.current.set(participantId, timer);
+        });
+
+        activeSpeakerIdsRef.current = nextActiveIds;
+      });
+
+      room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        void publication;
         if (!mounted) return;
         if (track.kind === Track.Kind.Video && remoteVideoRef.current) {
           track.attach(remoteVideoRef.current);
@@ -364,6 +731,12 @@ export default function RoomPage() {
           setRemoteConnected(true);
         }
         if (track.kind === Track.Kind.Audio && remoteAudioContainerRef.current) {
+          upsertSpeakerParticipant(participant, {
+            muted: !participant.isMicrophoneEnabled,
+            isSpeaking: participant.isSpeaking,
+            audioLevel: participant.audioLevel,
+            lastSpokeAt: participant.isSpeaking ? Date.now() : null,
+          });
           const audioEl = track.attach() as HTMLAudioElement;
           audioEl.autoplay = true;
           audioEl.muted = false;
@@ -376,7 +749,8 @@ export default function RoomPage() {
         }
       });
 
-      room.on(RoomEvent.TrackUnsubscribed, (track) => {
+      room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        void publication;
         track.detach();
         if (track.kind === Track.Kind.Video) {
           setRemoteConnected(false);
@@ -386,6 +760,11 @@ export default function RoomPage() {
             `audio[data-lk-track-sid="${track.sid}"]`,
           );
           audioEl?.remove();
+          upsertSpeakerParticipant(participant, {
+            muted: !participant.isMicrophoneEnabled,
+            isSpeaking: participant.isSpeaking,
+            audioLevel: participant.audioLevel,
+          });
         }
       });
 
@@ -629,6 +1008,10 @@ export default function RoomPage() {
                     </button>
                   </div>
                 )}
+
+                {requestedRole !== "host" ? (
+                  <SpeakerParticipantDock participants={speakerParticipants} tx={tx} />
+                ) : null}
 
                 <div className="absolute right-3 top-3 flex items-center gap-2">
                   <button

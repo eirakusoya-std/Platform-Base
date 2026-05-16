@@ -1,6 +1,7 @@
 "use client";
 
 import { ComponentType, SVGProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -25,6 +26,7 @@ import {
   type BilingualChatMessage,
   type ChatSenderRole,
 } from "../../../lib/chatMessages";
+import type { Reservation } from "../../../lib/apiTypes";
 import { useI18n } from "../../../lib/i18n";
 import {
   getStreamSession,
@@ -46,6 +48,16 @@ type ParticipantItem = {
 };
 
 type ConnectionStatus = "idle" | "starting" | "live" | "failed";
+
+type DocumentPictureInPictureController = {
+  requestWindow: (options?: { width?: number; height?: number }) => Promise<Window>;
+};
+
+declare global {
+  interface Window {
+    documentPictureInPicture?: DocumentPictureInPictureController;
+  }
+}
 
 type ChatItem = BilingualChatMessage & {
   mine?: boolean;
@@ -96,16 +108,16 @@ function SpeakerTalkOverlay({
   tx: (ja: string, en: string) => string;
 }) {
   return (
-    <aside className="fixed bottom-4 left-3 right-3 top-auto z-[80] max-h-[38vh] overflow-hidden rounded-2xl border border-white/12 bg-[var(--brand-bg-800)]/78 shadow-[0_18px_44px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-20 sm:w-[320px] sm:max-h-[min(520px,calc(100vh-112px))]">
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
+    <aside className="h-screen overflow-hidden bg-transparent p-2 text-[var(--brand-text)]">
+      <div className="flex items-center justify-between px-2 py-2">
         <p className="text-xs font-bold text-[var(--brand-text)]">{tx("スピーカー", "Speakers")}</p>
         <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-text-muted)]">
           {participants.length}
         </span>
       </div>
-      <div className="max-h-[calc(38vh-42px)] space-y-1.5 overflow-y-auto p-2 sm:max-h-[calc(min(520px,100vh-112px)-42px)]">
+      <div className="h-[calc(100vh-44px)] space-y-1.5 overflow-y-auto">
         {participants.length === 0 ? (
-          <p className="rounded-xl bg-white/6 px-3 py-3 text-xs text-[var(--brand-text-muted)]">
+          <p className="rounded-xl border border-white/10 bg-[var(--brand-bg-800)]/55 px-3 py-3 text-xs text-[var(--brand-text-muted)] backdrop-blur-xl">
             {tx("スピーカーはいません", "No speakers yet")}
           </p>
         ) : (
@@ -119,8 +131,8 @@ function SpeakerTalkOverlay({
                 key={participant.id}
                 className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all duration-200 ${
                   isSpeaking
-                    ? "border-[var(--brand-primary)]/55 bg-[var(--brand-primary)]/18 shadow-[0_0_22px_rgba(124,106,230,0.22)]"
-                    : "border-white/8 bg-white/5"
+                    ? "border-[var(--brand-primary)]/65 bg-[var(--brand-primary)]/18 shadow-[0_0_22px_rgba(124,106,230,0.22)] backdrop-blur-xl"
+                    : "border-white/10 bg-[var(--brand-bg-800)]/50 backdrop-blur-xl"
                 }`}
               >
                 <div
@@ -158,7 +170,7 @@ function SpeakerTalkOverlay({
                       />
                     </div>
                     <span className={`text-[10px] font-semibold ${participant.muted ? "text-[var(--brand-accent)]" : "text-[var(--brand-text-muted)]"}`}>
-                      {participant.muted ? tx("ミュート", "Muted") : tx("有効", "On")}
+                      {participant.muted ? tx("ミュート", "Muted") : participant.status === "requested" ? tx("待機中", "Waiting") : tx("有効", "On")}
                     </span>
                   </div>
                 </div>
@@ -168,6 +180,117 @@ function SpeakerTalkOverlay({
         )}
       </div>
     </aside>
+  );
+}
+
+function setupSpeakerPictureInPictureDocument(pipWindow: Window) {
+  pipWindow.document.title = "aiment スピーカー";
+  pipWindow.document.body.innerHTML = "";
+  pipWindow.document.body.style.margin = "0";
+  pipWindow.document.body.style.overflow = "hidden";
+
+  Array.from(document.head.querySelectorAll("style, link[rel='stylesheet']")).forEach((node) => {
+    pipWindow.document.head.appendChild(node.cloneNode(true));
+  });
+
+  const transparentStyle = pipWindow.document.createElement("style");
+  transparentStyle.textContent = `
+    :root,
+    html,
+    body {
+      background: var(--brand-surface) !important;
+      background-color: var(--brand-surface) !important;
+    }
+    body > div {
+      background: var(--brand-surface) !important;
+    }
+  `;
+  pipWindow.document.head.appendChild(transparentStyle);
+}
+
+function SpeakerOverlayLauncher({
+  participants,
+  tx,
+}: {
+  participants: ParticipantItem[];
+  tx: (ja: string, en: string) => string;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const pipWindowRef = useRef<Window | null>(null);
+  const pipRootRef = useRef<Root | null>(null);
+
+  const renderOverlay = useCallback(() => {
+    pipRootRef.current?.render(<SpeakerTalkOverlay participants={participants} tx={tx} />);
+  }, [participants, tx]);
+
+  useEffect(() => {
+    renderOverlay();
+  }, [renderOverlay]);
+
+  useEffect(() => {
+    return () => {
+      pipRootRef.current?.unmount();
+      pipRootRef.current = null;
+      if (pipWindowRef.current && !pipWindowRef.current.closed) {
+        pipWindowRef.current.close();
+      }
+      pipWindowRef.current = null;
+    };
+  }, []);
+
+  const openOverlay = async () => {
+    setError(null);
+    if (typeof window === "undefined") return;
+
+    const documentPictureInPicture = window.documentPictureInPicture;
+    if (!documentPictureInPicture) {
+      setError(tx("スピーカーオーバーレイは Document Picture-in-Picture 対応ブラウザが必要です。Chromeでお試しください。", "Speaker overlay requires a Document Picture-in-Picture capable browser. Please try Chrome."));
+      return;
+    }
+
+    try {
+      if (pipWindowRef.current && !pipWindowRef.current.closed) {
+        pipWindowRef.current.focus();
+        return;
+      }
+
+      const overlayHeight = Math.min(420, Math.max(150, 56 + participants.length * 76));
+      const pipWindow = await documentPictureInPicture.requestWindow({ width: 320, height: overlayHeight });
+      pipWindowRef.current = pipWindow;
+      setupSpeakerPictureInPictureDocument(pipWindow);
+
+      const rootElement = pipWindow.document.createElement("div");
+      pipWindow.document.body.appendChild(rootElement);
+      const root = createRoot(rootElement);
+      pipRootRef.current = root;
+      root.render(<SpeakerTalkOverlay participants={participants} tx={tx} />);
+
+      pipWindow.addEventListener("pagehide", () => {
+        pipRootRef.current?.unmount();
+        pipRootRef.current = null;
+        pipWindowRef.current = null;
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : tx("スピーカーオーバーレイを開けませんでした。", "Could not open the speaker overlay."));
+    }
+  };
+
+  return (
+    <div className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => void openOverlay()}
+        className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-extrabold text-black shadow-[0_10px_24px_rgba(255,213,102,0.2)]"
+      >
+        <span>{tx("スピーカーOverlay", "Speaker Overlay")}</span>
+        <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px]">{participants.length}</span>
+      </button>
+      {error ? (
+        <p className="absolute left-0 top-11 z-20 w-[280px] rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)] shadow-lg shadow-black/25">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -240,6 +363,59 @@ export default function StudioLiveSessionPage() {
       unsubscribe();
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || !session) return;
+
+    let cancelled = false;
+
+    const syncSpeakerReservations = async () => {
+      try {
+        const response = await fetch(`/api/reservations?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { reservations?: Reservation[] };
+        if (cancelled) return;
+
+        const activeSpeakerReservations = (payload.reservations ?? []).filter(
+          (reservation) => reservation.type === "speaker" && reservation.status === "reserved",
+        );
+        const activeIds = new Set(activeSpeakerReservations.map((reservation) => reservation.userId));
+
+        setParticipants((prev) => {
+          const byId = new Map(prev.map((participant) => [participant.id, participant]));
+
+          activeSpeakerReservations.forEach((reservation) => {
+            const existing = byId.get(reservation.userId);
+            byId.set(reservation.userId, {
+              id: reservation.userId,
+              name: existing?.name ?? reservation.userName,
+              status: existing?.isSpeaking ? "speaking" : existing && existing.status !== "requested" ? existing.status : "requested",
+              muted: existing?.muted ?? false,
+              isSpeaking: existing?.isSpeaking ?? false,
+              audioLevel: existing?.audioLevel ?? 0,
+              lastSpokeAt: existing?.lastSpokeAt ?? null,
+            });
+          });
+
+          return Array.from(byId.values()).filter(
+            (participant) => participant.status !== "requested" || activeIds.has(participant.id),
+          );
+        });
+      } catch {
+        // no-op: reservations are a best-effort waiting list for the overlay.
+      }
+    };
+
+    void syncSpeakerReservations();
+    const interval = window.setInterval(() => {
+      void syncSpeakerReservations();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [session, sessionId]);
 
 
   const metrics = useMemo(
@@ -661,7 +837,6 @@ export default function StudioLiveSessionPage() {
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav mode="studio" />
-      <SpeakerTalkOverlay participants={participants} tx={tx} />
 
       <main className="mx-auto grid max-w-[1440px] grid-cols-[1fr_320px] items-start gap-4 px-4 py-3 lg:grid-cols-[58px_1fr_360px] lg:px-6">
         <aside className="sticky top-4 hidden lg:block">
@@ -671,7 +846,10 @@ export default function StudioLiveSessionPage() {
         <section className="flex flex-col gap-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl font-bold">Live Studio</h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-xl font-bold">Live Studio</h1>
+                <SpeakerOverlayLauncher participants={participants} tx={tx} />
+              </div>
               <p className="line-clamp-1 text-xs text-[var(--brand-text-muted)]">{session.title}</p>
             </div>
             <div className="flex items-center gap-2">
