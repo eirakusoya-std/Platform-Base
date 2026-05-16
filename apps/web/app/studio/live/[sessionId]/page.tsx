@@ -1,10 +1,12 @@
 "use client";
 
 import { ComponentType, SVGProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownCircleIcon,
+  ArrowTopRightOnSquareIcon,
   ChatBubbleLeftRightIcon,
   MicrophoneIcon,
   PaperAirplaneIcon,
@@ -12,6 +14,7 @@ import {
   StopIcon,
   VideoCameraIcon,
   VideoCameraSlashIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { Room, RoomEvent, Track, type Participant } from "livekit-client";
 import { TopNav } from "../../../components/home/TopNav";
@@ -24,6 +27,7 @@ import {
   type BilingualChatMessage,
   type ChatSenderRole,
 } from "../../../lib/chatMessages";
+import type { Reservation } from "../../../lib/apiTypes";
 import { useI18n } from "../../../lib/i18n";
 import {
   getStreamSession,
@@ -45,6 +49,16 @@ type ParticipantItem = {
 };
 
 type ConnectionStatus = "idle" | "starting" | "live" | "failed";
+
+type DocumentPictureInPictureController = {
+  requestWindow: (options?: { width?: number; height?: number }) => Promise<Window>;
+};
+
+declare global {
+  interface Window {
+    documentPictureInPicture?: DocumentPictureInPictureController;
+  }
+}
 
 type ChatItem = BilingualChatMessage & {
   mine?: boolean;
@@ -105,38 +119,85 @@ function SpeakerTalkOverlay({
   tx: (ja: string, en: string) => string;
 }) {
   return (
-    <aside className="fixed bottom-4 left-3 right-3 top-auto z-[80] max-h-[38vh] overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]/78 backdrop-blur-xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-20 sm:w-[260px] sm:max-h-[min(480px,calc(100vh-112px))]">
-      <div className="flex items-center justify-between px-3 py-2.5">
+    <aside className="h-screen overflow-hidden bg-transparent p-2 text-[var(--brand-text)]">
+      <div className="flex items-center justify-between px-2 py-2">
         <p className="text-xs font-bold text-[var(--brand-text)]">{tx("スピーカー", "Speakers")}</p>
         <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-text-muted)]">
           {participants.length}
         </span>
       </div>
-      <div className="max-h-[calc(38vh-38px)] overflow-y-auto pb-2 sm:max-h-[calc(min(480px,100vh-112px)-38px)]">
+      <div className="h-[calc(100vh-44px)] space-y-1.5 overflow-y-auto">
         {participants.length === 0 ? (
-          <p className="px-3 text-xs text-[var(--brand-text-muted)]">{tx("スピーカーはいません", "No speakers yet")}</p>
+          <p className="rounded-xl border border-white/10 bg-[var(--brand-bg-800)]/55 px-3 py-3 text-xs text-[var(--brand-text-muted)] backdrop-blur-xl">
+            {tx("スピーカーはいません", "No speakers yet")}
+          </p>
         ) : (
           participants.map((participant) => {
+            const isSpeaking = participant.isSpeaking;
+            const level = Math.max(0.08, Math.min(1, participant.audioLevel || 0));
             const initial = (participant.name || participant.id).trim().charAt(0).toUpperCase();
             const isGuest = participant.id.startsWith("guest-");
-            const isSpeaking = participant.isSpeaking;
+
             const row = (
-              <div className={`flex items-center gap-2.5 px-2 py-1.5 ${isSpeaking ? "rounded-lg mx-1 bg-green-500/10" : ""}`}>
-                <div className={`relative grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-extrabold ${
-                  isSpeaking ? "bg-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
-                }`}>
-                  {initial || "S"}
+              <div
+                className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all duration-200 ${
+                  isSpeaking
+                    ? "border-[var(--brand-primary)]/65 bg-[var(--brand-primary)]/18 shadow-[0_0_22px_rgba(124,106,230,0.22)] backdrop-blur-xl"
+                    : "border-white/10 bg-[var(--brand-bg-800)]/50 backdrop-blur-xl"
+                }`}
+              >
+                <div
+                  className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-extrabold ${
+                    isSpeaking
+                      ? "bg-[var(--brand-primary)] text-white ring-2 ring-[var(--brand-primary)]/65 ring-offset-2 ring-offset-[var(--brand-bg-800)]"
+                      : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
+                  }`}
+                >
+                  <span>{initial || "S"}</span>
+                  {isSpeaking ? (
+                    <span className="absolute -inset-1 rounded-full border border-[var(--brand-primary)]/55 shadow-[0_0_18px_rgba(124,106,230,0.55)]" />
+                  ) : null}
                 </div>
-                <p className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--brand-text)]">{participant.name}</p>
-                {participant.muted && (
-                  <span className="shrink-0 text-[var(--brand-text-muted)]"><MuteIcon /></span>
-                )}
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <p className="truncate text-sm font-bold text-[var(--brand-text)]">{participant.name}</p>
+                    {isSpeaking ? (
+                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--brand-primary)]/25 px-1.5 py-0.5 text-[9px] font-bold text-[var(--brand-primary)]">
+                        <span className="h-2 w-0.5 rounded-full bg-current opacity-60" style={{ transform: `scaleY(${0.6 + level * 0.7})` }} />
+                        <span className="h-2.5 w-0.5 rounded-full bg-current" style={{ transform: `scaleY(${0.75 + level * 0.8})` }} />
+                        <span className="h-2 w-0.5 rounded-full bg-current opacity-75" style={{ transform: `scaleY(${0.55 + level * 0.75})` }} />
+                        <span className="ml-0.5">{tx("発話中", "Speaking")}</span>
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className={`h-full rounded-full transition-all duration-200 ${
+                          isSpeaking ? "bg-[var(--brand-primary)]" : "bg-white/18"
+                        }`}
+                        style={{ width: `${Math.round(level * 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-[10px] font-semibold ${participant.muted ? "text-[var(--brand-accent)]" : "text-[var(--brand-text-muted)]"}`}>
+                      {participant.muted ? tx("ミュート", "Muted") : participant.status === "requested" ? tx("待機中", "Waiting") : tx("有効", "On")}
+                    </span>
+                    {participant.muted ? <span className="shrink-0 text-[var(--brand-text-muted)]"><MuteIcon /></span> : null}
+                  </div>
+                </div>
               </div>
             );
             return isGuest ? (
               <div key={participant.id}>{row}</div>
             ) : (
-              <a key={participant.id} href={`/users/${encodeURIComponent(participant.id)}`} target="_blank" rel="noopener noreferrer" className="block hover:bg-white/5">
+              <a
+                key={participant.id}
+                href={`/users/${encodeURIComponent(participant.id)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-xl hover:bg-white/5"
+              >
                 {row}
               </a>
             );
@@ -147,8 +208,123 @@ function SpeakerTalkOverlay({
   );
 }
 
+function setupSpeakerPictureInPictureDocument(pipWindow: Window) {
+  pipWindow.document.title = "aiment スピーカー";
+  pipWindow.document.body.innerHTML = "";
+  pipWindow.document.body.style.margin = "0";
+  pipWindow.document.body.style.overflow = "hidden";
+
+  Array.from(document.head.querySelectorAll("style, link[rel='stylesheet']")).forEach((node) => {
+    pipWindow.document.head.appendChild(node.cloneNode(true));
+  });
+
+  const transparentStyle = pipWindow.document.createElement("style");
+  transparentStyle.textContent = `
+    :root,
+    html,
+    body {
+      background: var(--brand-surface) !important;
+      background-color: var(--brand-surface) !important;
+    }
+    body > div {
+      background: var(--brand-surface) !important;
+    }
+  `;
+  pipWindow.document.head.appendChild(transparentStyle);
+}
+
+function SpeakerOverlayLauncher({
+  participants,
+  tx,
+}: {
+  participants: ParticipantItem[];
+  tx: (ja: string, en: string) => string;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const pipWindowRef = useRef<Window | null>(null);
+  const pipRootRef = useRef<Root | null>(null);
+
+  const renderOverlay = useCallback(() => {
+    pipRootRef.current?.render(<SpeakerTalkOverlay participants={participants} tx={tx} />);
+  }, [participants, tx]);
+
+  useEffect(() => {
+    renderOverlay();
+  }, [renderOverlay]);
+
+  useEffect(() => {
+    return () => {
+      pipRootRef.current?.unmount();
+      pipRootRef.current = null;
+      if (pipWindowRef.current && !pipWindowRef.current.closed) {
+        pipWindowRef.current.close();
+      }
+      pipWindowRef.current = null;
+    };
+  }, []);
+
+  const openOverlay = async () => {
+    setError(null);
+    if (typeof window === "undefined") return;
+
+    const documentPictureInPicture = window.documentPictureInPicture;
+    if (!documentPictureInPicture) {
+      setError(tx("スピーカーオーバーレイは Document Picture-in-Picture 対応ブラウザが必要です。Chromeでお試しください。", "Speaker overlay requires a Document Picture-in-Picture capable browser. Please try Chrome."));
+      return;
+    }
+
+    try {
+      if (pipWindowRef.current && !pipWindowRef.current.closed) {
+        pipWindowRef.current.focus();
+        return;
+      }
+
+      const overlayHeight = Math.min(420, Math.max(150, 56 + participants.length * 76));
+      const pipWindow = await documentPictureInPicture.requestWindow({ width: 320, height: overlayHeight });
+      pipWindowRef.current = pipWindow;
+      setupSpeakerPictureInPictureDocument(pipWindow);
+
+      const rootElement = pipWindow.document.createElement("div");
+      pipWindow.document.body.appendChild(rootElement);
+      const root = createRoot(rootElement);
+      pipRootRef.current = root;
+      root.render(<SpeakerTalkOverlay participants={participants} tx={tx} />);
+
+      pipWindow.addEventListener("pagehide", () => {
+        pipRootRef.current?.unmount();
+        pipRootRef.current = null;
+        pipWindowRef.current = null;
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : tx("スピーカーオーバーレイを開けませんでした。", "Could not open the speaker overlay."));
+    }
+  };
+
+  return (
+    <div className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => void openOverlay()}
+        aria-label={tx("スピーカーパネルを開く", "Open speaker panel")}
+        className="relative grid h-9 w-9 place-items-center rounded-lg bg-[var(--brand-secondary)] text-black shadow-[0_10px_24px_rgba(255,213,102,0.2)] transition-transform hover:-translate-y-0.5"
+      >
+        <ArrowTopRightOnSquareIcon className="h-5 w-5" aria-hidden />
+        <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-black/15 px-1 text-center text-[10px] font-extrabold leading-4">
+          {participants.length}
+        </span>
+      </button>
+      {error ? (
+        <p className="absolute left-0 top-11 z-20 w-[280px] rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)] shadow-lg shadow-black/25">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function StudioLiveSessionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { tx } = useI18n();
   const { isVtuber, hydrated: sessionHydrated } = useUserSession();
   const params = useParams<{ sessionId: string }>();
@@ -174,10 +350,11 @@ export default function StudioLiveSessionPage() {
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const roomRef = useRef<Room | null>(null);
+  const autoStartDoneRef = useRef(false);
+  const startBroadcastRef = useRef<(() => Promise<void>) | null>(null);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
   const activeSpeakerIdsRef = useRef<Set<string>>(new Set());
   const speakingLingerTimersRef = useRef<Map<string, number>>(new Map());
-  // Refs for navigation guard — keeps listeners stable without re-registering on every render
   const isLiveRef = useRef(false);
   const sessionRef = useRef<StreamSession | null>(null);
 
@@ -218,6 +395,59 @@ export default function StudioLiveSessionPage() {
       unsubscribe();
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || !session) return;
+
+    let cancelled = false;
+
+    const syncSpeakerReservations = async () => {
+      try {
+        const response = await fetch(`/api/reservations?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { reservations?: Reservation[] };
+        if (cancelled) return;
+
+        const activeSpeakerReservations = (payload.reservations ?? []).filter(
+          (reservation) => reservation.type === "speaker" && reservation.status === "reserved",
+        );
+        const activeIds = new Set(activeSpeakerReservations.map((reservation) => reservation.userId));
+
+        setParticipants((prev) => {
+          const byId = new Map(prev.map((participant) => [participant.id, participant]));
+
+          activeSpeakerReservations.forEach((reservation) => {
+            const existing = byId.get(reservation.userId);
+            byId.set(reservation.userId, {
+              id: reservation.userId,
+              name: existing?.name ?? reservation.userName,
+              status: existing?.isSpeaking ? "speaking" : existing && existing.status !== "requested" ? existing.status : "requested",
+              muted: existing?.muted ?? false,
+              isSpeaking: existing?.isSpeaking ?? false,
+              audioLevel: existing?.audioLevel ?? 0,
+              lastSpokeAt: existing?.lastSpokeAt ?? null,
+            });
+          });
+
+          return Array.from(byId.values()).filter(
+            (participant) => participant.status !== "requested" || activeIds.has(participant.id),
+          );
+        });
+      } catch {
+        // no-op: reservations are a best-effort waiting list for the overlay.
+      }
+    };
+
+    void syncSpeakerReservations();
+    const interval = window.setInterval(() => {
+      void syncSpeakerReservations();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [session, sessionId]);
 
 
   const metrics = useMemo(
@@ -299,15 +529,10 @@ export default function StudioLiveSessionPage() {
   }, []);
 
   const isSpeakerParticipant = useCallback((participant: Participant) => {
-    // If the participant has audio track publications, they're definitely a speaker
     if (participant.audioTrackPublications.size > 0) return true;
     if (participant.isMicrophoneEnabled) return true;
-    // Fall back to permissions — canPublishSources is a protobuf repeated field so it's
-    // always an array (never undefined), but permissions itself can be undefined when the
-    // LiveKit server omits the permission field from ParticipantInfo.
     const sources = participant.permissions?.canPublishSources;
     if (sources !== undefined) return sources.length > 0;
-    // Unknown at connection time — defer; TrackSubscribed will resolve it
     return false;
   }, []);
 
@@ -511,25 +736,12 @@ export default function StudioLiveSessionPage() {
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
       if (track.kind !== Track.Kind.Audio) return;
       if (participant.identity === room.localParticipant.identity) return;
-      // OBS ingress publishes the VTuber's own audio back to the room — skip it to avoid feedback.
       if (participant.identity.startsWith("obs-") || participant.identity.startsWith("ingress-")) return;
-
-      // Audio subscription is definitive proof this is a speaker — add directly.
-      // Do this before the ref check so participant tracking always runs.
-      const audioItem: ParticipantItem = {
-        id: participant.identity,
-        name: participant.name ?? participant.identity,
-        status: participant.isSpeaking ? "speaking" : "watching",
+      upsertParticipant(participant, {
         muted: !participant.isMicrophoneEnabled,
         isSpeaking: participant.isSpeaking,
         audioLevel: participant.audioLevel,
         lastSpokeAt: participant.isSpeaking ? Date.now() : null,
-      };
-      setParticipants((prev) => {
-        const exists = prev.some((item) => item.id === participant.identity);
-        return exists
-          ? prev.map((item) => item.id === participant.identity ? { ...item, ...audioItem } : item)
-          : [...prev, audioItem];
       });
 
       if (!remoteAudioContainerRef.current) return;
@@ -562,9 +774,7 @@ export default function StudioLiveSessionPage() {
         if (participant?.identity && participant.identity === room.localParticipant.identity) {
           return;
         }
-        const decoded = new TextDecoder().decode(payload);
-        console.debug("[studio] DataReceived from", participant?.identity ?? "server", decoded.slice(0, 80));
-        const msg = JSON.parse(decoded) as {
+        const msg = JSON.parse(new TextDecoder().decode(payload)) as {
           type?: string;
           id?: string;
           user?: string;
@@ -604,8 +814,6 @@ export default function StudioLiveSessionPage() {
       return;
     }
 
-    // Camera/mic errors are non-fatal — show the error but keep the room connected.
-    // MediaDevicesError event already fires for permission denials; this catches other throws.
     try {
       await room.localParticipant.setCameraEnabled(camOn);
       await room.localParticipant.setMicrophoneEnabled(micOn);
@@ -628,22 +836,23 @@ export default function StudioLiveSessionPage() {
   };
 
   useEffect(() => {
+    startBroadcastRef.current = startBroadcast;
+  });
+
+  useEffect(() => {
     return () => {
       cleanupConnection();
     };
   }, [cleanupConnection]);
 
-  // Sync refs so event handlers always see current values without re-registering
   useEffect(() => {
     isLiveRef.current = connectionStatus === "live";
     sessionRef.current = session;
     if (connectionStatus === "live") {
-      // Push a guard state so browser back button hits this first
       window.history.pushState({ __liveGuard: true }, "");
     }
   }, [connectionStatus, session]);
 
-  // Navigation guard — registered ONCE on mount with ref-based checks for reliability
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!isLiveRef.current) return;
@@ -686,7 +895,21 @@ export default function StudioLiveSessionPage() {
       document.removeEventListener("click", onLinkClick, true);
       window.removeEventListener("popstate", onPopState);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  const shouldAutoStart = searchParams.get("autostart") === "1";
+
+  useEffect(() => {
+    if (!shouldAutoStart || autoStartDoneRef.current) return;
+    if (notFound || !session) return;
+    if (connectionStatus !== "idle") return;
+
+    autoStartDoneRef.current = true;
+    const timer = window.setTimeout(() => {
+      void startBroadcastRef.current?.();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [shouldAutoStart, notFound, session, connectionStatus]);
 
   if (!sessionHydrated || !isVtuber) return null;
 
@@ -710,7 +933,6 @@ export default function StudioLiveSessionPage() {
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav mode="studio" />
-      <SpeakerTalkOverlay participants={participants} tx={tx} />
 
       <main className="mx-auto grid max-w-[1440px] grid-cols-[1fr_320px] items-start gap-4 px-4 py-3 lg:grid-cols-[58px_1fr_360px] lg:px-6">
         <aside className="sticky top-4 hidden lg:block">
@@ -720,13 +942,29 @@ export default function StudioLiveSessionPage() {
         <section className="flex flex-col gap-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl font-bold">Live Studio</h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-xl font-bold">Live Studio</h1>
+                <SpeakerOverlayLauncher participants={participants} tx={tx} />
+              </div>
               <p className="line-clamp-1 text-xs text-[var(--brand-text-muted)]">{session.title}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isLive ? "bg-[var(--brand-primary)]/15 text-[var(--brand-primary)]" : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)]"}`}>
                 {isLive ? tx("配信中", "Live now") : tx("待機中", "Standby")}
               </span>
+              <button
+                onClick={() => {
+                  if (isLive) {
+                    setShowStopConfirm(true);
+                    return;
+                  }
+                  router.push("/");
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
+              >
+                <XMarkIcon className="h-4 w-4" aria-hidden />
+                {tx("閉じる", "Close")}
+              </button>
             </div>
           </div>
 
@@ -760,7 +998,9 @@ export default function StudioLiveSessionPage() {
                   onClick={
                     isLive
                       ? () => setShowStopConfirm(true)
-                      : () => { void startBroadcast(); }
+                      : () => {
+                          void startBroadcast();
+                        }
                   }
                   disabled={!isLive && !obsConnected && connectionStatus === "idle"}
                   title={!isLive && !obsConnected ? tx("OBSを先に接続してください", "Connect OBS first") : undefined}
