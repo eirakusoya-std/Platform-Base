@@ -653,6 +653,57 @@ export default function StudioLiveSessionPage() {
     };
   }, [cleanupConnection]);
 
+  // Prevent accidental navigation while live
+  useEffect(() => {
+    if (connectionStatus !== "live" || !session) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+
+    // Fire keepalive cleanup when the page actually hides (tab close / browser close)
+    const handlePageHide = () => {
+      void fetch(`/api/livekit/ingress?sessionId=${encodeURIComponent(session.sessionId)}`, {
+        method: "DELETE",
+        keepalive: true,
+      });
+      void fetch(`/api/stream-sessions/${encodeURIComponent(session.sessionId)}/end`, {
+        method: "POST",
+        keepalive: true,
+      });
+    };
+
+    // Intercept in-app link clicks → show stop confirm modal instead
+    const handleLinkClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setShowStopConfirm(true);
+    };
+
+    // Intercept browser back button
+    const handlePopState = () => {
+      window.history.pushState(null, "", window.location.href);
+      setShowStopConfirm(true);
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("click", handleLinkClick, true);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("click", handleLinkClick, true);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [connectionStatus, session]);
+
   if (!sessionHydrated || !isVtuber) return null;
 
   if (notFound || !session) {
