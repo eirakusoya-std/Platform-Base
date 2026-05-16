@@ -109,13 +109,21 @@ function SpeakerTalkOverlay({
           <div className="flex flex-wrap gap-3">
             {participants.map((participant) => {
               const initial = (participant.name || participant.id).trim().charAt(0).toUpperCase();
-              return (
-                <div key={participant.id} className="flex flex-col items-center gap-1">
+              const isGuest = participant.id.startsWith("guest-");
+              const content = (
+                <>
                   <div className="grid h-10 w-10 place-items-center rounded-full bg-[var(--brand-surface)] text-sm font-extrabold text-[var(--brand-text)]">
                     {initial || "S"}
                   </div>
                   <p className="w-14 truncate text-center text-[10px] text-[var(--brand-text-muted)]">{participant.name}</p>
-                </div>
+                </>
+              );
+              return isGuest ? (
+                <div key={participant.id} className="flex flex-col items-center gap-1">{content}</div>
+              ) : (
+                <a key={participant.id} href={`/users/${encodeURIComponent(participant.id)}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 hover:opacity-80">
+                  {content}
+                </a>
               );
             })}
           </div>
