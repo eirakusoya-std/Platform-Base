@@ -116,6 +116,14 @@ export function MySessionsManager({ title, description, showCreateButton = true,
               </div>
 
               <div className="flex flex-shrink-0 items-center gap-2">
+                {session.status === "live" && (
+                  <Link
+                    href={`/studio/live/${encodeURIComponent(session.sessionId)}`}
+                    className={buttonClassName({ variant: "primary", size: "sm" })}
+                  >
+                    {tx("配信スタジオへ", "Go to Studio")}
+                  </Link>
+                )}
                 {session.status === "prelive" && (
                   <Link
                     href={`/studio/live/${encodeURIComponent(session.sessionId)}`}

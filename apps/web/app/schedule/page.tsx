@@ -8,7 +8,7 @@ import { ScheduleFilters } from "../components/schedule/ScheduleFilters";
 import { ScheduleGrid } from "../components/schedule/ScheduleGrid";
 import { ScheduleEvent, SessionCategory, Talent } from "../components/schedule/types";
 import { useI18n } from "../lib/i18n";
-import { listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "../lib/streamSessions";
+import { getCachedActiveSessions, listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "../lib/streamSessions";
 
 function todayYmd() {
   const now = new Date();
@@ -41,7 +41,7 @@ function toSessionCategory(value: string): SessionCategory {
 export default function SchedulePage() {
   const router = useRouter();
   const { tx } = useI18n();
-  const [sessions, setSessions] = useState<StreamSession[]>([]);
+  const [sessions, setSessions] = useState<StreamSession[]>(() => getCachedActiveSessions() ?? []);
   const todayDate = todayYmd();
 
   useEffect(() => {
