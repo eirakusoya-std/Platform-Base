@@ -614,13 +614,21 @@ export default function StudioLiveSessionPage() {
 
     try {
       await room.connect(tokenData.livekitUrl, tokenData.token);
-      await room.localParticipant.setCameraEnabled(camOn);
-      await room.localParticipant.setMicrophoneEnabled(micOn);
     } catch (err) {
       setMediaError(err instanceof Error ? err.message : "Failed to connect to LiveKit");
       setConnectionStatus("failed");
       room.disconnect();
       roomRef.current = null;
+      return;
+    }
+
+    // Camera/mic errors are non-fatal — show the error but keep the room connected.
+    // MediaDevicesError event already fires for permission denials; this catches other throws.
+    try {
+      await room.localParticipant.setCameraEnabled(camOn);
+      await room.localParticipant.setMicrophoneEnabled(micOn);
+    } catch (err) {
+      setMediaError(err instanceof Error ? err.message : tx("カメラ/マイクにアクセスできません。", "Camera/mic access denied."));
     }
   };
 
