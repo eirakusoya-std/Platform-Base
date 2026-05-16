@@ -95,75 +95,30 @@ function SpeakerTalkOverlay({
   tx: (ja: string, en: string) => string;
 }) {
   return (
-    <aside className="fixed bottom-4 left-3 right-3 top-auto z-[80] max-h-[38vh] overflow-hidden rounded-2xl border border-white/12 bg-[var(--brand-bg-800)]/78 shadow-[0_18px_44px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-20 sm:w-[320px] sm:max-h-[min(520px,calc(100vh-112px))]">
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
+    <aside className="fixed bottom-4 left-3 right-3 top-auto z-[80] max-h-[38vh] overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]/78 backdrop-blur-xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-20 sm:w-[280px] sm:max-h-[min(520px,calc(100vh-112px))]">
+      <div className="flex items-center justify-between px-3 py-2.5">
         <p className="text-xs font-bold text-[var(--brand-text)]">{tx("スピーカー", "Speakers")}</p>
         <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-text-muted)]">
           {participants.length}
         </span>
       </div>
-      <div className="max-h-[calc(38vh-42px)] space-y-1.5 overflow-y-auto p-2 sm:max-h-[calc(min(520px,100vh-112px)-42px)]">
+      <div className="max-h-[calc(38vh-38px)] overflow-y-auto px-3 pb-3 sm:max-h-[calc(min(520px,100vh-112px)-38px)]">
         {participants.length === 0 ? (
-          <p className="rounded-xl bg-white/6 px-3 py-3 text-xs text-[var(--brand-text-muted)]">
-            {tx("スピーカーはいません", "No speakers yet")}
-          </p>
+          <p className="text-xs text-[var(--brand-text-muted)]">{tx("スピーカーはいません", "No speakers yet")}</p>
         ) : (
-          participants.map((participant) => {
-            const isSpeaking = participant.isSpeaking;
-            const level = Math.max(0.08, Math.min(1, participant.audioLevel || 0));
-            const initial = (participant.name || participant.id).trim().charAt(0).toUpperCase();
-
-            return (
-              <div
-                key={participant.id}
-                className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all duration-200 ${
-                  isSpeaking
-                    ? "border-green-400/55 bg-green-500/10 shadow-[0_0_22px_rgba(34,197,94,0.22)]"
-                    : "border-white/8 bg-white/5"
-                }`}
-              >
-                <div
-                  className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-extrabold ${
-                    isSpeaking
-                      ? "bg-green-500 text-white ring-2 ring-green-400/65 ring-offset-2 ring-offset-[var(--brand-bg-800)]"
-                      : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
-                  }`}
-                >
-                  <span>{initial || "S"}</span>
-                  {isSpeaking ? (
-                    <span className="absolute -inset-1 rounded-full border border-green-400/55 shadow-[0_0_18px_rgba(34,197,94,0.55)]" />
-                  ) : null}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <p className="truncate text-sm font-bold text-[var(--brand-text)]">{participant.name}</p>
-                    {isSpeaking ? (
-                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-green-500/25 px-1.5 py-0.5 text-[9px] font-bold text-green-400">
-                        <span className="h-2 w-0.5 rounded-full bg-current opacity-60" style={{ transform: `scaleY(${0.6 + level * 0.7})` }} />
-                        <span className="h-2.5 w-0.5 rounded-full bg-current" style={{ transform: `scaleY(${0.75 + level * 0.8})` }} />
-                        <span className="h-2 w-0.5 rounded-full bg-current opacity-75" style={{ transform: `scaleY(${0.55 + level * 0.75})` }} />
-                        <span className="ml-0.5">{tx("発話中", "Speaking")}</span>
-                      </span>
-                    ) : null}
+          <div className="flex flex-wrap gap-3">
+            {participants.map((participant) => {
+              const initial = (participant.name || participant.id).trim().charAt(0).toUpperCase();
+              return (
+                <div key={participant.id} className="flex flex-col items-center gap-1">
+                  <div className="grid h-10 w-10 place-items-center rounded-full bg-[var(--brand-surface)] text-sm font-extrabold text-[var(--brand-text)]">
+                    {initial || "S"}
                   </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className={`h-full rounded-full transition-all duration-200 ${
-                          isSpeaking ? "bg-green-400" : "bg-white/18"
-                        }`}
-                        style={{ width: `${Math.round(level * 100)}%` }}
-                      />
-                    </div>
-                    <span className={`text-[10px] font-semibold ${participant.muted ? "text-[var(--brand-accent)]" : "text-[var(--brand-text-muted)]"}`}>
-                      {participant.muted ? tx("ミュート", "Muted") : tx("有効", "On")}
-                    </span>
-                  </div>
+                  <p className="w-14 truncate text-center text-[10px] text-[var(--brand-text-muted)]">{participant.name}</p>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
     </aside>
