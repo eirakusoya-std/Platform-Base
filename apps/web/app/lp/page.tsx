@@ -1,7 +1,20 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import type { ReactNode } from "react";
 import { MicrophoneIcon, SpeakerWaveIcon } from "@heroicons/react/24/outline";
 import { ArrowRightCircleIcon } from "@heroicons/react/24/solid";
+
+export const metadata: Metadata = {
+  title: "aiment — VTuberとファンをつなぐライブ配信プラットフォーム",
+  description:
+    "aimentはVTuberとリスナーが一対一で話せる新しいライブ配信サービスです。抽選・先着で参加枠をゲットして、推しと話そう。",
+  openGraph: {
+    title: "aiment — VTuberとファンをつなぐライブ配信プラットフォーム",
+    description:
+      "aimentはVTuberとリスナーが一対一で話せる新しいライブ配信サービスです。抽選・先着で参加枠をゲットして、推しと話そう。",
+    url: "https://aiment.jp/lp",
+  },
+};
 
 const cell = (name: string) => `/lp/cells/${name}.png`;
 const edited = (name: string) => `/lp/edited/${name}`;

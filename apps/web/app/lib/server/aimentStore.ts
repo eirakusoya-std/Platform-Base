@@ -625,6 +625,37 @@ export async function resetStore() {
   await writeFile(STORE_FILE, JSON.stringify(seed, null, 2), "utf8");
 }
 
+export async function searchUsers(query: string, limit = 10): Promise<SessionUser[]> {
+  const q = query.trim();
+  if (!q) return [];
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const pattern = `%${q}%`;
+    const rows = await db`
+      SELECT id, name, role, email, auth_provider, created_at, last_login_at,
+             channel_name, bio, avatar_url, email_verified_at, terms_accepted_at, privacy_accepted_at
+      FROM users
+      WHERE role = 'vtuber'
+        AND (name ILIKE ${pattern} OR channel_name ILIKE ${pattern})
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+    return rows.map((r) => sanitizeUser(rowToStoredUser(r)));
+  }
+  const store = await readStore();
+  const lower = q.toLowerCase();
+  return store.users
+    .filter(
+      (u) =>
+        u.role === "vtuber" &&
+        (u.name.toLowerCase().includes(lower) ||
+          (u.channelName ?? "").toLowerCase().includes(lower)),
+    )
+    .slice(0, limit)
+    .map(sanitizeUser);
+}
+
 export async function listUsers() {
   if (USE_NEON) {
     await ensureSchema();
