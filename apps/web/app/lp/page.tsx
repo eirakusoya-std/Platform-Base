@@ -22,8 +22,8 @@ const edited = (name: string) => `/lp/edited/${name}`;
 const navItems = ["Concept", "How it Works", "Contents", "FAQ"];
 
 const ctaLinks = {
-  watch: "/schedule",
-  speaker: "/auth/signup",
+  watch: "/",
+  speaker: "/",
 };
 
 const contentExamples = [

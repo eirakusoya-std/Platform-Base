@@ -119,20 +119,20 @@ function SpeakerTalkOverlay({
                 key={participant.id}
                 className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all duration-200 ${
                   isSpeaking
-                    ? "border-[var(--brand-primary)]/55 bg-[var(--brand-primary)]/18 shadow-[0_0_22px_rgba(124,106,230,0.22)]"
+                    ? "border-green-400/55 bg-green-500/10 shadow-[0_0_22px_rgba(34,197,94,0.22)]"
                     : "border-white/8 bg-white/5"
                 }`}
               >
                 <div
                   className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-extrabold ${
                     isSpeaking
-                      ? "bg-[var(--brand-primary)] text-white ring-2 ring-[var(--brand-primary)]/65 ring-offset-2 ring-offset-[var(--brand-bg-800)]"
+                      ? "bg-green-500 text-white ring-2 ring-green-400/65 ring-offset-2 ring-offset-[var(--brand-bg-800)]"
                       : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
                   }`}
                 >
                   <span>{initial || "S"}</span>
                   {isSpeaking ? (
-                    <span className="absolute -inset-1 rounded-full border border-[var(--brand-primary)]/55 shadow-[0_0_18px_rgba(124,106,230,0.55)]" />
+                    <span className="absolute -inset-1 rounded-full border border-green-400/55 shadow-[0_0_18px_rgba(34,197,94,0.55)]" />
                   ) : null}
                 </div>
 
@@ -140,7 +140,7 @@ function SpeakerTalkOverlay({
                   <div className="flex min-w-0 items-center gap-1.5">
                     <p className="truncate text-sm font-bold text-[var(--brand-text)]">{participant.name}</p>
                     {isSpeaking ? (
-                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--brand-primary)]/25 px-1.5 py-0.5 text-[9px] font-bold text-[var(--brand-primary)]">
+                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-green-500/25 px-1.5 py-0.5 text-[9px] font-bold text-green-400">
                         <span className="h-2 w-0.5 rounded-full bg-current opacity-60" style={{ transform: `scaleY(${0.6 + level * 0.7})` }} />
                         <span className="h-2.5 w-0.5 rounded-full bg-current" style={{ transform: `scaleY(${0.75 + level * 0.8})` }} />
                         <span className="h-2 w-0.5 rounded-full bg-current opacity-75" style={{ transform: `scaleY(${0.55 + level * 0.75})` }} />
@@ -152,7 +152,7 @@ function SpeakerTalkOverlay({
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
                       <div
                         className={`h-full rounded-full transition-all duration-200 ${
-                          isSpeaking ? "bg-[var(--brand-primary)]" : "bg-white/18"
+                          isSpeaking ? "bg-green-400" : "bg-white/18"
                         }`}
                         style={{ width: `${Math.round(level * 100)}%` }}
                       />
@@ -192,13 +192,13 @@ export default function StudioLiveSessionPage() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [connectedViewers, setConnectedViewers] = useState(0);
   const [obsConnected, setObsConnected] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const roomRef = useRef<Room | null>(null);
-  const autoStartDoneRef = useRef(false);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
   const activeSpeakerIdsRef = useRef<Set<string>>(new Set());
   const speakingLingerTimersRef = useRef<Map<string, number>>(new Map());
@@ -321,11 +321,9 @@ export default function StudioLiveSessionPage() {
   }, []);
 
   const isSpeakerParticipant = useCallback((participant: Participant) => {
-    return (
-      participant.permissions?.canPublishSources?.some((source) => String(source) === "microphone") ||
-      participant.isMicrophoneEnabled ||
-      participant.audioTrackPublications.size > 0
-    );
+    const sources = participant.permissions?.canPublishSources;
+    if (sources !== undefined) return sources.length > 0;
+    return participant.isMicrophoneEnabled || participant.audioTrackPublications.size > 0;
   }, []);
 
   const clearSpeakingTimer = useCallback((participantId: string) => {
@@ -625,20 +623,6 @@ export default function StudioLiveSessionPage() {
     };
   }, [cleanupConnection]);
 
-  const shouldAutoStart = searchParams.get("autostart") === "1";
-
-  useEffect(() => {
-    if (!shouldAutoStart || autoStartDoneRef.current) return;
-    if (notFound || !session) return;
-    if (connectionStatus !== "idle") return;
-
-    autoStartDoneRef.current = true;
-    const timer = window.setTimeout(() => {
-      void startBroadcast();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [shouldAutoStart, notFound, session, connectionStatus]);
-
   if (!sessionHydrated || !isVtuber) return null;
 
   if (notFound || !session) {
@@ -678,16 +662,6 @@ export default function StudioLiveSessionPage() {
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isLive ? "bg-[var(--brand-primary)]/15 text-[var(--brand-primary)]" : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)]"}`}>
                 {isLive ? tx("配信中", "Live now") : tx("待機中", "Standby")}
               </span>
-              <button
-                onClick={() => {
-                  stopBroadcast();
-                  router.push("/");
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
-              >
-                <XMarkIcon className="h-4 w-4" aria-hidden />
-                {tx("閉じる", "Close")}
-              </button>
             </div>
           </div>
 
@@ -720,10 +694,8 @@ export default function StudioLiveSessionPage() {
                 <button
                   onClick={
                     isLive
-                      ? stopBroadcast
-                      : () => {
-                          void startBroadcast();
-                        }
+                      ? () => setShowStopConfirm(true)
+                      : () => { void startBroadcast(); }
                   }
                   disabled={!isLive && !obsConnected && connectionStatus === "idle"}
                   title={!isLive && !obsConnected ? tx("OBSを先に接続してください", "Connect OBS first") : undefined}
@@ -826,6 +798,39 @@ export default function StudioLiveSessionPage() {
           />
         </aside>
       </main>
+
+      {showStopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--brand-surface)] p-6 shadow-2xl shadow-black/50">
+            <h2 className="text-base font-bold text-[var(--brand-text)]">
+              {tx("配信を停止しますか？", "Stop the stream?")}
+            </h2>
+            <p className="mt-2 text-sm text-[var(--brand-text-muted)]">
+              {tx(
+                "配信を停止すると視聴者との接続が切断されます。この操作は取り消せません。",
+                "Stopping the stream will disconnect all viewers. This cannot be undone.",
+              )}
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setShowStopConfirm(false)}
+                className="flex-1 rounded-xl bg-[var(--brand-bg-900)] px-4 py-2.5 text-sm font-semibold text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
+              >
+                {tx("キャンセル", "Cancel")}
+              </button>
+              <button
+                onClick={() => {
+                  setShowStopConfirm(false);
+                  void stopBroadcast();
+                }}
+                className="flex-1 rounded-xl bg-[var(--brand-accent)] px-4 py-2.5 text-sm font-extrabold text-white"
+              >
+                {tx("配信を停止する", "Stop Stream")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
