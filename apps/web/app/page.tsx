@@ -12,7 +12,7 @@ import { UpcomingTicker } from "./components/home/UpcomingTicker";
 import { LiveSession, StartingSoonSession } from "./components/home/types";
 import { matchesFilter } from "./components/home/utils";
 import { useI18n } from "./lib/i18n";
-import { listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "./lib/streamSessions";
+import { getCachedActiveSessions, listActiveStreamSessions, subscribeStreamSessions, type StreamSession } from "./lib/streamSessions";
 
 function toSecondsUntil(startsAt: string) {
   const diffMs = new Date(startsAt).getTime() - Date.now();
@@ -25,7 +25,7 @@ export default function HomePage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [dynamicSessions, setDynamicSessions] = useState<StreamSession[]>([]);
+  const [dynamicSessions, setDynamicSessions] = useState<StreamSession[]>(() => getCachedActiveSessions() ?? []);
   const [countdown, setCountdown] = useState<Record<string, number>>({});
 
   useEffect(() => {

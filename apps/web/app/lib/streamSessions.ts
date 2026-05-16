@@ -24,6 +24,23 @@ const UPDATE_EVENT = "aiment-stream-sessions-updated";
 const BC_CHANNEL = "aiment-stream-updates";
 const API_BASE = "/api/stream-sessions";
 
+// Module-level cache — survives React unmount/remount and page-to-page SPA navigation
+let _activeSessionsCache: StreamSession[] | null = null;
+let _cacheTime = 0;
+const CACHE_TTL_MS = 60_000;
+
+export function getCachedActiveSessions(): StreamSession[] | null {
+  if (_activeSessionsCache !== null && Date.now() - _cacheTime < CACHE_TTL_MS) {
+    return _activeSessionsCache;
+  }
+  return null;
+}
+
+function setCachedActiveSessions(sessions: StreamSession[]) {
+  _activeSessionsCache = sessions;
+  _cacheTime = Date.now();
+}
+
 function sessionUrl(sessionId: string) {
   return `${API_BASE}/${encodeURIComponent(sessionId)}`;
 }
@@ -82,7 +99,9 @@ export async function listAllStreamSessions(): Promise<StreamSession[]> {
 
 export async function listActiveStreamSessions(): Promise<StreamSession[]> {
   const { sessions } = await requestJson<{ sessions: StreamSession[] }>(`${API_BASE}?status=prelive,live`);
-  return sessions.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const sorted = sessions.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  setCachedActiveSessions(sorted);
+  return sorted;
 }
 
 export async function getStreamSession(sessionId: string): Promise<StreamSession | null> {
