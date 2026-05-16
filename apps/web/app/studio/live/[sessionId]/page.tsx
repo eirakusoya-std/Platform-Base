@@ -531,6 +531,8 @@ export default function StudioLiveSessionPage() {
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
       if (track.kind !== Track.Kind.Audio) return;
       if (participant.identity === room.localParticipant.identity) return;
+      // OBS ingress publishes the VTuber's own audio back to the room — skip it to avoid feedback.
+      if (participant.identity.startsWith("obs-") || participant.identity.startsWith("ingress-")) return;
 
       // Audio subscription is definitive proof this is a speaker — add directly.
       // Do this before the ref check so participant tracking always runs.
