@@ -27,10 +27,11 @@ import {
   type ChatSenderRole,
 } from "../../lib/chatMessages";
 import { useI18n } from "../../lib/i18n";
+import { getStreamSession } from "../../lib/streamSessions";
 
 type Role = "host" | "listener" | "speaker" | "unknown";
 type RequestedRole = "host" | "listener" | "speaker";
-type Status = "idle" | "connecting" | "connected" | "failed";
+type Status = "idle" | "waitingForLive" | "connecting" | "connected" | "failed";
 
 type ChatMessage = BilingualChatMessage & {
   user?: string;
@@ -290,6 +291,23 @@ export default function RoomPage() {
     let mounted = true;
 
     const start = async () => {
+      // Non-host roles wait until the VTuber starts the broadcast (session.status === "live").
+      if (requestedRole !== "host") {
+        setStatus("waitingForLive");
+        while (mounted) {
+          const sessionData = await getStreamSession(roomId);
+          if (!mounted) return;
+          if (sessionData?.status === "live") break;
+          if (sessionData === null) {
+            setFailureReason(tx("配信枠が見つかりませんでした。", "Session not found."));
+            setStatus("failed");
+            return;
+          }
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 3000));
+        }
+        if (!mounted) return;
+      }
+
       setStatus("connecting");
 
       // Get LiveKit token
@@ -545,9 +563,11 @@ export default function RoomPage() {
       ? tx("接続済み", "Connected")
       : status === "connecting"
         ? tx("接続中", "Connecting")
-        : status === "failed"
-          ? tx("接続失敗", "Failed")
-          : tx("待機中", "Idle");
+        : status === "waitingForLive"
+          ? tx("配信開始待ち", "Waiting for broadcast")
+          : status === "failed"
+            ? tx("接続失敗", "Failed")
+            : tx("待機中", "Idle");
 
   if (!roomId) {
     return <div className="p-8">{tx("Room IDを読み込んでいます...", "Loading room ID...")}</div>;
@@ -606,7 +626,15 @@ export default function RoomPage() {
                     </button>
                   </div>
                 )}
-                {status !== "failed" && !remoteConnected && (
+                {status === "waitingForLive" && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
+                    <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信開始をお待ちください", "Waiting for broadcast to start")}</p>
+                    <p className="text-xs text-[var(--brand-text-muted)]">
+                      {tx("VTuberが配信を開始すると自動で接続されます", "You will be connected automatically when the VTuber starts")}
+                    </p>
+                  </div>
+                )}
+                {status !== "failed" && status !== "waitingForLive" && !remoteConnected && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
                     <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信者の映像を待機中", "Waiting for host stream")}</p>
                     <p className="text-xs text-[var(--brand-text-muted)]">
