@@ -249,14 +249,6 @@ export default function StudioPostLivePage() {
                     <p className="text-xs text-[var(--brand-text-muted)]">{tx("参加方式", "Entry Type")}</p>
                     <p className="mt-1 font-bold text-[var(--brand-text)]">{participationLabel(session.participationType, tx)}</p>
                   </div>
-                  <div className="rounded-xl bg-[var(--brand-bg-900)] px-4 py-3">
-                    <p className="text-xs text-[var(--brand-text-muted)]">{tx("必要プラン", "Required Plan")}</p>
-                    <p className="mt-1 font-bold text-[var(--brand-text)]">{session.requiredPlan}</p>
-                  </div>
-                  <div className="rounded-xl bg-[var(--brand-bg-900)] px-4 py-3">
-                    <p className="text-xs text-[var(--brand-text-muted)]">{tx("スピーカー必要プラン", "Speaker Required Plan")}</p>
-                    <p className="mt-1 font-bold text-[var(--brand-text)]">{session.speakerRequiredPlan}</p>
-                  </div>
                 </div>
                 <p className="mt-4 text-xs leading-relaxed text-[var(--brand-text-muted)]">
                   {tx("最大同接・平均同接・コメント数・cue数は、現時点では配信単位で保存していません。次の実装で session metrics として保存すると、このページに実数を表示できます。", "Peak viewers, average viewers, comment count, and cue count are not stored per session yet. Once session metrics are added, this page can show real values.")}

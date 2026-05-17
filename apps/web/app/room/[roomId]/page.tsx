@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import Image from "next/image";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownCircleIcon,
@@ -29,10 +30,11 @@ import {
   type ChatSenderRole,
 } from "../../lib/chatMessages";
 import { useI18n } from "../../lib/i18n";
+import { getStreamSession, listActiveStreamSessions, type StreamSession } from "../../lib/streamSessions";
 
 type Role = "host" | "listener" | "speaker" | "unknown";
 type RequestedRole = "host" | "listener" | "speaker";
-type Status = "idle" | "connecting" | "connected" | "failed";
+type Status = "idle" | "waitingForLive" | "connecting" | "connected" | "failed";
 
 type ChatMessage = BilingualChatMessage & {
   user?: string;
@@ -101,7 +103,13 @@ const PREVIEW_SPEAKER_PARTICIPANTS: SpeakerParticipantItem[] = [
     lastSpokeAt: null,
   },
 ];
-
+function relativeTime(iso: string, tx: (jp: string, en: string) => string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (diff < 1) return tx("たった今配信開始", "Just started");
+  if (diff < 60) return tx(`${diff}分前に配信開始`, `Started ${diff} min ago`);
+  const h = Math.floor(diff / 60);
+  return tx(`${h}時間前に配信開始`, `Started ${h} hr ago`);
+}
 function parseRequestedRole(value: string | null): RequestedRole {
   if (value === "host" || value === "speaker" || value === "listener") return value;
   return "listener";
@@ -361,6 +369,9 @@ export default function RoomPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [failureReason, setFailureReason] = useState<string | null>(null);
   const [assignedRole, setAssignedRole] = useState<Role>("unknown");
+  const [session, setSession] = useState<StreamSession | null>(null);
+  const [streamEnded, setStreamEnded] = useState(false);
+  const [suggestedSessions, setSuggestedSessions] = useState<StreamSession[]>([]);
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT);
@@ -509,9 +520,11 @@ export default function RoomPage() {
     seenChatIdsRef.current.add(message.id);
     setChatMessages((prev) => [...prev, { ...message, mine }].slice(-MAX_CHAT_MESSAGES));
     setChatInput("");
+    const payload = JSON.stringify({ type: "chat", ...message });
+    console.debug("[room] publishData", payload.slice(0, 80));
     void room.localParticipant
       .publishData(
-        new TextEncoder().encode(JSON.stringify({ type: "chat", ...message })),
+        new TextEncoder().encode(payload),
         { reliable: true },
       )
       .catch((error: unknown) => {
@@ -619,6 +632,23 @@ export default function RoomPage() {
     let mounted = true;
 
     const start = async () => {
+      // Non-host roles wait until the VTuber starts the broadcast (session.status === "live").
+      if (requestedRole !== "host") {
+        setStatus("waitingForLive");
+        while (mounted) {
+          const sessionData = await getStreamSession(roomId);
+          if (!mounted) return;
+          if (sessionData?.status === "live") break;
+          if (sessionData === null) {
+            setFailureReason(tx("配信枠が見つかりませんでした。", "Session not found."));
+            setStatus("failed");
+            return;
+          }
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 3000));
+        }
+        if (!mounted) return;
+      }
+
       setStatus("connecting");
 
       // Get LiveKit token
@@ -692,6 +722,17 @@ export default function RoomPage() {
         speakingLingerTimersRef.current.clear();
         activeSpeakerIdsRef.current.clear();
       });
+
+      // Check if session ended — if so show the ended screen
+        void getStreamSession(roomId).then((s) => {
+          if (!mounted) return;
+          if (s?.status === "ended") {
+            setStreamEnded(true);
+            void listActiveStreamSessions().then((sessions) => {
+              if (mounted) setSuggestedSessions(sessions.slice(0, 4));
+            });
+          }
+        });
 
       room.on(RoomEvent.ParticipantConnected, (participant) => {
         if (!mounted) return;
@@ -813,7 +854,9 @@ export default function RoomPage() {
           if (participant?.identity && participant.identity === room.localParticipant.identity) {
             return;
           }
-          const msg = JSON.parse(new TextDecoder().decode(payload)) as {
+          const decoded = new TextDecoder().decode(payload);
+          console.debug("[room] DataReceived from", participant?.identity ?? "server", decoded.slice(0, 80));
+          const msg = JSON.parse(decoded) as {
             type?: string;
             id?: string;
             user?: string;
@@ -896,6 +939,16 @@ export default function RoomPage() {
     };
   }, [cleanup, requestedRole, roomId, selectedMicDeviceId, selectedCamDeviceId]);
 
+  // Fetch session metadata for the info panel
+  useEffect(() => {
+    if (!roomId) return;
+    let mounted = true;
+    void getStreamSession(roomId).then((s) => {
+      if (mounted) setSession(s);
+    });
+    return () => { mounted = false; };
+  }, [roomId]);
+
   useEffect(() => {
     let mounted = true;
     const refreshDevices = async () => {
@@ -960,9 +1013,11 @@ export default function RoomPage() {
       ? tx("接続済み", "Connected")
       : status === "connecting"
         ? tx("接続中", "Connecting")
-        : status === "failed"
-          ? tx("接続失敗", "Failed")
-          : tx("待機中", "Idle");
+        : status === "waitingForLive"
+          ? tx("配信開始待ち", "Waiting for broadcast")
+          : status === "failed"
+            ? tx("接続失敗", "Failed")
+            : tx("待機中", "Idle");
 
   if (!roomId) {
     return <div className="p-8">{tx("Room IDを読み込んでいます...", "Loading room ID...")}</div>;
@@ -992,13 +1047,13 @@ export default function RoomPage() {
       </header>
 
       <main
-        className={`mx-auto min-h-0 w-full max-w-[1600px] flex-1 overflow-hidden px-4 pt-4 lg:px-8 ${
+        className={`mx-auto w-full max-w-[1600px] overflow-y-auto px-4 pt-4 lg:px-8 ${
           requestedRole === "listener" ? "pb-4" : "pb-28"
         }`}
       >
-        <div className={`grid h-full grid-cols-1 gap-4 ${chatOpen ? "xl:grid-cols-[1fr_360px]" : "xl:grid-cols-[1fr_64px]"}`}>
-          <section className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden pr-1">
-            <div ref={videoShellRef} className="min-h-0 shrink overflow-hidden rounded-2xl bg-black shadow-xl">
+        <div className={`grid grid-cols-1 items-start gap-4 xl:grid-cols-[1fr_360px] ${!chatOpen ? "xl:grid-cols-[1fr_64px]" : ""}`}>
+          <section className="min-w-0 space-y-3">
+            <div ref={videoShellRef} className="overflow-hidden rounded-2xl bg-black shadow-xl">
               <div
                 onMouseMove={revealVideoControls}
                 onMouseLeave={hideVideoControls}
@@ -1021,7 +1076,15 @@ export default function RoomPage() {
                     </button>
                   </div>
                 )}
-                {status !== "failed" && !remoteConnected && (
+                {status === "waitingForLive" && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
+                    <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信開始をお待ちください", "Waiting for broadcast to start")}</p>
+                    <p className="text-xs text-[var(--brand-text-muted)]">
+                      {tx("VTuberが配信を開始すると自動で接続されます", "You will be connected automatically when the VTuber starts")}
+                    </p>
+                  </div>
+                )}
+                {status !== "failed" && status !== "waitingForLive" && !remoteConnected && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--brand-surface)] text-center">
                     <p className="text-sm font-semibold text-[var(--brand-text)]">{tx("配信者の映像を待機中", "Waiting for host stream")}</p>
                     <p className="text-xs text-[var(--brand-text-muted)]">
@@ -1049,6 +1112,10 @@ export default function RoomPage() {
                   </div>
                 )}
 
+                {requestedRole !== "host" ? (
+                  <SpeakerParticipantDock participants={visibleSpeakerParticipants} tx={tx} />
+                ) : null}
+
                 <div className="absolute right-3 top-3 flex items-center gap-2">
                   <button
                     type="button"
@@ -1069,13 +1136,64 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {requestedRole !== "host" ? (
-              <SpeakerParticipantDock participants={visibleSpeakerParticipants} tx={tx} />
-            ) : null}
+            {/* Stream ended overlay */}
+            {streamEnded && (
+              <div className="rounded-2xl bg-[var(--brand-surface)] p-6">
+                <p className="text-center text-lg font-extrabold">{tx("配信が終了しました", "This stream has ended")}</p>
+                <p className="mt-1 text-center text-sm text-[var(--brand-text-muted)]">{tx("ご視聴ありがとうございました。", "Thank you for watching.")}</p>
+                {suggestedSessions.length > 0 && (
+                  <div className="mt-5">
+                    <p className="mb-3 text-xs font-bold text-[var(--brand-text-muted)]">{tx("他の配信を見る", "Other live sessions")}</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {suggestedSessions.map((s) => (
+                        <Link key={s.sessionId} href={`/join/${encodeURIComponent(s.sessionId)}`} className="flex gap-3 rounded-xl bg-[var(--brand-bg-900)] p-3 transition-colors hover:bg-[var(--brand-bg-900)]/60">
+                          {s.thumbnail && <Image src={s.thumbnail} alt={s.title} width={72} height={48} className="h-12 w-18 shrink-0 rounded-lg object-cover" />}
+                          <div className="min-w-0">
+                            <p className="line-clamp-2 text-xs font-semibold">{s.title}</p>
+                            <p className="mt-1 truncate text-[10px] text-[var(--brand-text-muted)]">{s.hostName}</p>
+                            {s.status === "live" && <span className="inline-block rounded bg-[var(--brand-accent)] px-1.5 py-0.5 text-[9px] font-bold text-white">{tx("配信中", "LIVE")}</span>}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => router.push("/")} className="mx-auto mt-5 block rounded-xl bg-[var(--brand-primary)] px-6 py-2.5 text-sm font-bold text-white">
+                  {tx("ホームへ", "Go Home")}
+                </button>
+              </div>
+            )}
 
+            {/* Session info panel — YouTube-style */}
+            {session && !streamEnded && (
+              <div className="px-1 pt-3">
+                <h1 className="text-base font-extrabold leading-snug">{session.title}</h1>
+                <div className="mt-3 flex items-center gap-3">
+                  {session.hostAvatarUrl ? (
+                    <Image src={session.hostAvatarUrl} alt={session.hostName} width={36} height={36} className="h-9 w-9 rounded-full object-cover" />
+                  ) : (
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--brand-surface)] text-sm font-extrabold text-[var(--brand-text-muted)]">
+                      {session.hostName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-bold">{session.hostChannelName ?? session.hostName}</p>
+                    <p className="text-xs text-[var(--brand-text-muted)]">{relativeTime(session.startsAt, tx)}</p>
+                  </div>
+                </div>
+                {session.description && (
+                  <details className="mt-3 rounded-xl bg-[var(--brand-surface)] px-4 py-3 text-sm">
+                    <summary className="cursor-pointer select-none font-semibold text-[var(--brand-text)]">
+                      {tx("概要", "Description")}
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--brand-text-muted)]">{session.description}</p>
+                  </details>
+                )}
+              </div>
+            )}
           </section>
 
-          <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
+          <aside className="sticky top-4 flex min-h-0 max-h-[calc(100vh-80px)] flex-col overflow-hidden rounded-2xl bg-[var(--brand-bg-800)]">
             {chatOpen ? (
               <>
             <div className="px-4 py-3">

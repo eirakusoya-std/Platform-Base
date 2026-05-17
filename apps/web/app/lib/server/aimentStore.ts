@@ -319,6 +319,10 @@ async function initSchema() {
     )
   `;
   await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS header_url TEXT`;
+  await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT`;
+  await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS language_level TEXT`;
+  await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS sns_twitter TEXT`;
+  await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS sns_youtube TEXT`;
   await db`
     CREATE TABLE IF NOT EXISTS stream_sessions (
       session_id TEXT PRIMARY KEY,
@@ -623,6 +627,37 @@ export async function resetStore() {
   }
   const seed = await getSeedStore();
   await writeFile(STORE_FILE, JSON.stringify(seed, null, 2), "utf8");
+}
+
+export async function searchUsers(query: string, limit = 10): Promise<SessionUser[]> {
+  const q = query.trim();
+  if (!q) return [];
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const pattern = `%${q}%`;
+    const rows = await db`
+      SELECT id, name, role, email, auth_provider, created_at, last_login_at,
+             channel_name, bio, avatar_url, email_verified_at, terms_accepted_at, privacy_accepted_at
+      FROM users
+      WHERE role = 'vtuber'
+        AND (name ILIKE ${pattern} OR channel_name ILIKE ${pattern})
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+    return rows.map((r) => sanitizeUser(rowToStoredUser(r)));
+  }
+  const store = await readStore();
+  const lower = q.toLowerCase();
+  return store.users
+    .filter(
+      (u) =>
+        u.role === "vtuber" &&
+        (u.name.toLowerCase().includes(lower) ||
+          (u.channelName ?? "").toLowerCase().includes(lower)),
+    )
+    .slice(0, limit)
+    .map(sanitizeUser);
 }
 
 export async function listUsers() {
@@ -1077,11 +1112,11 @@ export async function confirmPhoneVerification(userId: string, code: string) {
   });
 }
 
-// Columns for list responses — thumbnail/description/OBS fields excluded to minimise transfer size.
+// Columns for list responses — description/OBS fields excluded to minimise transfer size.
 // Detail endpoints use getStreamSessionById which returns all columns.
 const LIST_COLUMNS = `
   s.session_id, s.host_user_id, s.host_name, s.title, s.status, s.created_at,
-  s.starts_at, s.category, s.participation_type, s.required_plan,
+  s.starts_at, s.category, s.thumbnail, s.participation_type, s.required_plan,
   s.reservation_required, s.slots_total, s.slots_left,
   s.speaker_slots_total, s.speaker_slots_left, s.speaker_required_plan,
   u.avatar_url AS host_avatar_url, u.channel_name AS host_channel_name
@@ -1720,6 +1755,100 @@ export async function clearSessionIngress(sessionId: string): Promise<void> {
     }
     return null;
   });
+}
+
+export type PublicUserProfile = {
+  id: string;
+  name: string;
+  bio?: string;
+  avatarUrl?: string;
+  country?: string;
+  languageLevel?: string;
+  snsTwitter?: string;
+  snsYoutube?: string;
+  createdAt: string;
+  sessionHistory: Array<{
+    sessionId: string;
+    title: string;
+    hostName: string;
+    thumbnail: string;
+    startsAt: string;
+    status: string;
+    role: "speaker" | "listener";
+  }>;
+};
+
+export async function getPublicUserProfile(userId: string): Promise<PublicUserProfile | null> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const [row] = await db`
+      SELECT id, name, bio, avatar_url, country, language_level, sns_twitter, sns_youtube, created_at
+      FROM users WHERE id = ${userId}
+    `;
+    if (!row) return null;
+
+    const historyRows = await db`
+      SELECT s.session_id, s.title, s.host_name, s.thumbnail, s.starts_at, s.status, r.type
+      FROM reservations r
+      JOIN stream_sessions s ON s.session_id = r.session_id
+      WHERE r.user_id = ${userId} AND r.status != 'cancelled'
+      ORDER BY s.starts_at DESC
+      LIMIT 50
+    `;
+
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      bio: row.bio ?? undefined,
+      avatarUrl: row.avatar_url ?? undefined,
+      country: row.country ?? undefined,
+      languageLevel: row.language_level ?? undefined,
+      snsTwitter: row.sns_twitter ?? undefined,
+      snsYoutube: row.sns_youtube ?? undefined,
+      createdAt: row.created_at as string,
+      sessionHistory: historyRows.map((r) => ({
+        sessionId: r.session_id as string,
+        title: r.title as string,
+        hostName: r.host_name as string,
+        thumbnail: r.thumbnail as string,
+        startsAt: r.starts_at as string,
+        status: r.status as string,
+        role: (r.type === "speaker" ? "speaker" : "listener") as "speaker" | "listener",
+      })),
+    };
+  }
+
+  const store = await readStore();
+  const user = store.users.find((u) => u.id === userId);
+  if (!user) return null;
+  const reservations = store.reservations?.filter((r) => r.userId === userId && r.status !== "cancelled") ?? [];
+  const sessionHistory = reservations
+    .map((r) => {
+      const s = store.streamSessions.find((s) => s.sessionId === r.sessionId);
+      if (!s) return null;
+      return {
+        sessionId: s.sessionId,
+        title: s.title,
+        hostName: s.hostName,
+        thumbnail: s.thumbnail,
+        startsAt: s.startsAt,
+        status: s.status,
+        role: r.type as "speaker" | "listener",
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => (a.startsAt < b.startsAt ? 1 : -1))
+    .slice(0, 50);
+
+  return {
+    id: user.id,
+    name: user.name,
+    bio: user.bio,
+    avatarUrl: user.avatarUrl,
+    createdAt: user.createdAt,
+    sessionHistory,
+  };
 }
 
 export async function deleteUser(userId: string): Promise<void> {

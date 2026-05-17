@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownCircleIcon,
+  ArrowTopRightOnSquareIcon,
   ChatBubbleLeftRightIcon,
   MicrophoneIcon,
   PaperAirplaneIcon,
@@ -100,6 +101,16 @@ function CircleControl({ icon: Icon, offIcon: OffIcon, slashedWhenOff, on, onTog
   );
 }
 
+function MuteIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+      <path d="M10 2a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M5.5 9.5a.75.75 0 0 0-1.5 0 6 6 0 0 0 5.25 5.954V17H7.5a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-1.75v-1.546A6 6 0 0 0 16 9.5a.75.75 0 0 0-1.5 0 4.5 4.5 0 0 1-9 0Z" />
+      <line x1="3" y1="3" x2="17" y2="17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function SpeakerTalkOverlay({
   participants,
   tx,
@@ -125,10 +136,10 @@ function SpeakerTalkOverlay({
             const isSpeaking = participant.isSpeaking;
             const level = Math.max(0.08, Math.min(1, participant.audioLevel || 0));
             const initial = (participant.name || participant.id).trim().charAt(0).toUpperCase();
+            const isGuest = participant.id.startsWith("guest-");
 
-            return (
+            const row = (
               <div
-                key={participant.id}
                 className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all duration-200 ${
                   isSpeaking
                     ? "border-[var(--brand-primary)]/65 bg-[var(--brand-primary)]/18 shadow-[0_0_22px_rgba(124,106,230,0.22)] backdrop-blur-xl"
@@ -172,9 +183,23 @@ function SpeakerTalkOverlay({
                     <span className={`text-[10px] font-semibold ${participant.muted ? "text-[var(--brand-accent)]" : "text-[var(--brand-text-muted)]"}`}>
                       {participant.muted ? tx("ミュート", "Muted") : participant.status === "requested" ? tx("待機中", "Waiting") : tx("有効", "On")}
                     </span>
+                    {participant.muted ? <span className="shrink-0 text-[var(--brand-text-muted)]"><MuteIcon /></span> : null}
                   </div>
                 </div>
               </div>
+            );
+            return isGuest ? (
+              <div key={participant.id}>{row}</div>
+            ) : (
+              <a
+                key={participant.id}
+                href={`/users/${encodeURIComponent(participant.id)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-xl hover:bg-white/5"
+              >
+                {row}
+              </a>
             );
           })
         )}
@@ -280,10 +305,13 @@ function SpeakerOverlayLauncher({
       <button
         type="button"
         onClick={() => void openOverlay()}
-        className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-secondary)] px-3 py-2 text-xs font-extrabold text-black shadow-[0_10px_24px_rgba(255,213,102,0.2)]"
+        aria-label={tx("スピーカーパネルを開く", "Open speaker panel")}
+        className="relative grid h-9 w-9 place-items-center rounded-lg bg-[var(--brand-secondary)] text-black shadow-[0_10px_24px_rgba(255,213,102,0.2)] transition-transform hover:-translate-y-0.5"
       >
-        <span>{tx("スピーカーOverlay", "Speaker Overlay")}</span>
-        <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px]">{participants.length}</span>
+        <ArrowTopRightOnSquareIcon className="h-5 w-5" aria-hidden />
+        <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-black/15 px-1 text-center text-[10px] font-extrabold leading-4">
+          {participants.length}
+        </span>
       </button>
       {error ? (
         <p className="absolute left-0 top-11 z-20 w-[280px] rounded-lg bg-[var(--brand-accent)]/15 px-3 py-2 text-xs text-[var(--brand-accent)] shadow-lg shadow-black/25">
@@ -315,6 +343,7 @@ export default function StudioLiveSessionPage() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [connectedViewers, setConnectedViewers] = useState(0);
   const [obsConnected, setObsConnected] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
@@ -322,9 +351,12 @@ export default function StudioLiveSessionPage() {
   const shouldAutoScrollRef = useRef(true);
   const roomRef = useRef<Room | null>(null);
   const autoStartDoneRef = useRef(false);
+  const startBroadcastRef = useRef<(() => Promise<void>) | null>(null);
   const seenChatIdsRef = useRef<Set<string>>(new Set(INITIAL_CHAT.map((m) => m.id)));
   const activeSpeakerIdsRef = useRef<Set<string>>(new Set());
   const speakingLingerTimersRef = useRef<Map<string, number>>(new Map());
+  const isLiveRef = useRef(false);
+  const sessionRef = useRef<StreamSession | null>(null);
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -497,11 +529,11 @@ export default function StudioLiveSessionPage() {
   }, []);
 
   const isSpeakerParticipant = useCallback((participant: Participant) => {
-    return (
-      participant.permissions?.canPublishSources?.some((source) => String(source) === "microphone") ||
-      participant.isMicrophoneEnabled ||
-      participant.audioTrackPublications.size > 0
-    );
+    if (participant.audioTrackPublications.size > 0) return true;
+    if (participant.isMicrophoneEnabled) return true;
+    const sources = participant.permissions?.canPublishSources;
+    if (sources !== undefined) return sources.length > 0;
+    return false;
   }, []);
 
   const clearSpeakingTimer = useCallback((participantId: string) => {
@@ -702,8 +734,9 @@ export default function StudioLiveSessionPage() {
     });
 
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-      if (track.kind !== Track.Kind.Audio || !remoteAudioContainerRef.current) return;
+      if (track.kind !== Track.Kind.Audio) return;
       if (participant.identity === room.localParticipant.identity) return;
+      if (participant.identity.startsWith("obs-") || participant.identity.startsWith("ingress-")) return;
       upsertParticipant(participant, {
         muted: !participant.isMicrophoneEnabled,
         isSpeaking: participant.isSpeaking,
@@ -711,6 +744,7 @@ export default function StudioLiveSessionPage() {
         lastSpokeAt: participant.isSpeaking ? Date.now() : null,
       });
 
+      if (!remoteAudioContainerRef.current) return;
       const audioEl = track.attach() as HTMLAudioElement;
       audioEl.autoplay = true;
       audioEl.muted = false;
@@ -772,13 +806,19 @@ export default function StudioLiveSessionPage() {
 
     try {
       await room.connect(tokenData.livekitUrl, tokenData.token);
-      await room.localParticipant.setCameraEnabled(camOn);
-      await room.localParticipant.setMicrophoneEnabled(micOn);
     } catch (err) {
       setMediaError(err instanceof Error ? err.message : "Failed to connect to LiveKit");
       setConnectionStatus("failed");
       room.disconnect();
       roomRef.current = null;
+      return;
+    }
+
+    try {
+      await room.localParticipant.setCameraEnabled(camOn);
+      await room.localParticipant.setMicrophoneEnabled(micOn);
+    } catch (err) {
+      setMediaError(err instanceof Error ? err.message : tx("カメラ/マイクにアクセスできません。", "Camera/mic access denied."));
     }
   };
 
@@ -796,10 +836,66 @@ export default function StudioLiveSessionPage() {
   };
 
   useEffect(() => {
+    startBroadcastRef.current = startBroadcast;
+  });
+
+  useEffect(() => {
     return () => {
       cleanupConnection();
     };
   }, [cleanupConnection]);
+
+  useEffect(() => {
+    isLiveRef.current = connectionStatus === "live";
+    sessionRef.current = session;
+    if (connectionStatus === "live") {
+      window.history.pushState({ __liveGuard: true }, "");
+    }
+  }, [connectionStatus, session]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isLiveRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+
+    const onPageHide = () => {
+      if (!isLiveRef.current || !sessionRef.current) return;
+      const id = encodeURIComponent(sessionRef.current.sessionId);
+      void fetch(`/api/livekit/ingress?sessionId=${id}`, { method: "DELETE", keepalive: true });
+      void fetch(`/api/stream-sessions/${id}/end`, { method: "POST", keepalive: true });
+    };
+
+    const onLinkClick = (e: MouseEvent) => {
+      if (!isLiveRef.current) return;
+      const anchor = (e.target as HTMLElement).closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setShowStopConfirm(true);
+    };
+
+    const onPopState = () => {
+      if (!isLiveRef.current) return;
+      window.history.pushState({ __liveGuard: true }, "");
+      setShowStopConfirm(true);
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("click", onLinkClick, true);
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("click", onLinkClick, true);
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, []);
 
   const shouldAutoStart = searchParams.get("autostart") === "1";
 
@@ -810,7 +906,7 @@ export default function StudioLiveSessionPage() {
 
     autoStartDoneRef.current = true;
     const timer = window.setTimeout(() => {
-      void startBroadcast();
+      void startBroadcastRef.current?.();
     }, 0);
     return () => window.clearTimeout(timer);
   }, [shouldAutoStart, notFound, session, connectionStatus]);
@@ -858,7 +954,10 @@ export default function StudioLiveSessionPage() {
               </span>
               <button
                 onClick={() => {
-                  stopBroadcast();
+                  if (isLive) {
+                    setShowStopConfirm(true);
+                    return;
+                  }
                   router.push("/");
                 }}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-sm font-semibold text-[var(--brand-text-muted)]"
@@ -898,7 +997,7 @@ export default function StudioLiveSessionPage() {
                 <button
                   onClick={
                     isLive
-                      ? stopBroadcast
+                      ? () => setShowStopConfirm(true)
                       : () => {
                           void startBroadcast();
                         }
@@ -1004,6 +1103,39 @@ export default function StudioLiveSessionPage() {
           />
         </aside>
       </main>
+
+      {showStopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--brand-surface)] p-6 shadow-2xl shadow-black/50">
+            <h2 className="text-base font-bold text-[var(--brand-text)]">
+              {tx("配信を停止しますか？", "Stop the stream?")}
+            </h2>
+            <p className="mt-2 text-sm text-[var(--brand-text-muted)]">
+              {tx(
+                "配信を停止すると視聴者との接続が切断されます。この操作は取り消せません。",
+                "Stopping the stream will disconnect all viewers. This cannot be undone.",
+              )}
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setShowStopConfirm(false)}
+                className="flex-1 rounded-xl bg-[var(--brand-bg-900)] px-4 py-2.5 text-sm font-semibold text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
+              >
+                {tx("キャンセル", "Cancel")}
+              </button>
+              <button
+                onClick={() => {
+                  setShowStopConfirm(false);
+                  void stopBroadcast();
+                }}
+                className="flex-1 rounded-xl bg-[var(--brand-accent)] px-4 py-2.5 text-sm font-extrabold text-white"
+              >
+                {tx("配信を停止する", "Stop Stream")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
