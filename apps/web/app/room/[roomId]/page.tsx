@@ -69,6 +69,40 @@ const MAX_CHAT_MESSAGES = 200;
 
 const INITIAL_CHAT: ChatMessage[] = [];
 
+const PREVIEW_SPEAKER_PARTICIPANTS: SpeakerParticipantItem[] = [
+  {
+    id: "preview-speaker-1",
+    name: "不和ふぁん",
+    muted: false,
+    isSpeaking: true,
+    audioLevel: 0.68,
+    lastSpokeAt: 0,
+  },
+  {
+    id: "preview-speaker-2",
+    name: "シャイン",
+    muted: false,
+    isSpeaking: false,
+    audioLevel: 0.12,
+    lastSpokeAt: null,
+  },
+  {
+    id: "preview-speaker-3",
+    name: "Agel エージェル",
+    muted: true,
+    isSpeaking: false,
+    audioLevel: 0,
+    lastSpokeAt: null,
+  },
+  {
+    id: "preview-speaker-4",
+    name: "aiment管理者",
+    muted: true,
+    isSpeaking: false,
+    audioLevel: 0,
+    lastSpokeAt: null,
+  },
+];
 function relativeTime(iso: string, tx: (jp: string, en: string) => string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (diff < 1) return tx("たった今配信開始", "Just started");
@@ -76,7 +110,6 @@ function relativeTime(iso: string, tx: (jp: string, en: string) => string): stri
   const h = Math.floor(diff / 60);
   return tx(`${h}時間前に配信開始`, `Started ${h} hr ago`);
 }
-
 function parseRequestedRole(value: string | null): RequestedRole {
   if (value === "host" || value === "speaker" || value === "listener") return value;
   return "listener";
@@ -311,10 +344,10 @@ function SpeakerParticipantDock({
   if (participants.length === 0) return null;
 
   return (
-    <div className="absolute inset-x-3 bottom-3 z-20 flex items-end gap-2">
-      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-black/34 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+    <div className="flex min-h-0 shrink-0 items-center gap-2">
+      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-[var(--brand-bg-800)]/86 p-2 shadow-[0_14px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl">
         {participants.map((participant) => (
-          <div key={participant.id} className="w-[220px] shrink-0 sm:w-[240px]">
+          <div key={participant.id} className="w-[190px] shrink-0 sm:w-[210px]">
             <SpeakerParticipantRow participant={participant} tx={tx} compact />
           </div>
         ))}
@@ -350,6 +383,11 @@ export default function RoomPage() {
   const [latestCue, setLatestCue] = useState<CueEvent | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [speakerParticipants, setSpeakerParticipants] = useState<SpeakerParticipantItem[]>([]);
+  const previewSpeakers =
+    process.env.NODE_ENV !== "production" &&
+    searchParams.get("previewSpeakers") === "1" &&
+    speakerParticipants.length === 0;
+  const visibleSpeakerParticipants = previewSpeakers ? PREVIEW_SPEAKER_PARTICIPANTS : speakerParticipants;
 
   const [micOn, setMicOn] = useState(requestedRole !== "listener" && searchParams.get("mic") !== "0");
   const [camOn, setCamOn] = useState(requestedRole === "host" && searchParams.get("cam") !== "0");
@@ -684,7 +722,7 @@ export default function RoomPage() {
         speakingLingerTimersRef.current.clear();
         activeSpeakerIdsRef.current.clear();
       });
-      
+
       // Check if session ended — if so show the ended screen
         void getStreamSession(roomId).then((s) => {
           if (!mounted) return;
@@ -1019,7 +1057,7 @@ export default function RoomPage() {
               <div
                 onMouseMove={revealVideoControls}
                 onMouseLeave={hideVideoControls}
-                className={`relative bg-black ${isFullscreen ? "h-screen" : ""}`}
+                className={`relative mx-auto bg-black ${isFullscreen ? "h-screen" : "max-h-[calc(100vh-250px)] w-full"}`}
                 style={isFullscreen ? undefined : { aspectRatio: "16/9" }}
               >
                 <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
@@ -1075,7 +1113,7 @@ export default function RoomPage() {
                 )}
 
                 {requestedRole !== "host" ? (
-                  <SpeakerParticipantDock participants={speakerParticipants} tx={tx} />
+                  <SpeakerParticipantDock participants={visibleSpeakerParticipants} tx={tx} />
                 ) : null}
 
                 <div className="absolute right-3 top-3 flex items-center gap-2">
