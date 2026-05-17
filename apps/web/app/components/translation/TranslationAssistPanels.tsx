@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { BilingualChatMessage, ChatLanguage, ChatSenderRole } from "../../lib/chatMessages";
 import { logTranslationUsage, translateText, type TranslationDirection } from "../../lib/translateText";
@@ -23,6 +23,7 @@ declare global {
 }
 
 const MAX_TRANSLATION_CHARS = 300;
+const TRANSLATION_PIP_EXPANDED_SIZE = { width: 320, height: 300 };
 
 function CharacterCount({ value }: { value: string }) {
   const over = value.length > MAX_TRANSLATION_CHARS;
@@ -120,6 +121,29 @@ function CompactTranslationTool({
   );
 }
 
+function TranslationAssistPiPContent({
+  sessionId,
+}: {
+  sessionId: string;
+}) {
+  return (
+    <main className="min-h-screen bg-[var(--brand-bg-900)] p-3 text-[var(--brand-text)]">
+      <CompactTranslationTool
+        sessionId={sessionId}
+        userRole="vtuber"
+        sourceLang="ja"
+        targetLang="en"
+        direction="ja-en"
+        title="翻訳アシスト"
+        inputPlaceholder="日本語を入力"
+        outputLabel="English"
+        translateLabel="英語に翻訳"
+        translatingLabel="翻訳中..."
+      />
+    </main>
+  );
+}
+
 function setupPictureInPictureDocument(pipWindow: Window) {
   pipWindow.document.title = "aiment 翻訳アシスト";
   pipWindow.document.body.innerHTML = "";
@@ -156,16 +180,20 @@ export function VTuberTranslationAssistPanel({ sessionId, messages, className = 
   const pipWindowRef = useRef<Window | null>(null);
   const pipRootRef = useRef<Root | null>(null);
 
+  const closeCurrentPipWindow = useCallback(() => {
+    pipRootRef.current?.unmount();
+    pipRootRef.current = null;
+    if (pipWindowRef.current && !pipWindowRef.current.closed) {
+      pipWindowRef.current.close();
+    }
+    pipWindowRef.current = null;
+  }, []);
+
   useEffect(() => {
     return () => {
-      pipRootRef.current?.unmount();
-      pipRootRef.current = null;
-      if (pipWindowRef.current && !pipWindowRef.current.closed) {
-        pipWindowRef.current.close();
-      }
-      pipWindowRef.current = null;
+      closeCurrentPipWindow();
     };
-  }, []);
+  }, [closeCurrentPipWindow]);
 
   const openPanel = async () => {
     setError(null);
@@ -183,7 +211,9 @@ export function VTuberTranslationAssistPanel({ sessionId, messages, className = 
         return;
       }
 
-      const pipWindow = await documentPictureInPicture.requestWindow({ width: 320, height: 300 });
+      closeCurrentPipWindow();
+
+      const pipWindow = await documentPictureInPicture.requestWindow(TRANSLATION_PIP_EXPANDED_SIZE);
       pipWindowRef.current = pipWindow;
       setupPictureInPictureDocument(pipWindow);
 
@@ -192,20 +222,9 @@ export function VTuberTranslationAssistPanel({ sessionId, messages, className = 
       const root = createRoot(rootElement);
       pipRootRef.current = root;
       root.render(
-        <main className="min-h-screen bg-[var(--brand-bg-900)] p-3 text-[var(--brand-text)]">
-          <CompactTranslationTool
-            sessionId={sessionId}
-            userRole="vtuber"
-            sourceLang="ja"
-            targetLang="en"
-            direction="ja-en"
-            title="翻訳アシスト"
-            inputPlaceholder="日本語を入力"
-            outputLabel="English"
-            translateLabel="英語に翻訳"
-            translatingLabel="翻訳中..."
-          />
-        </main>,
+        <TranslationAssistPiPContent
+          sessionId={sessionId}
+        />,
       );
 
       pipWindow.addEventListener("pagehide", () => {

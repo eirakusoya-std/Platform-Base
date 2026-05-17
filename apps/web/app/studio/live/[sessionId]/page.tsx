@@ -142,7 +142,7 @@ function SpeakerTalkOverlay({
               <div
                 className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all duration-200 ${
                   isSpeaking
-                    ? "border-[var(--brand-primary)]/65 bg-[var(--brand-primary)]/18 shadow-[0_0_22px_rgba(124,106,230,0.22)] backdrop-blur-xl"
+                    ? "border-[var(--brand-primary)]/65 bg-[var(--brand-primary)]/18 backdrop-blur-xl"
                     : "border-white/10 bg-[var(--brand-bg-800)]/50 backdrop-blur-xl"
                 }`}
               >
@@ -155,7 +155,7 @@ function SpeakerTalkOverlay({
                 >
                   <span>{initial || "S"}</span>
                   {isSpeaking ? (
-                    <span className="absolute -inset-1 rounded-full border border-[var(--brand-primary)]/55 shadow-[0_0_18px_rgba(124,106,230,0.55)]" />
+                    <span className="absolute -inset-1 rounded-full border border-[var(--brand-primary)]/55" />
                   ) : null}
                 </div>
 
@@ -306,10 +306,11 @@ function SpeakerOverlayLauncher({
         type="button"
         onClick={() => void openOverlay()}
         aria-label={tx("スピーカーパネルを開く", "Open speaker panel")}
-        className="relative grid h-9 w-9 place-items-center rounded-lg bg-[var(--brand-secondary)] text-black shadow-[0_10px_24px_rgba(255,213,102,0.2)] transition-transform hover:-translate-y-0.5"
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-secondary)] px-3 text-xs font-extrabold text-black transition-transform hover:-translate-y-0.5"
       >
         <ArrowTopRightOnSquareIcon className="h-5 w-5" aria-hidden />
-        <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-black/15 px-1 text-center text-[10px] font-extrabold leading-4">
+        <span>{tx("スピーカー一覧", "Speakers")}</span>
+        <span className="min-w-4 rounded-full bg-black/15 px-1 text-center text-[10px] font-extrabold leading-4">
           {participants.length}
         </span>
       </button>
