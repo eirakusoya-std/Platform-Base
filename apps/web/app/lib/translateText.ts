@@ -28,25 +28,21 @@ export async function translateText({
 }
 
 export function logTranslationUsage({
-  sessionId,
-  userRole,
   direction,
   sourceTextLength,
   translatedTextLength,
 }: {
-  sessionId: string;
-  userRole: ChatSenderRole;
+  sessionId?: string;
+  userRole?: ChatSenderRole;
   direction: TranslationDirection;
   sourceTextLength: number;
   translatedTextLength: number;
 }) {
   console.log("[aiment translation usage]", {
-    sessionId,
-    userRole,
-    direction,
+    provider: "deepl",
     sourceTextLength,
     translatedTextLength,
-    provider: "deepl",
+    direction,
     createdAt: new Date().toISOString(),
   });
 }
