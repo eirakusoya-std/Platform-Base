@@ -258,7 +258,7 @@ export default function StudioPostLivePage() {
 
             <aside>
               <Card className="p-5">
-                <h2 className="text-lg font-extrabold">{tx("運営に送る", "Send to Operations")}</h2>
+                <h2 className="text-lg font-extrabold">{tx("サポートに送る", "Send to Support")}</h2>
                 <p className="mt-1 text-sm leading-relaxed text-[var(--brand-text-muted)]">
                   {tx("配信中に困ったことや、確認してほしいことをこの配信に紐づけて送信できます。", "Send issues or follow-up requests tied to this stream.")}
                 </p>
@@ -302,14 +302,14 @@ export default function StudioPostLivePage() {
                       checked={replyRequested}
                       onChange={(event) => setReplyRequested(event.target.checked)}
                     />
-                    {tx("運営からの返信を希望する", "Request a reply from operations")}
+                    {tx("サポートからの返信を希望する", "Request a reply from support")}
                   </label>
 
                   {formError ? <p className="rounded-xl bg-[var(--brand-accent)]/15 px-3 py-2 text-sm text-[var(--brand-accent)]">{formError}</p> : null}
                   {sent ? <p className="rounded-xl bg-green-500/15 px-3 py-2 text-sm text-green-300">{tx("送信しました。ありがとうございます。", "Sent. Thank you.")}</p> : null}
 
                   <Button type="submit" variant="secondary" fullWidth disabled={submitting}>
-                    {submitting ? tx("送信中...", "Sending...") : tx("運営に送信", "Send to Operations")}
+                    {submitting ? tx("送信中...", "Sending...") : tx("サポートに送信", "Send to Support")}
                   </Button>
                 </form>
               </Card>

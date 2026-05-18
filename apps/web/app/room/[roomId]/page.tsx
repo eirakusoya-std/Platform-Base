@@ -1028,10 +1028,12 @@ export default function RoomPage() {
       <header className="shrink-0 bg-[var(--brand-bg-900)]">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-3 lg:px-12">
           <button onClick={() => router.push("/")} className="flex items-center">
-            <Image src="/logo/aiment_logotype.svg" alt="aiment" width={120} height={40} className="h-8 w-auto object-contain" />
+            <Image src="/logo/aiment_logotype.svg" alt="aiment" width={150} height={50} className="h-10 w-auto object-contain brightness-0 invert" />
           </button>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-[var(--brand-surface)] px-3 py-1 text-xs font-medium text-[var(--brand-text-muted)]">Room: {roomId}</span>
+            <span className="max-w-[260px] truncate rounded-full bg-[var(--brand-surface)] px-3 py-1 text-xs font-medium text-[var(--brand-text-muted)]">
+              {session?.title ?? tx("配信ルーム", "Live room")}
+            </span>
             <span className="rounded-full bg-[var(--brand-surface)] px-3 py-1 text-xs font-medium text-[var(--brand-text-muted)]">Role: {assignedRole}</span>
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold ${

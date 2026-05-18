@@ -1671,6 +1671,25 @@ export async function hasActiveSpeakerReservation(
   return !!findActiveReservation(store, sessionId, userId, "speaker");
 }
 
+export async function hasActiveReservation(
+  userId: string,
+  sessionId: string,
+  type?: ReservationType,
+): Promise<boolean> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows =
+      type == null
+        ? await db`SELECT reservation_id FROM reservations WHERE session_id = ${sessionId} AND user_id = ${userId} AND status = 'reserved'`
+        : await db`SELECT reservation_id FROM reservations WHERE session_id = ${sessionId} AND user_id = ${userId} AND status = 'reserved' AND type = ${type}`;
+    return rows.length > 0;
+  }
+
+  const store = await readStore();
+  return !!findActiveReservation(store, sessionId, userId, type);
+}
+
 export async function cancelReservation(actor: SessionUser, reservationId: string) {
   if (USE_NEON) {
     await ensureSchema();

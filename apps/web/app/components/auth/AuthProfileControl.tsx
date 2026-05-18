@@ -61,7 +61,7 @@ function AuthDropdown({ onClose }: { onClose: () => void }) {
             onClick={() => {
               void logout().then(onClose);
             }}
-            variant="danger"
+            variant="ghost"
             size="md"
             fullWidth
             className="justify-start"

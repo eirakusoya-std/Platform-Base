@@ -335,7 +335,7 @@ export default function ColorLabPage() {
             <div className="bg-[var(--brand-bg-900)] p-4 text-[var(--brand-text)]">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center">
-                  <Image src="/logo/aiment_logotype.svg" alt="aiment" width={120} height={40} className="h-8 w-auto object-contain" />
+                  <Image src="/logo/aiment_logotype.svg" alt="aiment" width={150} height={50} className="h-10 w-auto object-contain brightness-0 invert" />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-[var(--brand-surface)] px-3 py-1 text-xs font-medium text-[var(--brand-text-muted)]">Room: color-lab</span>

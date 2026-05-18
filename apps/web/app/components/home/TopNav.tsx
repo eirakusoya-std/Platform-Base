@@ -31,7 +31,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { locale, setLocale, tx } = useI18n();
-  const { isVtuber, user } = useUserSession();
+  const { isVtuber } = useUserSession();
   const isStudioMode = mode === "studio";
   const navItems: NavItem[] = isVtuber
     ? [
@@ -49,9 +49,9 @@ export function TopNav({ mode = "default" }: TopNavProps) {
               <Image
                 src="/logo/aiment_logotype.svg"
                 alt="aiment"
-                width={120}
-                height={40}
-                className="h-8 w-auto object-contain"
+                width={150}
+                height={50}
+                className="h-10 w-auto object-contain brightness-0 invert"
                 priority
               />
             </Link>
@@ -64,7 +64,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                   const isActive = item.href ? pathname === item.href : false;
                   if (!item.href) {
                     return (
-                      <span key={item.labelJp} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-sm text-[var(--brand-text-muted)]/80">
+                      <span key={item.labelJp} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-[15px] text-[var(--brand-text-muted)]/80">
                         <Icon className="h-4 w-4" aria-hidden />
                         {tx(item.labelJp, item.labelEn)}
                       </span>
@@ -74,7 +74,7 @@ export function TopNav({ mode = "default" }: TopNavProps) {
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-[15px] font-semibold transition-colors ${
                         isActive
                           ? "bg-[var(--brand-primary)] text-white"
                           : "text-[var(--brand-text-muted)] hover:bg-[var(--brand-surface)] hover:text-[var(--brand-text)]"
