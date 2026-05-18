@@ -249,7 +249,7 @@ export function JoinPageClient() {
       <header className="bg-[var(--brand-bg-900)]">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-5 lg:px-12">
           <button onClick={() => router.push("/")} className="flex items-center">
-            <Image src="/logo/aiment_logotype.svg" alt="aiment" width={120} height={40} className="h-8 w-auto object-contain" />
+            <Image src="/logo/aiment_logotype.svg" alt="aiment" width={150} height={50} className="h-10 w-auto object-contain brightness-0 invert" />
           </button>
           <p className="text-sm text-[var(--brand-text-muted)]">{tx("視聴・参加の案内", "Viewing & participation")}</p>
         </div>

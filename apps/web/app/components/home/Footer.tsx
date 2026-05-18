@@ -11,7 +11,7 @@ export function Footer() {
  <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4 md:gap-12">
  <div>
  <div className="mb-4 flex items-center">
- <Image src="/logo/aiment_logotype.svg" alt="aiment" width={120} height={40} className="h-8 w-auto object-contain" />
+ <Image src="/logo/aiment_logotype.svg" alt="aiment" width={150} height={50} className="h-10 w-auto object-contain brightness-0 invert" />
  </div>
  <p className="text-sm leading-relaxed text-[var(--brand-text-muted)]">Beyond Chat. Unlock Distance.</p>
  </div>

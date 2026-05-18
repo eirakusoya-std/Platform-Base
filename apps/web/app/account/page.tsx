@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BellAlertIcon,
@@ -74,11 +74,6 @@ type AccountUiSettings = {
 
 type AccountTab = "profile" | "security" | "notifications" | "billing" | "ops";
 
-type AccountSnapshot = {
-  draft: SessionUser;
-  uiSettings: AccountUiSettings;
-};
-
 const ACCOUNT_TABS: Array<{
   key: AccountTab;
   labelJp: string;
@@ -89,7 +84,7 @@ const ACCOUNT_TABS: Array<{
   { key: "security", labelJp: "セキュリティ", labelEn: "Security", Icon: ShieldCheckIcon },
   { key: "notifications", labelJp: "通知・データ", labelEn: "Notifications & Data", Icon: BellAlertIcon },
   { key: "billing", labelJp: "課金", labelEn: "Billing", Icon: CreditCardIcon },
-  { key: "ops", labelJp: "運用", labelEn: "Operations", Icon: WrenchScrewdriverIcon },
+  { key: "ops", labelJp: "サポート", labelEn: "Support", Icon: WrenchScrewdriverIcon },
 ];
 
 function getSettingsStorageKey(userId: string) {
@@ -125,8 +120,8 @@ function ToggleItem({
     <div className="rounded-lg bg-[var(--brand-surface)] p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-[var(--brand-text)]">{label}</p>
-          <p className="mt-1 text-xs leading-5 text-[var(--brand-text-muted)]">{description}</p>
+          <p className="text-[15px] font-semibold text-[var(--brand-text)]">{label}</p>
+          <p className="mt-1 text-sm leading-6 text-[var(--brand-text-muted)]">{description}</p>
         </div>
         <button
           type="button"
@@ -156,8 +151,8 @@ function SectionCard({
   return (
     <section className={`rounded-xl bg-[var(--brand-surface-soft)] p-5 md:p-6 ${className ?? ""}`}>
       <header className="mb-4">
-        <h2 className="text-lg font-semibold tracking-[0.03em] text-[var(--brand-text)]">{title}</h2>
-        {subtitle ? <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{subtitle}</p> : null}
+        <h2 className="text-xl font-semibold tracking-[0.03em] text-[var(--brand-text)]">{title}</h2>
+        {subtitle ? <p className="mt-1 text-[15px] leading-6 text-[var(--brand-text-muted)]">{subtitle}</p> : null}
       </header>
       <div className="space-y-3">{children}</div>
     </section>
@@ -193,7 +188,8 @@ export default function AccountPage() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [phoneVisible, setPhoneVisible] = useState(false);
   const [emailVisible, setEmailVisible] = useState(false);
-  const [initialSnapshot, setInitialSnapshot] = useState<AccountSnapshot | null>(null);
+  const changeVersionRef = useRef(0);
+  const savedVersionRef = useRef(0);
 
   const defaultUiSettings = useMemo<AccountUiSettings>(
     () => ({
@@ -223,7 +219,8 @@ export default function AccountPage() {
         const parsed = JSON.parse(raw) as Partial<AccountUiSettings>;
         const merged = { ...defaultUiSettings, ...parsed };
         setUiSettings(merged);
-        setInitialSnapshot({ draft: user, uiSettings: merged });
+        changeVersionRef.current = 0;
+        savedVersionRef.current = 0;
         setHasChanges(false);
         return;
       }
@@ -231,7 +228,8 @@ export default function AccountPage() {
       // ignore invalid local state
     }
     setUiSettings(defaultUiSettings);
-    setInitialSnapshot({ draft: user, uiSettings: defaultUiSettings });
+    changeVersionRef.current = 0;
+    savedVersionRef.current = 0;
     setHasChanges(false);
   }, [defaultUiSettings, user]);
 
@@ -257,28 +255,27 @@ export default function AccountPage() {
     void sync();
   }, [isAuthenticated]);
 
+  const markChanged = useCallback(() => {
+    changeVersionRef.current += 1;
+    setHasChanges(true);
+    setMessage(null);
+    setError(null);
+  }, []);
+
   const updateUiSetting = <K extends keyof AccountUiSettings>(key: K, value: AccountUiSettings[K]) => {
     setUiSettings((prev) => {
       if (!prev) return prev;
-      setHasChanges(true);
+      markChanged();
       return { ...prev, [key]: value };
     });
   };
 
-  if (!isAuthenticated || !draft || !uiSettings) {
-    return (
-      <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
-        <TopNav />
-      </div>
-    );
-  }
+  const persistSettings = useCallback(async () => {
+    if (!draft || !uiSettings || !user?.id) return;
 
-  const saveAll = async (event?: FormEvent) => {
-    event?.preventDefault();
+    const saveVersion = changeVersionRef.current;
     setSaving(true);
-    setMessage(null);
     setError(null);
-
     try {
       await request("/api/account/profile", {
         method: "PATCH",
@@ -291,28 +288,32 @@ export default function AccountPage() {
           headerUrl: draft.headerUrl ?? "",
         }),
       });
-      if (user?.id) {
-        window.localStorage.setItem(getSettingsStorageKey(user.id), JSON.stringify(uiSettings));
-      }
-      await refreshSession();
-      setInitialSnapshot({ draft: { ...draft }, uiSettings: { ...uiSettings } });
-      setHasChanges(false);
-      setMessage(tx("設定を保存しました。", "Settings saved."));
+      window.localStorage.setItem(getSettingsStorageKey(user.id), JSON.stringify(uiSettings));
+      savedVersionRef.current = saveVersion;
+      setHasChanges(changeVersionRef.current !== saveVersion);
+      setMessage(tx("自動保存しました。", "Saved automatically."));
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : tx("保存に失敗しました。", "Failed to save settings."));
     } finally {
       setSaving(false);
     }
-  };
+  }, [draft, tx, uiSettings, user?.id]);
 
-  const resetAll = () => {
-    if (!initialSnapshot) return;
-    setDraft({ ...initialSnapshot.draft });
-    setUiSettings({ ...initialSnapshot.uiSettings });
-    setHasChanges(false);
-    setMessage(null);
-    setError(null);
-  };
+  useEffect(() => {
+    if (!hasChanges || !draft || !uiSettings || !user?.id) return;
+    const timer = window.setTimeout(() => {
+      void persistSettings();
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [draft, hasChanges, persistSettings, uiSettings, user?.id]);
+
+  if (!isAuthenticated || !draft || !uiSettings) {
+    return (
+      <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
+        <TopNav />
+      </div>
+    );
+  }
 
   const startCheckout = async () => {
     setBillingLoading(true);
@@ -405,9 +406,7 @@ export default function AccountPage() {
       const result = typeof reader.result === "string" ? reader.result : "";
       if (!result) return;
       setDraft((prev) => (prev ? { ...prev, avatarUrl: result } : prev));
-      setHasChanges(true);
-      setMessage(null);
-      setError(null);
+      markChanged();
     };
     reader.onerror = () => {
       setError(tx("画像の読み込みに失敗しました。", "Failed to load image."));
@@ -430,9 +429,7 @@ export default function AccountPage() {
       const result = typeof reader.result === "string" ? reader.result : "";
       if (!result) return;
       setDraft((prev) => (prev ? { ...prev, headerUrl: result } : prev));
-      setHasChanges(true);
-      setMessage(null);
-      setError(null);
+      markChanged();
     };
     reader.onerror = () => {
       setError(tx("画像の読み込みに失敗しました。", "Failed to load image."));
@@ -441,22 +438,29 @@ export default function AccountPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--brand-bg-900)]">
+    <div className="account-settings-page min-h-screen bg-[var(--brand-bg-900)]">
       <TopNav />
 
+      <div className="border-b border-white/10 bg-[var(--brand-surface)]/70 px-4 py-3 text-sm leading-6 text-[var(--brand-text-muted)] lg:hidden">
+        {tx(
+          "アカウント設定はPCでの操作を推奨しています。スマートフォンでは横にスクロールできるメニューから項目を選べます。",
+          "Account settings work best on desktop. On mobile, swipe the menu sideways to choose a section.",
+        )}
+      </div>
+
       <main className="min-h-[calc(100vh-72px)] lg:grid lg:grid-cols-[240px_1fr]">
-        <aside className="bg-[var(--brand-surface)] p-3 lg:min-h-[calc(100vh-72px)] lg:rounded-none">
+        <aside className="overflow-x-auto bg-[var(--brand-surface)] p-3 lg:min-h-[calc(100vh-72px)] lg:overflow-visible lg:rounded-none">
           <div className="lg:sticky lg:top-[84px]">
-            <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--brand-text-muted)]">
+            <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.15em] text-[var(--brand-text-muted)]">
               ACCOUNT MENU
             </p>
-            <div className="space-y-1">
+            <div className="flex gap-2 lg:block lg:space-y-1">
               {ACCOUNT_TABS.map(({ key, labelJp, labelEn, Icon }) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setActiveTab(key)}
-                  className={`flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold transition ${
+                  className={`flex h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-left text-[15px] font-semibold transition lg:w-full ${
                     activeTab === key
                       ? "bg-[var(--brand-primary)] text-white"
                       : "bg-[var(--brand-surface)] text-[var(--brand-text)]"
@@ -470,33 +474,35 @@ export default function AccountPage() {
           </div>
         </aside>
 
-        <section className="min-w-0 px-4 py-6 pb-16 lg:px-8">
+        <section className="min-w-0 px-4 py-6 pb-28 lg:px-8 lg:pb-16">
           <div className="w-full">
             <header className="mb-6">
-              <p className="text-[11px] uppercase tracking-[0.32em] text-[var(--brand-text-muted)]">Account Settings</p>
+              <p className="text-xs uppercase tracking-[0.22em] text-[var(--brand-text-muted)]">Account Settings</p>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <h1 className="text-3xl font-semibold tracking-[0.03em] text-[var(--brand-text)]">{tx("アカウント設定", "Account Settings")}</h1>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void logout().then(() => {
+                      router.push("/");
+                    });
+                  }}
+                  className="h-10 rounded-lg bg-[var(--brand-surface)] px-4 text-sm font-semibold text-[var(--brand-text)]"
+                >
+                  {tx("ログアウト", "Log out")}
+                </button>
               </div>
-              <p className="mt-2 text-sm text-[var(--brand-text-muted)]">
-                {tx("プロフィール、認証、通知、課金、運用連絡を管理できます。", "Manage your profile, verification, notifications, billing, and operations reports.")}
+              <p className="mt-2 text-[15px] leading-6 text-[var(--brand-text-muted)]">
+                {tx("プロフィール、認証、通知、課金、サポートへの連絡を管理できます。", "Manage your profile, verification, notifications, billing, and support requests.")}
               </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void saveAll()}
-                  className="h-10 rounded-lg bg-[var(--brand-secondary)] px-4 text-sm font-semibold text-[var(--brand-bg-900)] disabled:opacity-60"
-                  disabled={saving}
-                >
-                  {saving ? tx("保存中...", "Saving...") : tx("変更を保存", "Save Changes")}
-                </button>
-                <button
-                  type="button"
-                  onClick={resetAll}
-                  className="h-10 rounded-lg bg-[var(--brand-surface)] px-4 text-sm font-medium text-[var(--brand-text)]"
-                >
-                  {tx("リセット", "Reset")}
-                </button>
-                {hasChanges ? <p className="text-sm text-[var(--brand-text-muted)]">{tx("未保存の変更があります。", "You have unsaved changes.")}</p> : null}
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[var(--brand-text-muted)]">
+                <span className={`rounded-full px-3 py-1 ${saving ? "bg-[var(--brand-secondary)]/15 text-[var(--brand-secondary)]" : "bg-[var(--brand-surface)]"}`}>
+                  {saving
+                    ? tx("自動保存中...", "Auto-saving...")
+                    : hasChanges
+                      ? tx("まもなく自動保存されます", "Auto-save pending")
+                      : tx("保存済み", "Saved")}
+                </span>
               </div>
               {message ? <p className="mt-3 text-sm text-[var(--brand-secondary)]">{message}</p> : null}
               {error ? <p className="mt-3 text-sm text-[var(--brand-accent)]">{error}</p> : null}
@@ -505,7 +511,7 @@ export default function AccountPage() {
             <div className="grid gap-4 lg:grid-cols-2">
           {activeTab === "profile" ? (
             <SectionCard title={tx("プロフィール", "Profile")} subtitle={tx("表示情報と基本アカウント情報", "Display details and basic account information")} className="lg:col-span-2">
-              <form onSubmit={saveAll} className="space-y-4">
+              <div className="space-y-4">
                 <div className="rounded-lg bg-[var(--brand-surface)] p-4">
                   <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
                     <div className="overflow-hidden rounded-lg bg-[var(--brand-bg-800)]">
@@ -552,7 +558,7 @@ export default function AccountPage() {
                             type="button"
                             onClick={() => {
                               setDraft((prev) => (prev ? { ...prev, headerUrl: undefined } : prev));
-                              setHasChanges(true);
+                              markChanged();
                             }}
                             className="ui-btn ui-btn-sm ui-btn-ghost"
                           >
@@ -576,7 +582,7 @@ export default function AccountPage() {
                             type="button"
                             onClick={() => {
                               setDraft((prev) => (prev ? { ...prev, avatarUrl: undefined } : prev));
-                              setHasChanges(true);
+                              markChanged();
                             }}
                             className="ui-btn ui-btn-sm ui-btn-ghost"
                           >
@@ -596,7 +602,7 @@ export default function AccountPage() {
                       value={draft.name}
                       onChange={(event) => {
                         setDraft((prev) => (prev ? { ...prev, name: event.target.value } : prev));
-                        setHasChanges(true);
+                        markChanged();
                       }}
                       className="mt-2 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
                     />
@@ -621,7 +627,7 @@ export default function AccountPage() {
                       value={draft.channelName ?? ""}
                       onChange={(event) => {
                         setDraft((prev) => (prev ? { ...prev, channelName: event.target.value } : prev));
-                        setHasChanges(true);
+                        markChanged();
                       }}
                       className="mt-2 h-10 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
                     />
@@ -634,13 +640,13 @@ export default function AccountPage() {
                     value={draft.bio ?? ""}
                     onChange={(event) => {
                       setDraft((prev) => (prev ? { ...prev, bio: event.target.value } : prev));
-                      setHasChanges(true);
+                      markChanged();
                     }}
                     rows={6}
                     className="mt-2 w-full rounded-lg bg-[var(--brand-bg-800)] px-3 py-3 text-sm text-[var(--brand-text)] outline-none ring-1 ring-transparent focus:ring-[var(--brand-secondary)]"
                   />
                 </div>
-              </form>
+              </div>
             </SectionCard>
           ) : null}
 
@@ -825,22 +831,22 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "ops" ? (
-            <SectionCard title="Monitoring" subtitle={tx("接続失敗率、決済失敗、サーバーエラー", "Connection failure rate, payment failures, and server errors")}>
+            <SectionCard title={tx("サービス状況", "Service Status")} subtitle={tx("接続や決済に関する現在の状態", "Current status for connections and payments")}>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Connection Failure</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--brand-text-muted)]">{tx("接続失敗率", "Connection Failure")}</p>
                 <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{monitoringSummary?.connectionFailureRate ?? 0}%</p>
               </div>
               <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Payment Failures</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--brand-text-muted)]">{tx("決済エラー", "Payment Issues")}</p>
                 <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{monitoringSummary?.paymentFailures ?? 0}</p>
               </div>
               <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Server Errors</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--brand-text-muted)]">{tx("システムエラー", "System Issues")}</p>
                 <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{monitoringSummary?.serverErrors ?? 0}</p>
               </div>
               <div className="rounded-lg bg-[var(--brand-surface)] p-4">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--brand-text-muted)]">Connection Attempts</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--brand-text-muted)]">{tx("接続試行", "Connection Attempts")}</p>
                 <p className="mt-1 text-lg font-semibold text-[var(--brand-text)]">{monitoringSummary?.connectionAttempts ?? 0}</p>
               </div>
             </div>
@@ -863,7 +869,7 @@ export default function AccountPage() {
           ) : null}
 
           {activeTab === "ops" ? (
-            <SectionCard title="Reports" subtitle={tx("最低限の通報導線と保存", "Basic reporting flow and saved reports")}>
+            <SectionCard title={tx("お問い合わせ・通報", "Support & Reports")} subtitle={tx("困ったことや不適切な内容をサポートへ送れます。", "Send issues or inappropriate content to support.")}>
             <div className="grid gap-3">
               <select
                 value={reportTargetType}
@@ -886,11 +892,11 @@ export default function AccountPage() {
                 onChange={(event) => setReportCategory(event.target.value as ReportCategory)}
                 className="h-10 rounded-lg bg-[var(--brand-surface)] px-3 text-sm outline-none"
               >
-                <option value="abuse">abuse</option>
-                <option value="harassment">harassment</option>
-                <option value="impersonation">impersonation</option>
-                <option value="billing">billing</option>
-                <option value="other">other</option>
+                <option value="abuse">{tx("迷惑行為", "Abuse")}</option>
+                <option value="harassment">{tx("ハラスメント", "Harassment")}</option>
+                <option value="impersonation">{tx("なりすまし", "Impersonation")}</option>
+                <option value="billing">{tx("決済", "Billing")}</option>
+                <option value="other">{tx("その他", "Other")}</option>
               </select>
               <textarea
                 value={reportDetails}
@@ -923,20 +929,9 @@ export default function AccountPage() {
 
             {activeTab === "profile" ? (
               <section className="mt-4 rounded-xl bg-[var(--brand-surface-soft)] p-5 md:p-6">
-                <h2 className="text-lg font-semibold text-[var(--brand-accent)]">Danger Zone</h2>
-                <p className="mt-1 text-sm text-[var(--brand-text-muted)]">{tx("不可逆な操作です。実行前に確認してください。", "These actions cannot be undone. Please confirm before proceeding.")}</p>
+                <h2 className="text-xl font-semibold text-[var(--brand-accent)]">{tx("アカウント削除", "Delete Account")}</h2>
+                <p className="mt-1 text-[15px] leading-6 text-[var(--brand-text-muted)]">{tx("アカウント削除は取り消せません。実行前に内容を確認してください。", "Deleting your account cannot be undone. Please review before proceeding.")}</p>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void logout().then(() => {
-                        router.push("/");
-                      });
-                    }}
-                    className="h-11 rounded-lg bg-[var(--brand-accent)] px-5 text-sm font-semibold text-white"
-                  >
-                    {tx("ログアウト", "Log out")}
-                  </button>
                   {deleteConfirm ? (
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-[var(--brand-accent)]">{tx("本当に削除しますか？", "Are you sure you want to delete this account?")}</span>

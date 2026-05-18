@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createVtuberToken, createSpeakerToken, createListenerToken } from "@repo/livekit";
 import { resolveSessionUser } from "@/app/lib/server/auth";
-import { hasActiveSpeakerReservation } from "@/app/lib/server/aimentStore";
+import {
+  getStreamSessionById,
+  hasActiveReservation,
+  hasActiveSpeakerReservation,
+} from "@/app/lib/server/aimentStore";
+import { canAccessPlan, getEffectivePlanForUser } from "@/app/lib/server/billingStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +14,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const { sessionId, role } = (await request.json()) as { sessionId: string; role: "vtuber" | "speaker" | "listener" };
+    if (!sessionId || !["vtuber", "speaker", "listener"].includes(role)) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
 
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
@@ -18,17 +26,50 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "LiveKit not configured" }, { status: 500 });
     }
 
-    // vtuber and speaker require authentication; listener can be anonymous
+    const session = await getStreamSessionById(sessionId);
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
     const sessionUser = await resolveSessionUser();
-    if (role !== "listener" && !sessionUser) {
+
+    if (role === "vtuber") {
+      if (!sessionUser) {
+        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      }
+      if (sessionUser.role !== "vtuber" || session.hostUserId !== sessionUser.id) {
+        return NextResponse.json({ error: "Only the session host can join as VTuber" }, { status: 403 });
+      }
+    }
+
+    if (role !== "vtuber" && session.status !== "live") {
+      return NextResponse.json({ error: "Broadcast is not live" }, { status: 403 });
+    }
+
+    if (role === "speaker" && !sessionUser) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    // speaker requires an active reservation
     if (role === "speaker") {
       const reserved = await hasActiveSpeakerReservation(sessionUser!.id, sessionId);
       if (!reserved) {
         return NextResponse.json({ error: "Speaker reservation required" }, { status: 403 });
+      }
+    }
+
+    if (role === "listener" && (session.reservationRequired || session.requiredPlan !== "free")) {
+      if (!sessionUser) {
+        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      }
+      const userPlan = await getEffectivePlanForUser(sessionUser.id);
+      if (!canAccessPlan(userPlan, session.requiredPlan)) {
+        return NextResponse.json({ error: `This session requires the ${session.requiredPlan} plan` }, { status: 403 });
+      }
+      if (session.reservationRequired) {
+        const reserved = await hasActiveReservation(sessionUser.id, sessionId, "listener");
+        if (!reserved) {
+          return NextResponse.json({ error: "Reservation required" }, { status: 403 });
+        }
       }
     }
 
