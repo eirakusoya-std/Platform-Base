@@ -18,6 +18,8 @@ type CreateStreamSessionInput = {
   speakerRequiredPlan?: SubscriptionPlan;
   preferredVideoDeviceId?: string;
   preferredVideoLabel?: string;
+  plannedDurationMin?: number;
+  japaneseLevel?: number;
 };
 
 const UPDATE_EVENT = "aiment-stream-sessions-updated";

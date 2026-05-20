@@ -344,6 +344,7 @@ export default function StudioLiveSessionPage() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [connectedViewers, setConnectedViewers] = useState(0);
   const [obsConnected, setObsConnected] = useState(false);
+  const [speakerReservations, setSpeakerReservations] = useState<{ reservationId: string; userName: string }[]>([]);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
@@ -450,6 +451,31 @@ export default function StudioLiveSessionPage() {
     };
   }, [session, sessionId]);
 
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+
+    const loadHostReservations = async () => {
+      try {
+        const res = await fetch(
+          `/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations?asHost=1`,
+          { cache: "no-store" },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { reservations?: { reservationId: string; userName: string }[] };
+        if (!cancelled) setSpeakerReservations(data.reservations ?? []);
+      } catch {
+        // no-op
+      }
+    };
+
+    void loadHostReservations();
+    const timer = window.setInterval(() => void loadHostReservations(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [sessionId]);
 
   const metrics = useMemo(
     () => [
@@ -1044,6 +1070,29 @@ export default function StudioLiveSessionPage() {
         </section>
 
         <aside className="sticky top-4 max-h-[calc(100vh-88px)] self-start space-y-3 overflow-y-auto pr-1">
+          <section className="rounded-2xl bg-[var(--brand-surface)] p-3 shadow-lg shadow-black/25">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー予約", "Speaker Reservations")}</p>
+              <span className="rounded-full bg-[var(--brand-primary)]/20 px-2 py-0.5 text-[10px] font-bold text-[var(--brand-primary)]">
+                {speakerReservations.length}
+              </span>
+            </div>
+            {speakerReservations.length === 0 ? (
+              <p className="text-xs text-[var(--brand-text-muted)]">{tx("予約者なし", "No reservations yet")}</p>
+            ) : (
+              <ul className="space-y-1">
+                {speakerReservations.map((r) => (
+                  <li key={r.reservationId} className="flex items-center gap-2 rounded-lg bg-[var(--brand-bg-900)] px-2.5 py-1.5">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)]/25 text-[10px] font-bold text-[var(--brand-primary)]">
+                      {(r.userName || "?").charAt(0).toUpperCase()}
+                    </span>
+                    <span className="truncate text-xs font-semibold text-[var(--brand-text)]">{r.userName}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <section className="flex h-[520px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
             <div className="border-b border-black/20 px-3 py-2">
               <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
