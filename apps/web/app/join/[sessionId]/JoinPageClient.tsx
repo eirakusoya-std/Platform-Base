@@ -30,8 +30,6 @@ export function JoinPageClient() {
   const [dynamicSession, setDynamicSession] = useState<Awaited<ReturnType<typeof getStreamSession>>>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [reservationStatus, setReservationStatus] = useState<ReservationStatus>("loading");
-  const [reserving, setReserving] = useState(false);
-  const [reserveError, setReserveError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<"watch" | "speaker" | null>(null);
 
   const { isAuthenticated, hydrated, user } = useUserSession();
@@ -76,26 +74,8 @@ export function JoinPageClient() {
     }
   }, [authStatus, checkReservation]);
 
-  const handleReserve = async () => {
-    setReserving(true);
-    setReserveError(null);
-    try {
-      const res = await fetch(`/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "speaker" }),
-      });
-      if (res.ok) {
-        setReservationStatus("reserved");
-      } else {
-        const data = (await res.json()) as { error?: string };
-        setReserveError(data.error ?? tx("予約に失敗しました", "Reservation failed"));
-      }
-    } catch {
-      setReserveError(tx("予約に失敗しました", "Reservation failed"));
-    } finally {
-      setReserving(false);
-    }
+  const goToSpeakerCheckout = () => {
+    router.push(`/join/${encodeURIComponent(sessionId)}/speaker-checkout`);
   };
 
   const session = useMemo<SessionMeta>(() => {
@@ -218,8 +198,7 @@ export function JoinPageClient() {
   };
 
   const watchNow = () => {
-    const roomId = encodeURIComponent(session.id);
-    router.push(`/room/${roomId}?role=listener`);
+    // リスナー機能は一時的に無効
   };
 
   const joinNow = () => {
@@ -318,9 +297,17 @@ export function JoinPageClient() {
               {tx("視聴はすぐ始められます。会話参加はログイン後に申し込みへ進みます。", "Watching starts right away. Speaking continues to application after login.")}
             </p>
             <div className="mt-4 grid gap-2">
-              <button onClick={watchNow} className="w-full rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-white">
-                {tx("視聴する", "Watch now")}
-              </button>
+              <div className="relative">
+                <button
+                  disabled
+                  className="w-full cursor-not-allowed rounded-xl bg-[var(--brand-surface)] px-4 py-3 text-sm font-bold text-[var(--brand-text-muted)] opacity-50"
+                >
+                  {tx("視聴する（準備中）", "Watch now (coming soon)")}
+                </button>
+                <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[var(--brand-surface-soft)] px-2 py-0.5 text-[10px] text-[var(--brand-text-muted)]">
+                  {tx("一時的に利用不可", "Temporarily unavailable")}
+                </span>
+              </div>
               <button
                 onClick={() => setSelectedPath("speaker")}
                 className={`w-full rounded-xl px-4 py-3 text-sm font-bold transition-colors ${
@@ -384,16 +371,24 @@ export function JoinPageClient() {
                       )
                     : tx("スピーカー枠の詳細を確認しています", "Checking speaker slots...")}
                 </p>
+                <p className="mt-2 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-xs text-[var(--brand-text-muted)]">
+                  {dynamicSession?.plannedDurationMin != null
+                    ? tx(
+                        `参加費: ₱${dynamicSession.plannedDurationMin <= 60 ? 200 : 400}（配信予定${dynamicSession.plannedDurationMin}分）`,
+                        `Fee: ₱${dynamicSession.plannedDurationMin <= 60 ? 200 : 400} (${dynamicSession.plannedDurationMin} min session)`,
+                      )
+                    : tx("参加費: ₱200", "Fee: ₱200")}
+                </p>
               </div>
 
-              {reserveError && <p className="rounded-xl bg-[var(--brand-accent)]/15 px-4 py-3 text-sm text-[var(--brand-accent)]">{reserveError}</p>}
-
               <button
-                onClick={() => void handleReserve()}
-                disabled={reserving || (dynamicSession != null && dynamicSession.speakerSlotsLeft === 0)}
+                onClick={goToSpeakerCheckout}
+                disabled={dynamicSession != null && dynamicSession.speakerSlotsLeft === 0}
                 className="w-full rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[var(--brand-text-muted)]"
               >
-                {reserving ? tx("申し込み中...", "Applying...") : tx("スピーカー参加を申し込む", "Apply as speaker")}
+                {dynamicSession != null && dynamicSession.speakerSlotsLeft === 0
+                  ? tx("満枠です", "No slots left")
+                  : tx("支払いへ進む →", "Continue to payment →")}
               </button>
             </div>
           )}

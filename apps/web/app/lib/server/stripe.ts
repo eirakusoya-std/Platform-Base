@@ -20,6 +20,16 @@ export async function getStripeClient() {
 
 type StripePriceKey = Exclude<SubscriptionPlan, "free"> | TicketType;
 
+/** Speaker session fee: ≤60min → 200PHP, >60min → 400PHP */
+export function getSpeakerSessionPriceId(plannedDurationMin: number): string | undefined {
+  if (plannedDurationMin <= 60) return process.env.STRIPE_PRICE_SPEAKER_200?.trim();
+  return process.env.STRIPE_PRICE_SPEAKER_400?.trim();
+}
+
+export function getSpeakerSessionAmountPhp(plannedDurationMin: number): number {
+  return plannedDurationMin <= 60 ? 200 : 400;
+}
+
 export function getStripePriceId(key: StripePriceKey) {
   if (key === "aimer") return process.env.STRIPE_PRICE_AIMER?.trim();
   if (key === "1on1_10min") return process.env.STRIPE_PRICE_1ON1_10MIN?.trim();

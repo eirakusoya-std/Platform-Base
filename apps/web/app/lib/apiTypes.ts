@@ -87,6 +87,10 @@ export type StreamSession = {
   speakerRequiredPlan: SubscriptionPlan;
   preferredVideoDeviceId?: string;
   preferredVideoLabel?: string;
+  /** Planned duration in minutes (used for speaker fee tier) */
+  plannedDurationMin?: number;
+  /** Required Japanese level 1–5 */
+  japaneseLevel?: number;
   /** OBS stream key info — only returned to the session host */
   ingressId?: string;
   streamKey?: string;
@@ -108,6 +112,8 @@ export type CreateStreamSessionInput = {
   speakerRequiredPlan?: SubscriptionPlan;
   preferredVideoDeviceId?: string;
   preferredVideoLabel?: string;
+  plannedDurationMin?: number;
+  japaneseLevel?: number;
 };
 
 export type UpdateStreamSessionInput = Partial<
@@ -128,6 +134,8 @@ export type UpdateStreamSessionInput = Partial<
     | "speakerRequiredPlan"
     | "preferredVideoDeviceId"
     | "preferredVideoLabel"
+    | "plannedDurationMin"
+    | "japaneseLevel"
   >
 >;
 
