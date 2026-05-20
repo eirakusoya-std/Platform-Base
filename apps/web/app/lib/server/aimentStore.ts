@@ -168,6 +168,8 @@ function normalizeStreamSession(entry: Partial<StreamSession>): StreamSession | 
     ingressId: typeof entry.ingressId === "string" ? entry.ingressId : undefined,
     streamKey: typeof entry.streamKey === "string" ? entry.streamKey : undefined,
     rtmpUrl: typeof entry.rtmpUrl === "string" ? entry.rtmpUrl : undefined,
+    plannedDurationMin: typeof entry.plannedDurationMin === "number" ? entry.plannedDurationMin : undefined,
+    japaneseLevel: typeof entry.japaneseLevel === "number" ? entry.japaneseLevel : undefined,
   };
 }
 
@@ -350,6 +352,8 @@ async function initSchema() {
   await db`ALTER TABLE stream_sessions ADD COLUMN IF NOT EXISTS ingress_id TEXT`;
   await db`ALTER TABLE stream_sessions ADD COLUMN IF NOT EXISTS stream_key TEXT`;
   await db`ALTER TABLE stream_sessions ADD COLUMN IF NOT EXISTS rtmp_url TEXT`;
+  await db`ALTER TABLE stream_sessions ADD COLUMN IF NOT EXISTS planned_duration_min INTEGER`;
+  await db`ALTER TABLE stream_sessions ADD COLUMN IF NOT EXISTS japanese_level INTEGER`;
   await db`
     CREATE TABLE IF NOT EXISTS reservations (
       reservation_id TEXT PRIMARY KEY,
@@ -420,6 +424,8 @@ function rowToStreamSession(row: any): StreamSession {
     ingressId: row.ingress_id ?? undefined,
     streamKey: row.stream_key ?? undefined,
     rtmpUrl: row.rtmp_url ?? undefined,
+    plannedDurationMin: row.planned_duration_min != null ? Number(row.planned_duration_min) : undefined,
+    japaneseLevel: row.japanese_level != null ? Number(row.japanese_level) : undefined,
   };
 }
 
@@ -1192,7 +1198,8 @@ export async function createStreamSession(
         session_id, host_user_id, title, status, created_at, starts_at, description,
         category, thumbnail, host_name, participation_type, required_plan,
         reservation_required, slots_total, slots_left, speaker_slots_total, speaker_slots_left,
-        speaker_required_plan, preferred_video_device_id, preferred_video_label
+        speaker_required_plan, preferred_video_device_id, preferred_video_label,
+        planned_duration_min, japanese_level
       ) VALUES (
         ${sessionId}, ${hostUser.id}, ${input.title.trim()}, 'prelive', ${now},
         ${normalizeStartsAt(input.startsAt)}, ${input.description.trim()}, ${input.category.trim()},
@@ -1201,7 +1208,8 @@ export async function createStreamSession(
         ${input.participationType ?? "First-come"}, ${input.requiredPlan ?? "free"},
         ${input.reservationRequired === true}, ${slotsTotal}, ${slotsTotal},
         ${speakerSlotsTotal}, ${speakerSlotsTotal}, ${input.speakerRequiredPlan ?? "free"},
-        ${input.preferredVideoDeviceId ?? null}, ${input.preferredVideoLabel ?? null}
+        ${input.preferredVideoDeviceId ?? null}, ${input.preferredVideoLabel ?? null},
+        ${input.plannedDurationMin ?? null}, ${input.japaneseLevel ?? null}
       )
     `;
 
@@ -1235,6 +1243,8 @@ export async function createStreamSession(
       speakerRequiredPlan: input.speakerRequiredPlan ?? "free",
       preferredVideoDeviceId: input.preferredVideoDeviceId,
       preferredVideoLabel: input.preferredVideoLabel,
+      plannedDurationMin: input.plannedDurationMin,
+      japaneseLevel: input.japaneseLevel,
     };
 
     store.streamSessions.unshift(next);

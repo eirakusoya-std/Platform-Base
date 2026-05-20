@@ -27,6 +27,17 @@ export function getStripePriceId(key: StripePriceKey) {
   return undefined;
 }
 
+/** Speaker session fee: ≤60min → 200PHP, >60min → 400PHP */
+export function getSpeakerSessionPriceId(plannedDurationMin: number): string | undefined {
+  if (plannedDurationMin <= 60) return process.env.STRIPE_PRICE_SPEAKER_200?.trim();
+  return process.env.STRIPE_PRICE_SPEAKER_400?.trim();
+}
+
+/** Speaker session PHP amount for display */
+export function getSpeakerSessionAmountPhp(plannedDurationMin: number): number {
+  return plannedDurationMin <= 60 ? 200 : 400;
+}
+
 function buildBillingUrl(returnPath: string | undefined, status: "success" | "cancel") {
   const appUrl = getRuntimeConfig().appUrl;
   const path = returnPath?.startsWith("/") && !returnPath.startsWith("//") ? returnPath : "/account";

@@ -102,6 +102,7 @@ export default function StudioLiveSessionPage() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [connectedViewers, setConnectedViewers] = useState(0);
   const [obsConnected, setObsConnected] = useState(false);
+  const [speakerReservations, setSpeakerReservations] = useState<{ reservationId: string; userName: string }[]>([]);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const remoteAudioContainerRef = useRef<HTMLDivElement | null>(null);
@@ -149,6 +150,26 @@ export default function StudioLiveSessionPage() {
     };
   }, [sessionId]);
 
+  useEffect(() => {
+    if (!sessionId) return;
+    const load = async () => {
+      try {
+        const res = await fetch(
+          `/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations?asHost=1`,
+          { cache: "no-store" },
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { reservations?: { reservationId: string; userName: string }[] };
+          setSpeakerReservations(data.reservations ?? []);
+        }
+      } catch {
+        // no-op
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [sessionId]);
 
   const metrics = useMemo(
     () => [
@@ -541,6 +562,24 @@ export default function StudioLiveSessionPage() {
                   sessionId={sessionId}
                   onConnectionChange={setObsConnected}
                 />
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー予約者", "Speaker Reservations")}</p>
+                <div className="space-y-1">
+                  {speakerReservations.length === 0 ? (
+                    <p className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs text-[var(--brand-text-muted)]">
+                      {tx("まだ予約者はいません", "No reservations yet")}
+                    </p>
+                  ) : (
+                    speakerReservations.map((r) => (
+                      <div key={r.reservationId} className="flex items-center gap-2 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
+                        <span className="h-2 w-2 rounded-full bg-[var(--brand-primary)]" />
+                        <p className="text-xs font-semibold text-[var(--brand-text)]">{r.userName}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div>
