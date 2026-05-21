@@ -45,6 +45,62 @@ export async function sendEarlyAccessNotification(opts: {
   );
 }
 
+export async function sendStreamReminder(opts: {
+  to: string;
+  userName: string;
+  sessionTitle: string;
+  sessionId: string;
+  startsAt: Date;
+  isPaid: boolean;
+}): Promise<void> {
+  const { to, userName, sessionTitle, sessionId, startsAt, isPaid } = opts;
+  const client = getSendGridClient();
+  const joinUrl = `https://aiment.jp/join/${encodeURIComponent(sessionId)}`;
+  const startStr = startsAt.toLocaleString("en-US", { timeZone: "Asia/Tokyo", hour12: false });
+
+  const paymentWarning = isPaid
+    ? ""
+    : `\n\n⚠️ Payment required: Your speaker reservation is not yet paid. You will NOT be able to enter the session without completing payment. Please visit the link below and pay before the stream starts.\n${joinUrl}`;
+
+  const paymentWarningHtml = isPaid
+    ? ""
+    : `
+      <div style="background:#2a1a2e;border:1px solid #7c3aed;border-radius:12px;padding:16px;margin:20px 0;">
+        <p style="color:#f472b6;font-weight:bold;margin:0 0 8px;">⚠️ Payment Required</p>
+        <p style="color:#e8e8f0;margin:0;font-size:14px;">Your speaker reservation is <strong>not yet paid</strong>. You will <strong>not be able to enter</strong> the session without completing payment. Please pay before the stream starts.</p>
+        <a href="${joinUrl}" style="display:inline-block;margin-top:12px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:8px;padding:10px 20px;font-weight:bold;">Pay now →</a>
+      </div>`;
+
+  if (!client) {
+    console.info(`[mailer] Stream reminder for ${to}: "${sessionTitle}" starts at ${startStr}${paymentWarning}`);
+    return;
+  }
+
+  await client.send({
+    to,
+    from: { email: FROM_EMAIL, name: "Aiment" },
+    subject: `[Aiment] "${sessionTitle}" starts in 3 hours!`,
+    text: `Hi ${userName},\n\nYour reserved session is starting in 3 hours!\n\nSession: ${sessionTitle}\nStarts: ${startStr} (JST)\nJoin: ${joinUrl}${paymentWarning}\n\n— Aiment Team`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0f0f14;color:#e8e8f0;border-radius:16px;">
+        <h2 style="color:#a78bfa;margin-bottom:4px;">Aiment</h2>
+        <p style="color:#9090a0;margin:0 0 24px;font-size:13px;">Stream Reminder</p>
+        <h3 style="margin:0 0 8px;font-size:18px;">Your session starts in 3 hours!</h3>
+        <p style="color:#9090a0;margin:0 0 20px;">Hi ${userName}, get ready — the stream is almost here.</p>
+        <div style="background:#1a1a2e;border-radius:12px;padding:20px;margin-bottom:20px;">
+          <p style="margin:0 0 8px;font-size:13px;color:#9090a0;">Session</p>
+          <p style="margin:0 0 16px;font-weight:bold;font-size:16px;">${sessionTitle}</p>
+          <p style="margin:0 0 4px;font-size:13px;color:#9090a0;">Starts at (JST)</p>
+          <p style="margin:0;font-size:15px;">${startStr}</p>
+        </div>
+        ${paymentWarningHtml}
+        <a href="${joinUrl}" style="display:block;text-align:center;background:#7c3aed;color:#fff;text-decoration:none;border-radius:12px;padding:14px;font-weight:bold;font-size:15px;">Join the session →</a>
+        <p style="color:#9090a0;font-size:12px;margin-top:24px;text-align:center;">— Aiment Team</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendVerificationEmail(to: string, code: string): Promise<void> {
   const client = getSendGridClient();
   if (!client) {

@@ -1216,6 +1216,68 @@ function isAdminUser(userId: string) {
   return ADMIN_IDS.length > 0 && ADMIN_IDS.includes(userId);
 }
 
+/**
+ * Returns sessions in `prelive` status whose `starts_at` falls within [windowStart, windowEnd],
+ * along with all active speaker reservations for those sessions and their user emails.
+ * Used by the 3-hour reminder cron job.
+ */
+export async function listSessionsStartingBetween(windowStart: Date, windowEnd: Date) {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const sessionRows = await db`
+      SELECT * FROM stream_sessions
+      WHERE status = 'prelive'
+        AND starts_at >= ${windowStart.toISOString()}
+        AND starts_at < ${windowEnd.toISOString()}
+    `;
+    const sessions = sessionRows.map(rowToStreamSession);
+
+    const results: Array<{
+      session: ReturnType<typeof rowToStreamSession>;
+      reservations: Array<{ userId: string; userName: string; email: string; isPaid: boolean }>;
+    }> = [];
+
+    for (const session of sessions) {
+      const resRows = await db`
+        SELECT r.*, u.email
+        FROM reservations r
+        JOIN users u ON u.id = r.user_id
+        WHERE r.session_id = ${session.sessionId}
+          AND r.type = 'speaker'
+          AND r.status = 'reserved'
+      `;
+      results.push({
+        session,
+        reservations: resRows.map((row) => ({
+          userId: row.user_id as string,
+          userName: row.user_name as string,
+          email: row.email as string,
+          isPaid: Boolean(row.payment_intent_id),
+        })),
+      });
+    }
+    return results;
+  }
+
+  const store = await readStore();
+  const now = windowStart.getTime();
+  const end = windowEnd.getTime();
+  const sessions = store.streamSessions.filter(
+    (s) => s.status === "prelive" && new Date(s.startsAt).getTime() >= now && new Date(s.startsAt).getTime() < end,
+  );
+
+  return sessions.map((session) => {
+    const reservations = store.reservations
+      .filter((r) => r.sessionId === session.sessionId && r.type === "speaker" && r.status === "reserved")
+      .map((r) => {
+        const u = store.users.find((u) => u.id === r.userId);
+        return { userId: r.userId, userName: r.userName, email: u?.email ?? "", isPaid: Boolean(r.paymentIntentId) };
+      });
+    return { session, reservations };
+  });
+}
+
 export async function listReservationsForSession(sessionId: string, actor: SessionUser) {
   const admin = isAdminUser(actor.id);
   if (USE_NEON) {
