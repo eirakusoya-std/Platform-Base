@@ -1211,14 +1211,20 @@ export async function listReservationsForUser(userId: string) {
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
+const ADMIN_IDS = (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+function isAdminUser(userId: string) {
+  return ADMIN_IDS.length > 0 && ADMIN_IDS.includes(userId);
+}
+
 export async function listReservationsForSession(sessionId: string, actor: SessionUser) {
+  const admin = isAdminUser(actor.id);
   if (USE_NEON) {
     await ensureSchema();
     const db = getDb();
     const sessionRows =
       await db`SELECT host_user_id FROM stream_sessions WHERE session_id = ${sessionId}`;
     if (!sessionRows[0]) throw new Error("Session not found");
-    if (sessionRows[0].host_user_id !== actor.id)
+    if (!admin && sessionRows[0].host_user_id !== actor.id)
       throw new Error("Cannot view reservations for another VTuber's session");
     const rows =
       await db`SELECT * FROM reservations WHERE session_id = ${sessionId} ORDER BY created_at DESC`;
@@ -1228,7 +1234,7 @@ export async function listReservationsForSession(sessionId: string, actor: Sessi
   const store = await readStore();
   const session = store.streamSessions.find((entry) => entry.sessionId === sessionId);
   if (!session) throw new Error("Session not found");
-  if (session.hostUserId !== actor.id)
+  if (!admin && session.hostUserId !== actor.id)
     throw new Error("Cannot view reservations for another VTuber's session");
 
   return store.reservations

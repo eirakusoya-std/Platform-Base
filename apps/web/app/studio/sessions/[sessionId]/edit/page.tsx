@@ -5,12 +5,22 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeftIcon } from "@heroicons/react/24/solid";
 import { TopNav } from "../../../../components/home/TopNav";
-import type { SubscriptionPlan } from "../../../../lib/apiTypes";
+import type { Reservation, SubscriptionPlan } from "../../../../lib/apiTypes";
 import { useI18n } from "../../../../lib/i18n";
 import { useUserSession } from "../../../../lib/userSession";
 import { getStreamSession, updateStreamSession, type StreamSession } from "../../../../lib/streamSessions";
 
 const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
+
+type Tab = "settings" | "reservations";
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function SessionEditPage() {
   const router = useRouter();
@@ -19,6 +29,7 @@ export default function SessionEditPage() {
   const { tx } = useI18n();
   const { isVtuber, hydrated } = useUserSession();
 
+  const [tab, setTab] = useState<Tab>("settings");
   const [session, setSession] = useState<StreamSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,6 +44,9 @@ export default function SessionEditPage() {
   const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<SubscriptionPlan>("free");
   const [requiredPlan, setRequiredPlan] = useState<SubscriptionPlan>("free");
   const [reservationRequired, setReservationRequired] = useState(false);
+
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [resLoading, setResLoading] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -59,6 +73,23 @@ export default function SessionEditPage() {
     setLoading(false);
   }
 
+  async function loadReservations() {
+    setResLoading(true);
+    try {
+      const res = await fetch(
+        `/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations?asHost=1`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) throw new Error("Failed");
+      const data = (await res.json()) as { reservations?: Reservation[] };
+      setReservations(data.reservations ?? []);
+    } catch {
+      // keep existing
+    } finally {
+      setResLoading(false);
+    }
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!hydrated) return;
@@ -68,6 +99,11 @@ export default function SessionEditPage() {
     }
     void load();
   }, [hydrated, isVtuber, sessionId]);
+
+  useEffect(() => {
+    if (tab === "reservations" && session) void loadReservations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, session]);
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
@@ -105,6 +141,9 @@ export default function SessionEditPage() {
 
   if (!hydrated || !isVtuber) return null;
 
+  const speakerRes = reservations.filter((r) => r.type === "speaker" && r.status === "reserved");
+  const listenerRes = reservations.filter((r) => r.type === "listener" && r.status === "reserved");
+
   return (
     <div className="min-h-screen bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav mode="studio" />
@@ -120,13 +159,31 @@ export default function SessionEditPage() {
           </Link>
         </div>
 
-        <h1 className="mb-6 text-2xl font-bold">{tx("配信枠を編集", "Edit Session")}</h1>
+        <h1 className="mb-4 text-2xl font-bold">{tx("配信枠を編集", "Edit Session")}</h1>
+
+        {/* Tabs */}
+        <div className="mb-6 flex gap-1 rounded-xl bg-[var(--brand-surface)] p-1">
+          <button
+            type="button"
+            onClick={() => setTab("settings")}
+            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${tab === "settings" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"}`}
+          >
+            {tx("設定", "Settings")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("reservations")}
+            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${tab === "reservations" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"}`}
+          >
+            {tx("予約者", "Reservations")}
+          </button>
+        </div>
 
         {loading ? (
           <div className="py-20 text-center text-sm text-[var(--brand-text-muted)]">{tx("読み込み中...", "Loading...")}</div>
         ) : error && !session ? (
           <div className="rounded-xl bg-[var(--brand-accent)]/15 px-4 py-4 text-sm text-[var(--brand-accent)]">{error}</div>
-        ) : (
+        ) : tab === "settings" ? (
           <form onSubmit={handleSave} className="space-y-5">
             {error && (
               <div className="rounded-xl bg-[var(--brand-accent)]/15 px-4 py-3 text-sm text-[var(--brand-accent)]">{error}</div>
@@ -245,8 +302,80 @@ export default function SessionEditPage() {
               </button>
             </div>
           </form>
+        ) : (
+          /* Reservations tab */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[var(--brand-text-muted)]">
+                {tx("スピーカー", "Speakers")}: {speakerRes.length} / {tx("リスナー", "Listeners")}: {listenerRes.length}
+              </p>
+              <button
+                type="button"
+                onClick={() => void loadReservations()}
+                disabled={resLoading}
+                className="text-xs text-[var(--brand-primary)] hover:brightness-110 disabled:opacity-50"
+              >
+                {resLoading ? tx("更新中...", "Refreshing...") : tx("更新", "Refresh")}
+              </button>
+            </div>
+
+            {resLoading && reservations.length === 0 ? (
+              <div className="py-12 text-center text-sm text-[var(--brand-text-muted)]">{tx("読み込み中...", "Loading...")}</div>
+            ) : reservations.length === 0 ? (
+              <div className="rounded-xl bg-[var(--brand-surface)] px-4 py-8 text-center text-sm text-[var(--brand-text-muted)]">
+                {tx("予約者はまだいません。", "No reservations yet.")}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {speakerRes.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--brand-text-muted)]">
+                      {tx("スピーカー", "Speakers")}
+                    </p>
+                    <div className="space-y-1.5">
+                      {speakerRes.map((r) => (
+                        <ReservationRow key={r.reservationId} r={r} formatDate={formatDate} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {listenerRes.length > 0 && (
+                  <div>
+                    <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-[var(--brand-text-muted)]">
+                      {tx("リスナー", "Listeners")}
+                    </p>
+                    <div className="space-y-1.5">
+                      {listenerRes.map((r) => (
+                        <ReservationRow key={r.reservationId} r={r} formatDate={formatDate} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function ReservationRow({ r, formatDate }: { r: Reservation; formatDate: (s: string) => string }) {
+  const isPaid = Boolean(r.paymentIntentId);
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-[var(--brand-surface)] px-4 py-2.5">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)]/20 text-sm font-bold text-[var(--brand-primary)]">
+        {r.userName.charAt(0).toUpperCase()}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">{r.userName}</p>
+        <p className="text-xs text-[var(--brand-text-muted)]">{formatDate(r.createdAt)}</p>
+      </div>
+      {r.type === "speaker" && (
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${isPaid ? "bg-green-500/20 text-green-400" : "bg-[var(--brand-text-muted)]/15 text-[var(--brand-text-muted)]"}`}>
+          {isPaid ? "支払済" : "未払い"}
+        </span>
+      )}
     </div>
   );
 }
