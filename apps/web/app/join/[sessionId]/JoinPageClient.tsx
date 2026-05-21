@@ -68,6 +68,7 @@ export function JoinPageClient() {
 
   useEffect(() => {
     if (authStatus === "logged-in") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void checkReservation();
     } else if (authStatus === "guest") {
       setReservationStatus("none");
@@ -113,6 +114,7 @@ export function JoinPageClient() {
 
   useEffect(() => {
     if (!(authStatus === "logged-in" && reservationStatus === "reserved" && selectedPath === "speaker")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReady(false);
       setMicLevel(0);
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -195,10 +197,6 @@ export function JoinPageClient() {
       track.enabled = enabled;
     });
     setMicOn(enabled);
-  };
-
-  const watchNow = () => {
-    // リスナー機能は一時的に無効
   };
 
   const joinNow = () => {
