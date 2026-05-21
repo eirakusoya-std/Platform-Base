@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopNav } from "../../components/home/TopNav";
 import { StudioProgress } from "../../components/ui/StudioProgress";
-import type { SubscriptionPlan } from "../../lib/apiTypes";
+import { DateTimePicker } from "../../components/ui/DateTimePicker";
 import { useI18n } from "../../lib/i18n";
 import { createStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
@@ -13,10 +13,25 @@ const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
 const PRESET_THUMBNAILS = [1, 2, 3, 4, 5].map((n) => `/image/thumbnail/thumbnail_${n}.png`);
 const DEFAULT_THUMBNAIL = PRESET_THUMBNAILS[4];
 
+// 星レベルのラベルと色（難易度別ガイドライン）
+const LEVEL_CONFIG = [
+  { label: "入門", color: "bg-emerald-500/20 text-emerald-400 ring-emerald-500/40" },
+  { label: "初級", color: "bg-lime-500/20 text-lime-400 ring-lime-500/40" },
+  { label: "中級", color: "bg-yellow-500/20 text-yellow-400 ring-yellow-500/40" },
+  { label: "上級", color: "bg-orange-500/20 text-orange-400 ring-orange-500/40" },
+  { label: "超上級", color: "bg-red-500/20 text-red-400 ring-red-500/40" },
+] as const;
+
 type NoticeItem = {
   id: string;
   text: string;
 };
+
+function localNow30min() {
+  const target = new Date(Date.now() + 30 * 60 * 1000);
+  const local = new Date(target.getTime() - target.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
 
 export default function StudioPreLivePage() {
   const router = useRouter();
@@ -27,20 +42,14 @@ export default function StudioPreLivePage() {
   const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]>("英語");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
-  const [publishMode, setPublishMode] = useState<"create_only" | "scheduled" | "go_live_now">("go_live_now");
+  const [publishMode, setPublishMode] = useState<"scheduled" | "go_live_now">("go_live_now");
   const [showPublishMenu, setShowPublishMenu] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState(() => {
-    const target = new Date(Date.now() + 30 * 60 * 1000);
-    const local = new Date(target.getTime() - target.getTimezoneOffset() * 60000);
-    return local.toISOString().slice(0, 16);
-  });
+  const [scheduledAt, setScheduledAt] = useState(localNow30min);
   const [startWarnings, setStartWarnings] = useState<string[]>([]);
   const [thumbnail, setThumbnail] = useState(DEFAULT_THUMBNAIL);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [speakerSlotsTotal, setSpeakerSlotsTotal] = useState(5);
-  const [speakerRequiredPlan, setSpeakerRequiredPlan] = useState<SubscriptionPlan>("free");
-  const [plannedDurationMin, setPlannedDurationMin] = useState(60);
+  const [plannedDurationMin, setPlannedDurationMin] = useState<string>("60");
   const [japaneseLevel, setJapaneseLevel] = useState(3);
   const [chatInput, setChatInput] = useState("");
   const [notices, setNotices] = useState<NoticeItem[]>([]);
@@ -104,6 +113,9 @@ export default function StudioPreLivePage() {
         ? new Date(scheduledAt).toISOString()
         : new Date().toISOString();
 
+    const durationNum = parseInt(plannedDurationMin, 10);
+    const plannedDuration = Number.isNaN(durationNum) || durationNum < 1 ? 60 : durationNum;
+
     try {
       const created = await createStreamSession({
         title: title.trim(),
@@ -113,9 +125,8 @@ export default function StudioPreLivePage() {
         startsAt,
         participationType: "First-come",
         slotsTotal: 50,
-        speakerSlotsTotal,
-        speakerRequiredPlan,
-        plannedDurationMin,
+        speakerSlotsTotal: 5,
+        plannedDurationMin: plannedDuration,
         japaneseLevel,
       });
 
@@ -142,6 +153,8 @@ export default function StudioPreLivePage() {
 
   if (!hydrated || !isVtuber) return null;
 
+  const levelConfig = LEVEL_CONFIG[japaneseLevel - 1];
+
   return (
     <div className="h-screen overflow-hidden bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
       <TopNav mode="studio" />
@@ -152,6 +165,7 @@ export default function StudioPreLivePage() {
         </aside>
 
         <section className="flex min-h-0 flex-col overflow-hidden">
+          {/* Header + action */}
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold">Pre-Live Setup</h1>
@@ -159,7 +173,7 @@ export default function StudioPreLivePage() {
             </div>
             <div className="relative flex items-center">
               <button
-                onClick={startBroadcastFlow}
+                onClick={() => void startBroadcastFlow()}
                 disabled={creating}
                 className="rounded-l-xl bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_26px_rgba(124,106,230,0.45)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -167,9 +181,7 @@ export default function StudioPreLivePage() {
                   ? tx("作成中...", "Creating...")
                   : publishMode === "go_live_now"
                     ? tx("作成して開始", "Create & Start")
-                    : publishMode === "scheduled"
-                      ? tx("予約枠を作成", "Create Scheduled Stream")
-                      : tx("枠を作成", "Create Room")}
+                    : tx("予約枠を作成", "Create Scheduled Stream")}
               </button>
               <button
                 type="button"
@@ -180,20 +192,13 @@ export default function StudioPreLivePage() {
                 ▾
               </button>
               {showPublishMenu && (
-                <div className="absolute right-0 top-[44px] z-20 w-[260px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/40">
+                <div className="absolute right-0 top-[44px] z-20 w-[220px] rounded-xl bg-[var(--brand-surface)] p-2 shadow-xl shadow-black/40">
                   <button
                     type="button"
                     onClick={() => { setPublishMode("go_live_now"); setShowPublishMenu(false); }}
                     className={`w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "go_live_now" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
                   >
                     {tx("今すぐ開始", "Start now")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setPublishMode("create_only"); setShowPublishMenu(false); }}
-                    className={`mt-1 w-full rounded-lg px-3 py-2 text-left text-sm ${publishMode === "create_only" ? "bg-[var(--brand-primary)] text-white" : "text-[var(--brand-text)] hover:bg-[var(--brand-bg-900)]"}`}
-                  >
-                    {tx("枠だけ作成", "Create room only")}
                   </button>
                   <button
                     type="button"
@@ -209,9 +214,7 @@ export default function StudioPreLivePage() {
 
           {startWarnings.length > 0 && (
             <div className="mb-2 rounded-xl bg-[var(--brand-accent)]/15 p-2.5 text-xs text-[var(--brand-accent)]">
-              {startWarnings.map((w) => (
-                <p key={w}>{w}</p>
-              ))}
+              {startWarnings.map((w) => <p key={w}>{w}</p>)}
             </div>
           )}
 
@@ -220,6 +223,7 @@ export default function StudioPreLivePage() {
             <div className="h-full overflow-y-auto pr-1">
               <div className="rounded-xl bg-[var(--brand-bg-900)]/28 p-3">
                 <div className="grid auto-rows-max content-start gap-3 pb-3 lg:grid-cols-2">
+
                   {/* サムネイル */}
                   <div className="lg:col-span-2">
                     <p className="mb-2 text-xs font-semibold text-[var(--brand-text-muted)]">{tx("サムネイル", "Thumbnail")}</p>
@@ -264,11 +268,13 @@ export default function StudioPreLivePage() {
                     />
                   </div>
 
+                  {/* タイトル */}
                   <label className="grid gap-1 text-sm">
                     <span className="text-[var(--brand-text-muted)]">{tx("タイトル", "Title")}</span>
                     <input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none" />
                   </label>
 
+                  {/* カテゴリ */}
                   <label className="grid gap-1 text-sm">
                     <span className="text-[var(--brand-text-muted)]">{tx("カテゴリ", "Category")}</span>
                     <select value={category} onChange={(e) => setCategory(e.target.value as (typeof CATEGORY_OPTIONS)[number])} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
@@ -278,96 +284,71 @@ export default function StudioPreLivePage() {
                     </select>
                   </label>
 
-                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-sm lg:col-span-2">
-                    <p className="text-[11px] text-[var(--brand-text-muted)]">{tx("公開方法", "Publish Mode")}</p>
-                    <p className="font-semibold text-[var(--brand-text)]">
-                      {publishMode === "go_live_now"
-                        ? tx("今すぐ開始", "Start now")
-                        : publishMode === "scheduled"
-                          ? tx("予約配信", "Schedule stream")
-                          : tx("枠だけ作成", "Create room only")}
-                    </p>
-                  </div>
-
+                  {/* 開始日時（予約のときのみ） */}
                   {publishMode === "scheduled" && (
-                    <label className="grid gap-1 text-sm">
-                      <span className="text-[var(--brand-text-muted)]">{tx("開始時刻", "Start time")}</span>
-                      <input
-                        type="datetime-local"
+                    <div className="grid gap-1 text-sm lg:col-span-2">
+                      <span className="text-[var(--brand-text-muted)]">{tx("開始日時", "Scheduled start")}</span>
+                      <DateTimePicker
                         value={scheduledAt}
-                        onChange={(e) => setScheduledAt(e.target.value)}
-                        className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
+                        onChange={setScheduledAt}
+                        minDate={new Date()}
                       />
-                    </label>
+                    </div>
                   )}
 
-                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 lg:col-span-2">
-                    <p className="mb-2 text-[11px] font-semibold text-[var(--brand-text-muted)]">{tx("スピーカー枠設定", "Speaker Slot Settings")}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="grid gap-1 text-xs">
-                        <span className="text-[var(--brand-text-muted)]">{tx("最大人数", "Max speakers")}</span>
+                  {/* 配信予定時間（自由入力）+ 日本語レベル（星選択） */}
+                  <div className="grid gap-3 lg:col-span-2 lg:grid-cols-2">
+                    {/* 配信予定時間 */}
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-[var(--brand-text-muted)]">{tx("配信予定時間（分）", "Planned duration (min)")}</span>
+                      <div className="flex items-center gap-2 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2">
                         <input
                           type="number"
                           min={1}
-                          max={10}
-                          value={speakerSlotsTotal}
-                          onChange={(e) => setSpeakerSlotsTotal(Math.max(1, Math.min(10, Number(e.target.value))))}
-                          className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
-                        />
-                      </label>
-                      <label className="grid gap-1 text-xs">
-                        <span className="text-[var(--brand-text-muted)]">{tx("必要プラン", "Required plan")}</span>
-                        <select
-                          value={speakerRequiredPlan}
-                          onChange={(e) => setSpeakerRequiredPlan(e.target.value as SubscriptionPlan)}
-                          className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
-                        >
-                          <option value="free">{tx("なし", "None (free)")}</option>
-                          <option value="aimer">Aimer</option>
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 lg:col-span-2">
-                    <p className="mb-2 text-[11px] font-semibold text-[var(--brand-text-muted)]">{tx("配信詳細設定", "Session Details")}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="grid gap-1 text-xs">
-                        <span className="text-[var(--brand-text-muted)]">{tx("配信予定時間", "Planned duration")}</span>
-                        <select
+                          max={480}
                           value={plannedDurationMin}
-                          onChange={(e) => setPlannedDurationMin(Number(e.target.value))}
-                          className="rounded-lg bg-[var(--brand-surface)] px-2 py-1.5 text-[var(--brand-text)] outline-none"
-                        >
-                          <option value={30}>30 {tx("分", "min")} — ₱200</option>
-                          <option value={45}>45 {tx("分", "min")} — ₱200</option>
-                          <option value={60}>60 {tx("分", "min")} — ₱200</option>
-                          <option value={90}>90 {tx("分", "min")} — ₱400</option>
-                          <option value={120}>120 {tx("分", "min")} — ₱400</option>
-                        </select>
-                      </label>
-                      <div className="grid gap-1 text-xs">
-                        <span className="text-[var(--brand-text-muted)]">{tx("日本語レベル（想定）", "Japanese level (expected)")}</span>
-                        <div className="flex gap-1">
-                          {[1, 2, 3, 4, 5].map((level) => (
+                          onChange={(e) => setPlannedDurationMin(e.target.value)}
+                          className="w-full bg-transparent text-[var(--brand-text)] outline-none"
+                          placeholder="60"
+                        />
+                        <span className="shrink-0 text-xs text-[var(--brand-text-muted)]">{tx("分", "min")}</span>
+                      </div>
+                    </label>
+
+                    {/* 日本語レベル */}
+                    <div className="grid gap-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[var(--brand-text-muted)]">{tx("日本語レベル（想定）", "Japanese level")}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${levelConfig.color}`}>
+                          {japaneseLevel} — {levelConfig.label}
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 rounded-lg bg-[var(--brand-bg-900)] px-2 py-2">
+                        {([1, 2, 3, 4, 5] as const).map((level) => {
+                          const cfg = LEVEL_CONFIG[level - 1];
+                          const active = level <= japaneseLevel;
+                          return (
                             <button
                               key={level}
                               type="button"
                               onClick={() => setJapaneseLevel(level)}
-                              className={`flex-1 rounded py-1 text-xs font-bold transition-colors ${
-                                japaneseLevel === level
-                                  ? "bg-[var(--brand-primary)] text-white"
-                                  : "bg-[var(--brand-surface)] text-[var(--brand-text-muted)]"
-                              }`}
+                              className="flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1 transition-colors hover:bg-[var(--brand-surface)]"
+                              title={`${level} — ${cfg.label}`}
                             >
-                              {level}
+                              <span className={`text-xl leading-none transition-colors ${active ? "text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]" : "text-[var(--brand-text-muted)]/30"}`}>
+                                ★
+                              </span>
+                              <span className={`text-[9px] font-bold transition-colors ${level === japaneseLevel ? cfg.color.split(" ")[1] : "text-[var(--brand-text-muted)]/40"}`}>
+                                {level}
+                              </span>
                             </button>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
 
+                  {/* 概要 */}
                   <label className="grid gap-1 text-sm lg:col-span-2">
                     <span className="text-[var(--brand-text-muted)]">{tx("概要", "Description")}</span>
                     <textarea
@@ -377,12 +358,14 @@ export default function StudioPreLivePage() {
                       className="min-h-[120px] resize-none rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none"
                     />
                   </label>
+
                 </div>
               </div>
             </div>
           </section>
         </section>
 
+        {/* Chat preview */}
         <aside className="flex min-h-0 flex-col overflow-hidden">
           <section className="flex h-full min-h-[220px] flex-col overflow-hidden rounded-2xl bg-[var(--brand-surface)] shadow-lg shadow-black/25">
             <div className="border-b border-black/20 px-3 py-2">
