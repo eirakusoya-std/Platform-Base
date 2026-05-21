@@ -30,7 +30,9 @@ export async function POST(request: Request) {
 
     const durationMin = session.plannedDurationMin ?? 60;
     const amountPhp = getSpeakerSessionAmountPhp(durationMin);
-    const priceId = getSpeakerSessionPriceId(durationMin);
+    const priceId =
+      getSpeakerSessionPriceId(durationMin) ??
+      process.env.EARLY_ACCESS_PRICE_ID?.trim();
 
     const stripe = await getStripeClient();
     if (!stripe) return NextResponse.json({ error: "決済サービスが設定されていません" }, { status: 500 });
