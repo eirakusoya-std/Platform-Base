@@ -9,18 +9,8 @@ import { useI18n } from "../../lib/i18n";
 import { createStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
 
-const CATEGORY_OPTIONS = ["雑談", "ゲーム", "歌枠", "英語"] as const;
 const PRESET_THUMBNAILS = [1, 2, 3, 4, 5].map((n) => `/image/thumbnail/thumbnail_${n}.png`);
 const DEFAULT_THUMBNAIL = PRESET_THUMBNAILS[4];
-
-// 星レベルのラベルと色（難易度別ガイドライン）
-const LEVEL_CONFIG = [
-  { label: "入門", color: "bg-emerald-500/20 text-emerald-400 ring-emerald-500/40" },
-  { label: "初級", color: "bg-lime-500/20 text-lime-400 ring-lime-500/40" },
-  { label: "中級", color: "bg-yellow-500/20 text-yellow-400 ring-yellow-500/40" },
-  { label: "上級", color: "bg-orange-500/20 text-orange-400 ring-orange-500/40" },
-  { label: "超上級", color: "bg-red-500/20 text-red-400 ring-red-500/40" },
-] as const;
 
 type NoticeItem = {
   id: string;
@@ -39,7 +29,6 @@ export default function StudioPreLivePage() {
   const { isVtuber, hydrated } = useUserSession();
 
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]>("英語");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [publishMode, setPublishMode] = useState<"scheduled" | "go_live_now">("go_live_now");
@@ -93,7 +82,6 @@ export default function StudioPreLivePage() {
     setShowPublishMenu(false);
     const warnings: string[] = [];
     if (title.trim().length < 2) warnings.push(tx("タイトルを入力してください。", "Please enter a title."));
-    if (!category) warnings.push(tx("カテゴリを選択してください。", "Choose a category."));
     if (publishMode === "scheduled") {
       const parsed = new Date(scheduledAt);
       if (!scheduledAt || Number.isNaN(parsed.getTime())) {
@@ -119,7 +107,7 @@ export default function StudioPreLivePage() {
     try {
       const created = await createStreamSession({
         title: title.trim(),
-        category,
+        category: "英語",
         description: description.trim(),
         thumbnail,
         startsAt,
@@ -152,8 +140,6 @@ export default function StudioPreLivePage() {
   };
 
   if (!hydrated || !isVtuber) return null;
-
-  const levelConfig = LEVEL_CONFIG[japaneseLevel - 1];
 
   return (
     <div className="h-screen overflow-hidden bg-[var(--brand-bg-900)] text-[var(--brand-text)]">
@@ -274,16 +260,6 @@ export default function StudioPreLivePage() {
                     <input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none" />
                   </label>
 
-                  {/* カテゴリ */}
-                  <label className="grid gap-1 text-sm">
-                    <span className="text-[var(--brand-text-muted)]">{tx("カテゴリ", "Category")}</span>
-                    <select value={category} onChange={(e) => setCategory(e.target.value as (typeof CATEGORY_OPTIONS)[number])} className="rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-[var(--brand-text)] outline-none">
-                      {CATEGORY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                      ))}
-                    </select>
-                  </label>
-
                   {/* 開始日時（予約のときのみ） */}
                   {publishMode === "scheduled" && (
                     <div className="grid gap-1 text-sm lg:col-span-2">
@@ -317,33 +293,20 @@ export default function StudioPreLivePage() {
 
                     {/* 日本語レベル */}
                     <div className="grid gap-1 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[var(--brand-text-muted)]">{tx("日本語レベル（想定）", "Japanese level")}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${levelConfig.color}`}>
-                          {japaneseLevel} — {levelConfig.label}
-                        </span>
-                      </div>
-                      <div className="flex gap-1.5 rounded-lg bg-[var(--brand-bg-900)] px-2 py-2">
-                        {([1, 2, 3, 4, 5] as const).map((level) => {
-                          const cfg = LEVEL_CONFIG[level - 1];
-                          const active = level <= japaneseLevel;
-                          return (
-                            <button
-                              key={level}
-                              type="button"
-                              onClick={() => setJapaneseLevel(level)}
-                              className="flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1 transition-colors hover:bg-[var(--brand-surface)]"
-                              title={`${level} — ${cfg.label}`}
-                            >
-                              <span className={`text-xl leading-none transition-colors ${active ? "text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]" : "text-[var(--brand-text-muted)]/30"}`}>
-                                ★
-                              </span>
-                              <span className={`text-[9px] font-bold transition-colors ${level === japaneseLevel ? cfg.color.split(" ")[1] : "text-[var(--brand-text-muted)]/40"}`}>
-                                {level}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <span className="text-[var(--brand-text-muted)]">{tx("難易度", "Difficulty")}</span>
+                      <div className="flex gap-1 rounded-lg bg-[var(--brand-bg-900)] px-2 py-2">
+                        {([1, 2, 3, 4, 5] as const).map((level) => (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() => setJapaneseLevel(level)}
+                            className="flex flex-1 items-center justify-center rounded-lg py-1.5 transition-colors hover:bg-[var(--brand-surface)]"
+                          >
+                            <span className={`text-xl leading-none ${level <= japaneseLevel ? "text-[var(--brand-primary)]" : "text-[var(--brand-text-muted)]/30"}`}>
+                              ★
+                            </span>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
