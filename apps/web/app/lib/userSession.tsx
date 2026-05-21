@@ -12,6 +12,7 @@ type UserSessionContextValue = {
   loading: boolean;
   isAuthenticated: boolean;
   isVtuber: boolean;
+  isAdmin: boolean;
   login: (user: SessionUser) => void;
   updateUser: (updates: Partial<SessionUser>) => void;
   logout: () => Promise<void>;
@@ -23,6 +24,7 @@ const UserSessionContext = createContext<UserSessionContextValue | null>(null);
 export function UserSessionProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const refreshSession = useCallback(async () => {
     try {
@@ -35,8 +37,9 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
         }
         return;
       }
-      const data = (await res.json()) as { user: SessionUser | null; isAuthenticated: boolean };
+      const data = (await res.json()) as { user: SessionUser | null; isAuthenticated: boolean; isAdmin?: boolean };
       setUser(data.user ?? null);
+      setIsAdmin(data.isAdmin ?? false);
     } catch {
       // Network error → keep existing state, don't log out
     } finally {
@@ -74,12 +77,13 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
       loading: !hydrated,
       isAuthenticated: Boolean(user),
       isVtuber: user?.role === "vtuber",
+      isAdmin,
       login,
       updateUser,
       logout,
       refreshSession,
     }),
-    [hydrated, user, login, updateUser, logout, refreshSession],
+    [hydrated, user, isAdmin, login, updateUser, logout, refreshSession],
   );
 
   return <UserSessionContext.Provider value={value}>{children}</UserSessionContext.Provider>;
