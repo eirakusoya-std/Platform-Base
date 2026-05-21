@@ -4,6 +4,7 @@ import {
   createReservation,
   getStreamSessionById,
   hasActiveSpeakerReservation,
+  hasPaidSpeakerReservation,
   listReservationsForSession,
 } from "@/app/lib/server/aimentStore";
 import { getStripeClient } from "@/app/lib/server/stripe";
@@ -37,9 +38,16 @@ export async function GET(req: Request, ctx: RouteContext) {
     }
 
     const isSpeaker = await hasActiveSpeakerReservation(actor.id, sessionId);
+    const isPaid = isSpeaker ? await hasPaidSpeakerReservation(actor.id, sessionId) : false;
+
+    // Payment window opens 24h before startsAt
+    const startsAt = new Date(session.startsAt);
+    const paymentWindowOpen = Date.now() >= startsAt.getTime() - 24 * 60 * 60 * 1000;
 
     return NextResponse.json({
       hasSpeakerReservation: isSpeaker,
+      hasPaidSpeakerReservation: isPaid,
+      paymentWindowOpen,
       speakerSlotsLeft: session.speakerSlotsLeft,
       speakerSlotsTotal: session.speakerSlotsTotal,
       speakerRequiredPlan: session.speakerRequiredPlan,
@@ -52,37 +60,15 @@ export async function GET(req: Request, ctx: RouteContext) {
 }
 
 /** POST /api/stream-sessions/[sessionId]/reservations
- *  Body: { type: "speaker", paymentIntentId: string }
- *  スピーカー予約はStripe支払い確認が必須。
+ *  Body: { type: "speaker" | "listener" }
+ *  スピーカー予約は支払いなしで自由に行える。入室には別途支払い確定が必要。
  */
 export async function POST(req: Request, ctx: RouteContext) {
   try {
     const { sessionId } = await ctx.params;
     const actor = await requireSessionUser();
-    const body = (await req.json()) as { type?: string; paymentIntentId?: string };
+    const body = (await req.json()) as { type?: string };
     const type = body.type === "speaker" ? "speaker" : "listener";
-
-    if (type === "speaker") {
-      const paymentIntentId = typeof body.paymentIntentId === "string" ? body.paymentIntentId.trim() : "";
-      if (!paymentIntentId) {
-        return NextResponse.json({ error: "支払い情報が必要です" }, { status: 400 });
-      }
-
-      const stripe = await getStripeClient();
-      if (stripe) {
-        const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-        if (pi.status !== "succeeded") {
-          return NextResponse.json({ error: "支払いが完了していません" }, { status: 402 });
-        }
-        const meta = pi.metadata as Record<string, string>;
-        if (meta.sessionId !== sessionId) {
-          return NextResponse.json({ error: "支払い情報がこの枠と一致しません" }, { status: 400 });
-        }
-        if (meta.userId !== actor.id) {
-          return NextResponse.json({ error: "支払い情報がアカウントと一致しません" }, { status: 400 });
-        }
-      }
-    }
 
     const reservation = await createReservation(actor, { sessionId, type });
     return NextResponse.json({ reservation }, { status: 201 });
@@ -91,7 +77,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     const status =
       message === "Authentication required"
         ? 401
-        : message.includes("already have") || message.includes("plan") || message.includes("slots left")
+        : message.includes("already have") || message.includes("slots left")
           ? 403
           : 500;
     return NextResponse.json({ error: message }, { status });

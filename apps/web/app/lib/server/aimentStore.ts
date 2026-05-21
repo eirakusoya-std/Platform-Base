@@ -369,6 +369,7 @@ async function initSchema() {
       cancelled_at TEXT
     )
   `;
+  await db`ALTER TABLE reservations ADD COLUMN IF NOT EXISTS payment_intent_id TEXT`;
 }
 
 // Row → TypeScript type converters
@@ -459,6 +460,7 @@ function rowToReservation(row: any): Reservation {
     status: row.status as ReservationStatus,
     type: row.type as ReservationType,
     cancelledAt: row.cancelled_at ?? undefined,
+    paymentIntentId: row.payment_intent_id ?? undefined,
   };
 }
 
@@ -1581,9 +1583,6 @@ export async function createReservation(actor: SessionUser, input: CreateReserva
       );
 
     if (reservationType === "speaker") {
-      if (!canAccessPlan(actorPlan, session.speakerRequiredPlan))
-        throw new Error(`Speaker slots require the ${session.speakerRequiredPlan} plan`);
-
       const existingRows =
         await db`SELECT reservation_id FROM reservations WHERE session_id = ${session.sessionId} AND user_id = ${actor.id} AND status = 'reserved' AND type = 'speaker'`;
       if (existingRows.length > 0)
@@ -1632,8 +1631,6 @@ export async function createReservation(actor: SessionUser, input: CreateReserva
       throw new Error("Reservations for this session must be made before the stream starts");
 
     if (reservationType === "speaker") {
-      if (!canAccessPlan(actorPlan, session.speakerRequiredPlan))
-        throw new Error(`Speaker slots require the ${session.speakerRequiredPlan} plan`);
       if (findActiveReservation(store, session.sessionId, actor.id, "speaker"))
         throw new Error("You already have a speaker reservation for this session");
       const speakerCount = countActiveReservations(store, session.sessionId, "speaker");
@@ -1679,6 +1676,50 @@ export async function hasActiveSpeakerReservation(
 
   const store = await readStore();
   return !!findActiveReservation(store, sessionId, userId, "speaker");
+}
+
+export async function hasPaidSpeakerReservation(
+  userId: string,
+  sessionId: string,
+): Promise<boolean> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows =
+      await db`SELECT reservation_id FROM reservations WHERE session_id = ${sessionId} AND user_id = ${userId} AND status = 'reserved' AND type = 'speaker' AND payment_intent_id IS NOT NULL`;
+    return rows.length > 0;
+  }
+
+  const store = await readStore();
+  const res = findActiveReservation(store, sessionId, userId, "speaker");
+  return !!res && !!res.paymentIntentId;
+}
+
+export async function confirmSpeakerPayment(
+  userId: string,
+  sessionId: string,
+  paymentIntentId: string,
+): Promise<Reservation | null> {
+  if (USE_NEON) {
+    await ensureSchema();
+    const db = getDb();
+    const rows =
+      await db`SELECT * FROM reservations WHERE session_id = ${sessionId} AND user_id = ${userId} AND status = 'reserved' AND type = 'speaker'`;
+    if (!rows[0]) return null;
+    await db`UPDATE reservations SET payment_intent_id = ${paymentIntentId} WHERE reservation_id = ${rows[0].reservation_id}`;
+    const updated =
+      await db`SELECT * FROM reservations WHERE reservation_id = ${rows[0].reservation_id}`;
+    return updated[0] ? rowToReservation(updated[0]) : null;
+  }
+
+  return mutateStore((store) => {
+    const res = store.reservations.find(
+      (r) => r.sessionId === sessionId && r.userId === userId && r.status === "reserved" && r.type === "speaker",
+    );
+    if (!res) return null;
+    res.paymentIntentId = paymentIntentId;
+    return res;
+  });
 }
 
 export async function hasActiveReservation(

@@ -150,6 +150,8 @@ export type Reservation = {
   status: ReservationStatus;
   type: ReservationType;
   cancelledAt?: string;
+  /** Stripe PaymentIntent ID. Speakers must have this set to enter the room. */
+  paymentIntentId?: string;
 };
 
 export type CreateReservationInput = {

@@ -10,7 +10,8 @@ import { getStreamSession } from "../../lib/streamSessions";
 import { useUserSession } from "../../lib/userSession";
 
 type AuthStatus = "loading" | "guest" | "logged-in";
-type ReservationStatus = "loading" | "none" | "reserved" | "error";
+// "reserved" = 予約済みだが未払い, "paid" = 支払い済みで入室可能
+type ReservationStatus = "loading" | "none" | "reserved" | "paid" | "error";
 
 type SessionMeta = {
   id: string;
@@ -30,6 +31,7 @@ export function JoinPageClient() {
   const [dynamicSession, setDynamicSession] = useState<Awaited<ReturnType<typeof getStreamSession>>>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [reservationStatus, setReservationStatus] = useState<ReservationStatus>("loading");
+  const [paymentWindowOpen, setPaymentWindowOpen] = useState(false);
   const [selectedPath, setSelectedPath] = useState<"watch" | "speaker" | null>(null);
 
   const { isAuthenticated, hydrated, user } = useUserSession();
@@ -56,8 +58,19 @@ export function JoinPageClient() {
     try {
       const res = await fetch(`/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations`, { cache: "no-store" });
       if (res.ok) {
-        const data = (await res.json()) as { hasSpeakerReservation?: boolean };
-        setReservationStatus(data.hasSpeakerReservation ? "reserved" : "none");
+        const data = (await res.json()) as {
+          hasSpeakerReservation?: boolean;
+          hasPaidSpeakerReservation?: boolean;
+          paymentWindowOpen?: boolean;
+        };
+        setPaymentWindowOpen(data.paymentWindowOpen ?? false);
+        if (data.hasPaidSpeakerReservation) {
+          setReservationStatus("paid");
+        } else if (data.hasSpeakerReservation) {
+          setReservationStatus("reserved");
+        } else {
+          setReservationStatus("none");
+        }
       } else {
         setReservationStatus("none");
       }
@@ -113,7 +126,7 @@ export function JoinPageClient() {
   const [showMicMenu, setShowMicMenu] = useState(false);
 
   useEffect(() => {
-    if (!(authStatus === "logged-in" && reservationStatus === "reserved" && selectedPath === "speaker")) {
+    if (!(authStatus === "logged-in" && reservationStatus === "paid" && selectedPath === "speaker")) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setReady(false);
       setMicLevel(0);
@@ -351,6 +364,7 @@ export function JoinPageClient() {
             </div>
           )}
 
+          {/* 未予約 → 予約+支払いフローへ */}
           {selectedPath === "speaker" && authStatus === "logged-in" && reservationStatus === "none" && (
             <div className="mt-4 flex flex-col gap-4 rounded-xl bg-[var(--brand-bg-900)] p-5">
               <div>
@@ -360,7 +374,7 @@ export function JoinPageClient() {
               </div>
 
               <div>
-                <h2 className="text-base font-semibold text-[var(--brand-text)]">{tx("スピーカー参加を申し込む", "Apply for a speaker slot")}</h2>
+                <h2 className="text-base font-semibold text-[var(--brand-text)]">{tx("スピーカー枠を申し込む", "Apply for a speaker slot")}</h2>
                 <p className="mt-2 text-sm text-[var(--brand-text-muted)]">
                   {dynamicSession
                     ? tx(
@@ -370,6 +384,9 @@ export function JoinPageClient() {
                     : tx("スピーカー枠の詳細を確認しています", "Checking speaker slots...")}
                 </p>
                 <p className="mt-2 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-xs text-[var(--brand-text-muted)]">
+                  {tx("予約は無料です。配信24時間前から支払いが可能になります。", "Reservation is free. Payment opens 24h before the stream.")}
+                </p>
+                <p className="mt-1 rounded-lg bg-[var(--brand-surface)] px-3 py-2 text-xs text-[var(--brand-text-muted)]">
                   {dynamicSession?.plannedDurationMin != null
                     ? tx(
                         `参加費: ₱${dynamicSession.plannedDurationMin <= 60 ? 200 : 400}（配信予定${dynamicSession.plannedDurationMin}分）`,
@@ -386,12 +403,36 @@ export function JoinPageClient() {
               >
                 {dynamicSession != null && dynamicSession.speakerSlotsLeft === 0
                   ? tx("満枠です", "No slots left")
-                  : tx("支払いへ進む →", "Continue to payment →")}
+                  : tx("スピーカー枠を予約する →", "Reserve a speaker slot →")}
               </button>
             </div>
           )}
 
+          {/* 予約済みだが未払い */}
           {selectedPath === "speaker" && authStatus === "logged-in" && reservationStatus === "reserved" && (
+            <div className="mt-4 flex flex-col gap-4 rounded-xl bg-[var(--brand-bg-900)] p-5">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--brand-primary)]">{tx("予約済み", "Reserved")}</p>
+                <h2 className="mt-2 text-base font-semibold text-[var(--brand-text)]">{tx("支払いで参加を確定する", "Confirm with payment")}</h2>
+                <p className="mt-2 text-sm text-[var(--brand-text-muted)]">
+                  {paymentWindowOpen
+                    ? tx("支払いが可能になりました。配信に参加するには支払いを完了してください。", "Payment is now open. Please pay to confirm your participation.")
+                    : tx("配信24時間前に支払いが可能になります。それまで枠は確保されています。", "Payment opens 24h before the stream. Your slot is reserved until then.")}
+                </p>
+              </div>
+              {paymentWindowOpen && (
+                <button
+                  onClick={goToSpeakerCheckout}
+                  className="w-full rounded-xl bg-[var(--brand-primary)] px-4 py-3 text-sm font-bold text-white"
+                >
+                  {tx("支払いへ進む →", "Continue to payment →")}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* 支払い済み → 入室可能 */}
+          {selectedPath === "speaker" && authStatus === "logged-in" && reservationStatus === "paid" && (
             <div className="mt-4 rounded-xl bg-[var(--brand-bg-900)] p-5">
               <div className="mb-4">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--brand-text-muted)]">{tx("参加前の確認", "Before you join")}</p>

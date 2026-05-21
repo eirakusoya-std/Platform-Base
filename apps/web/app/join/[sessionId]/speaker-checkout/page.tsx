@@ -9,7 +9,7 @@ import { getStreamSession } from "../../../lib/streamSessions";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-type Step = "loading" | "payment" | "success" | "already_reserved" | "error";
+type Step = "loading" | "payment" | "success" | "already_paid" | "window_closed" | "error";
 
 function usePhpToJpy(phpAmount: number) {
   const [jpy, setJpy] = useState<number | null>(null);
@@ -66,23 +66,25 @@ function PaymentForm({
       return;
     }
 
+    // Confirm payment on existing reservation
     try {
-      const res = await fetch(`/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "speaker", paymentIntentId: paymentIntent.id }),
-      });
+      const res = await fetch(
+        `/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations/confirm-payment`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
+        },
+      );
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        if (!data.error?.includes("already have")) {
-          setError(data.error ?? "予約の作成に失敗しました。");
-          setLoading(false);
-          return;
-        }
+        setError(data.error ?? "支払い確定に失敗しました。");
+        setLoading(false);
+        return;
       }
       onSuccess();
     } catch {
-      setError("予約の作成に失敗しました。");
+      setError("支払い確定に失敗しました。");
       setLoading(false);
     }
   };
@@ -122,6 +124,7 @@ export default function SpeakerCheckoutPage() {
   const [amountPhp, setAmountPhp] = useState(200);
   const [sessionTitle, setSessionTitle] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [opensAt, setOpensAt] = useState<string | null>(null);
   const jpyEquiv = usePhpToJpy(amountPhp);
 
   useEffect(() => {
@@ -136,15 +139,24 @@ export default function SpeakerCheckoutPage() {
       }
       setSessionTitle(session.title);
 
+      // Check current reservation & payment status
       try {
         const resCheck = await fetch(
           `/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations`,
           { cache: "no-store" },
         );
         if (resCheck.ok) {
-          const data = (await resCheck.json()) as { hasSpeakerReservation?: boolean };
-          if (data.hasSpeakerReservation) {
-            setStep("already_reserved");
+          const data = (await resCheck.json()) as {
+            hasSpeakerReservation?: boolean;
+            hasPaidSpeakerReservation?: boolean;
+            paymentWindowOpen?: boolean;
+          };
+          if (data.hasPaidSpeakerReservation) {
+            setStep("already_paid");
+            return;
+          }
+          if (data.hasSpeakerReservation && !data.paymentWindowOpen) {
+            setStep("window_closed");
             return;
           }
         }
@@ -152,13 +164,49 @@ export default function SpeakerCheckoutPage() {
         // 未ログインなどは無視してPayment画面へ
       }
 
+      // Create reservation first if not yet reserved
+      try {
+        const resReserve = await fetch(
+          `/api/stream-sessions/${encodeURIComponent(sessionId)}/reservations`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "speaker" }),
+          },
+        );
+        if (!resReserve.ok) {
+          const data = (await resReserve.json()) as { error?: string };
+          // "already have" means reservation exists — continue to payment
+          if (!data.error?.includes("already have")) {
+            setErrorMessage(data.error ?? "予約の作成に失敗しました。");
+            setStep("error");
+            return;
+          }
+        }
+      } catch {
+        setErrorMessage("予約の作成に失敗しました。");
+        setStep("error");
+        return;
+      }
+
+      // Initialize Stripe PaymentIntent
       try {
         const res = await fetch("/api/billing/speaker-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId }),
         });
-        const data = (await res.json()) as { clientSecret?: string; amountPhp?: number; error?: string };
+        const data = (await res.json()) as {
+          clientSecret?: string;
+          amountPhp?: number;
+          error?: string;
+          opensAt?: string;
+        };
+        if (res.status === 403 && data.opensAt) {
+          setOpensAt(data.opensAt);
+          setStep("window_closed");
+          return;
+        }
         if (!res.ok || !data.clientSecret) {
           setErrorMessage(data.error ?? "決済の準備に失敗しました。");
           setStep("error");
@@ -199,15 +247,38 @@ export default function SpeakerCheckoutPage() {
     );
   }
 
-  if (step === "already_reserved") {
+  if (step === "window_closed") {
+    const opensDate = opensAt ? new Date(opensAt).toLocaleString("ja-JP") : null;
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--brand-bg-900)] p-4">
+        <div className="w-full max-w-md rounded-2xl bg-[var(--brand-surface)] p-8 text-center shadow-xl">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-primary)]/20">
+            <span className="text-2xl">🗓</span>
+          </div>
+          <h1 className="mb-2 text-xl font-bold text-[var(--brand-text)]">予約済み</h1>
+          <p className="mb-2 text-sm text-[var(--brand-text-muted)]">スピーカー枠の予約が完了しています。</p>
+          {opensDate && (
+            <p className="mb-6 rounded-lg bg-[var(--brand-bg-900)] px-3 py-2 text-xs text-[var(--brand-text-muted)]">
+              支払いは <span className="font-semibold text-[var(--brand-text)]">{opensDate}</span> から可能になります
+            </p>
+          )}
+          <button onClick={backToJoin} className="w-full rounded-lg bg-[var(--brand-surface)] py-3 text-sm font-semibold text-[var(--brand-text-muted)]">
+            入室準備ページへ戻る
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (step === "already_paid") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--brand-bg-900)] p-4">
         <div className="w-full max-w-md rounded-2xl bg-[var(--brand-surface)] p-8 text-center shadow-xl">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-primary)]/20">
             <span className="text-2xl">✓</span>
           </div>
-          <h1 className="mb-2 text-xl font-bold text-[var(--brand-text)]">予約済みです</h1>
-          <p className="mb-6 text-sm text-[var(--brand-text-muted)]">この枠のスピーカー枠はすでに予約されています。</p>
+          <h1 className="mb-2 text-xl font-bold text-[var(--brand-text)]">支払い済みです</h1>
+          <p className="mb-6 text-sm text-[var(--brand-text-muted)]">このスピーカー枠の支払いはすでに完了しています。</p>
           <button onClick={backToJoin} className="w-full rounded-lg bg-[var(--brand-primary)] py-3 text-sm font-semibold text-white">
             入室準備へ戻る
           </button>
@@ -223,8 +294,8 @@ export default function SpeakerCheckoutPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-primary)]/20">
             <span className="text-2xl">✓</span>
           </div>
-          <h1 className="mb-2 text-xl font-bold text-[var(--brand-text)]">予約完了</h1>
-          <p className="mb-1 text-sm text-[var(--brand-text-muted)]">スピーカー枠の予約が確定しました。</p>
+          <h1 className="mb-2 text-xl font-bold text-[var(--brand-text)]">支払い完了</h1>
+          <p className="mb-1 text-sm text-[var(--brand-text-muted)]">スピーカー参加が確定しました。</p>
           <p className="mb-6 text-xs text-[var(--brand-text-muted)]">{sessionTitle}</p>
           <button onClick={backToJoin} className="w-full rounded-lg bg-[var(--brand-primary)] py-3 text-sm font-semibold text-white">
             入室準備へ進む
